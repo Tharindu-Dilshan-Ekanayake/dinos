@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import {
   INTERACT_RADIUS,
+  clampToPlaza,
   PODIUMS,
   REBIRTH_PEDESTALS,
   REBIRTH_POSITIONS,
@@ -105,7 +106,7 @@ function Interactions() {
 export default function LobbyScene() {
   return (
     <>
-      <LobbyCamera />
+      <LobbyCamera clamp={clampToPlaza} />
       <LobbyEnvironment />
       <LobbyGround />
       <FightCatcher />

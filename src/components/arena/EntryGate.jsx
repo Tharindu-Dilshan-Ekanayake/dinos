@@ -3,9 +3,11 @@ import { useFrame } from '@react-three/fiber'
 import { Billboard, Text } from '@react-three/drei'
 import * as THREE from 'three'
 import { ARENA, ENTRY_TRIGGER, chamberOrigin } from '../../data/arena.js'
+import { paletteForStage } from '../../data/areas.js'
 import { formatNumber } from '../../data/progression.js'
 import { useGameStore } from '../../store/useGameStore.js'
 import { playerPosition } from '../../systems/playerState.js'
+import { voxelMaterial } from '../../systems/voxelTexture.js'
 
 const WIDTH = ARENA.gapHalfWidth * 2
 /*
@@ -31,11 +33,32 @@ export default function EntryGate() {
   const glowRef = useRef()
   const anim = useRef({ phase: 0 })
 
-  const frameMaterial = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: '#4a3f35', roughness: 0.9 }),
-    []
-  )
-  useEffect(() => () => frameMaterial.dispose(), [frameMaterial])
+  /*
+   * Waymarkers, built like everything else in the world: a coursed stone post
+   * in the biome's own rock under a warm lamp. The pair used to be flat dark
+   * boxes, which read as two crates left in the middle of every arena.
+   */
+  const materials = useMemo(() => {
+    const palette = paletteForStage(stageIndex)
+    return {
+      post: voxelMaterial(palette.cliffDark, {
+        pattern: 'bricks',
+        cells: 4,
+        variance: 0.09,
+        fleckDepth: 0.2,
+        seed: 149,
+      }),
+      lamp: new THREE.MeshStandardMaterial({
+        color: '#ffd76b',
+        emissive: new THREE.Color('#ffb703'),
+        emissiveIntensity: 0.9,
+        roughness: 0.4,
+        flatShading: true,
+      }),
+    }
+  }, [stageIndex])
+
+  useEffect(() => () => Object.values(materials).forEach((m) => m.dispose()), [materials])
 
   // Every arrival lands the player near this trigger, so it must be re-armed
   // by stepping away before it can fire.
@@ -69,16 +92,16 @@ export default function EntryGate() {
 
   return (
     <group position={[0, 0, chamberOrigin(stageIndex) + ENTRY_TRIGGER.z]}>
-      {/* Low kerbs either side, no lintel. */}
+      {/* Low posts either side, no lintel - the camera looks straight through. */}
       {[-1, 1].map((side) => (
-        <mesh
-          key={side}
-          material={frameMaterial}
-          position={[side * (ARENA.gapHalfWidth + 0.5), HEIGHT / 2, 0]}
-          castShadow
-        >
-          <boxGeometry args={[1, HEIGHT, 1.4]} />
-        </mesh>
+        <group key={side} position={[side * (ARENA.gapHalfWidth + 0.5), 0, 0]}>
+          <mesh material={materials.post} position={[0, HEIGHT / 2, 0]} castShadow>
+            <boxGeometry args={[0.9, HEIGHT, 1.3]} />
+          </mesh>
+          <mesh material={materials.lamp} position={[0, HEIGHT + 0.22, 0]}>
+            <boxGeometry args={[0.62, 0.44, 0.9]} />
+          </mesh>
+        </group>
       ))}
 
       <mesh ref={glowRef} rotation-x={-Math.PI / 2} position={[0, 0.04, 0]}>

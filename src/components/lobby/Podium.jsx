@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Billboard, Text } from '@react-three/drei'
 import * as THREE from 'three'
@@ -7,6 +7,7 @@ import { formatNumber } from '../../data/progression.js'
 import { INTERACT_RADIUS } from '../../data/lobby.js'
 import { useGameStore } from '../../store/useGameStore.js'
 import { playerPosition } from '../../systems/playerState.js'
+import { voxelMaterial } from '../../systems/voxelTexture.js'
 import DinoModel, { animateDinoRig, useDinoMaterials, useDinoRig } from '../DinoModel.jsx'
 
 /**
@@ -62,14 +63,30 @@ export default function Podium({ podium }) {
     [unlocked, evolution.aura]
   )
 
+  // Coursed stone, so a podium is built out of the same blocks as the hub it
+  // stands in rather than being a smooth pedestal dropped into it.
   const baseMaterial = useMemo(
     () =>
-      new THREE.MeshStandardMaterial({
-        color: unlocked ? '#e7ecf3' : '#5b6472',
+      voxelMaterial(unlocked ? '#e7ecf3' : '#5b6472', {
+        pattern: 'bricks',
+        cells: 4,
+        variance: 0.07,
+        fleckDepth: 0.16,
+        repeat: [2, 1],
         roughness: 0.85,
-        flatShading: true,
+        seed: 61,
       }),
     [unlocked]
+  )
+
+  // The pad's own material is disposed with the podium; the base's map lives
+  // in the shared texture cache and outlives it.
+  useEffect(
+    () => () => {
+      padMaterial.dispose()
+      baseMaterial.dispose()
+    },
+    [padMaterial, baseMaterial]
   )
 
   useFrame((_, rawDelta) => {

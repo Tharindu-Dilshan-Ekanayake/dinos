@@ -72,8 +72,13 @@ export const TARGET_CLICKS_TO_CLEAR = 12
  * Without a floor a player can technically enter any unlocked stage and then
  * spend an hour chipping at it, which reads as a broken game rather than a
  * hard one. The floor pushes them back to training instead.
+ *
+ * Set high enough that walking into the next level is something you earn: at
+ * a quarter you could scrape into almost anything you had unlocked, which made
+ * the climb a formality. Stage 1 is unaffected - its requirement rounds to 1
+ * either way, so a new player is never locked out of the game's front door.
  */
-export const MIN_DAMAGE_FRACTION = 0.25
+export const MIN_DAMAGE_FRACTION = 0.45
 
 /** Damage per click this stage is tuned for. */
 export function recommendedDamage(stageIndex) {

@@ -5,6 +5,26 @@
 /** Click damage before any multipliers. */
 export const BASE_STRENGTH = 1
 
+/**
+ * Permanent strength earned for every blow you land.
+ *
+ * Small on purpose: this is the drip that rewards playing rather than a
+ * replacement for training. Twelve or so clicks clear a level, so a level's
+ * worth of swinging is about a quarter of a point of strength.
+ */
+export const STRENGTH_PER_HIT = 0.02
+
+/**
+ * Permanent strength earned for clearing a level.
+ *
+ * Scaled by how deep the level is, so the climb itself keeps pace with the
+ * entry requirements ahead of it - fighting your way forward is a real way to
+ * get stronger, not just a way to spend the strength you already had.
+ */
+export function strengthForClear(stageIndex) {
+  return 0.5 + stageIndex * 0.35
+}
+
 /** Wins required before the Rebirth button unlocks. */
 export const REBIRTH_WINS_REQUIRED = 500
 

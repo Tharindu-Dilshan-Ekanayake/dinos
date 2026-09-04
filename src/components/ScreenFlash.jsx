@@ -38,6 +38,12 @@ export default function ScreenFlash() {
     }
 
     const unsubscribers = [
+      // Red, and stronger the closer the bite takes you to the end. Kept
+      // light: this fires every time something lands, so it has to register
+      // without blinding you mid-fight.
+      on(EVENTS.PLAYER_HURT, ({ health, max }) =>
+        flash('rgba(244,63,94,0.85)', 0.16 + (1 - health / max) * 0.28)
+      ),
       on(EVENTS.STAGE_CLEAR, ({ boss }) =>
         flash(boss ? 'rgba(255,183,3,0.85)' : 'rgba(226,255,251,0.7)', boss ? 0.55 : 0.3)
       ),

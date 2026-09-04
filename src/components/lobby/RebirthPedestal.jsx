@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Billboard, Text } from '@react-three/drei'
 import * as THREE from 'three'
@@ -6,6 +6,7 @@ import { REBIRTH_WINS_REQUIRED, formatNumber } from '../../data/progression.js'
 import { INTERACT_RADIUS } from '../../data/lobby.js'
 import { useGameStore } from '../../store/useGameStore.js'
 import { playerPosition } from '../../systems/playerState.js'
+import { voxelMaterial } from '../../systems/voxelTexture.js'
 
 /**
  * A rebirth milestone pedestal. Walking up to one and tapping it opens the
@@ -42,6 +43,23 @@ export default function RebirthPedestal({ pedestal, position, onOpen }) {
     }
   })
 
+  // The same coursed stone the podiums stand on, so the two rows of props in
+  // the hub are built out of one material.
+  const baseMaterial = useMemo(
+    () =>
+      voxelMaterial('#e7ecf3', {
+        pattern: 'bricks',
+        cells: 4,
+        variance: 0.07,
+        fleckDepth: 0.16,
+        repeat: [2, 1],
+        roughness: 0.85,
+        seed: 61,
+      }),
+    []
+  )
+  useEffect(() => () => baseMaterial.dispose(), [baseMaterial])
+
   const tint = achieved ? '#c9a3ff' : ready ? '#fbbf24' : '#64748b'
 
   return (
@@ -54,9 +72,8 @@ export default function RebirthPedestal({ pedestal, position, onOpen }) {
         onOpen()
       }}
     >
-      <mesh position={[0, 0.4, 0]} castShadow receiveShadow>
+      <mesh material={baseMaterial} position={[0, 0.4, 0]} castShadow receiveShadow>
         <boxGeometry args={[2.4, 0.8, 2.4]} />
-        <meshStandardMaterial color="#e7ecf3" roughness={0.85} flatShading />
       </mesh>
       <mesh position={[0, 0.9, 0]} castShadow>
         <boxGeometry args={[2, 0.24, 2]} />

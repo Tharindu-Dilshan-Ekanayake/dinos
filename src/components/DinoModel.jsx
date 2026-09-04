@@ -1,23 +1,33 @@
 import { Suspense, useEffect, useMemo, useRef } from 'react'
 import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import ModelFallback from './ModelFallback.jsx'
 
 /**
  * The dino, shared by every place one appears: the arena fighter, the player
  * walking around the hub, and the showcase model on each stage podium.
  *
- * The placeholder is built from flat-shaded boxes rather than smooth spheres -
- * a chunky voxel silhouette holds up far better at small sizes, reads clearly
- * against a bright hub, and matches the blocky look the rest of the level uses.
+ * It is built from flat-shaded boxes rather than smooth spheres - a chunky
+ * voxel silhouette holds up far better at small sizes, reads clearly against a
+ * bright hub, and matches the blocky look the rest of the level uses.
+ *
+ * The model is *described* as data and then merged: every box belonging to one
+ * body part and one material becomes a single geometry, so a dino carrying
+ * sixty blocks of detail costs about a dozen draw calls instead of sixty. That
+ * is what pays for the toes, teeth, cheeks and eye highlights - thirteen of
+ * these are on screen at once in the hub.
  *
  * Limbs, neck and tail hang off named groups collected into a "rig", so one
  * shared animator can walk any stage without each caller knowing the model's
- * internals. Every stage drives the same builder through the shape flags in
- * data/evolutions.js, so thirteen distinct dinos cost one mesh description.
+ * internals. Every stage drives the same description through the shape flags
+ * in data/evolutions.js, so thirteen distinct dinos cost one mesh definition.
  */
 
 /* ------------------------------------------------------------- materials */
+
+/** Which material groups are worth the shadow pass. Eyes and teeth are not. */
+const CASTS_SHADOW = { body: true, belly: true, spike: true, eye: false, pupil: false }
 
 /** Builds the per-stage material set. Callers own disposal. */
 export function useDinoMaterials(evolution) {
@@ -41,7 +51,14 @@ export function useDinoMaterials(evolution) {
       emissive: new THREE.Color(evolution.spike),
       emissiveIntensity: glow * 0.85,
     })
-    const eye = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.22 })
+    // A touch of self-lighting keeps the eyes bright in the arena's shade,
+    // which is most of what makes the face read as friendly rather than dead.
+    const eye = new THREE.MeshStandardMaterial({
+      color: '#ffffff',
+      roughness: 0.22,
+      emissive: new THREE.Color('#ffffff'),
+      emissiveIntensity: 0.25,
+    })
     const pupil = new THREE.MeshStandardMaterial({ color: '#141a26', roughness: 0.4 })
 
     // Late stages glow from the inside rather than just wearing bright colours.
@@ -113,297 +130,289 @@ export function animateDinoRig(rig, speed, stride) {
   }
 }
 
-/* ---------------------------------------------------------------- pieces */
+/* ------------------------------------------------------------- merging */
 
-/** One box. Shorthand keeps the model description readable. */
-function Box({ material, position, size, rotation, castShadow = true }) {
+/**
+ * One merged geometry per material used by a part.
+ *
+ * Boxes are baked into their part's local space here, so the rig still rotates
+ * whole limbs while the blocks inside a limb cost nothing extra to draw. The
+ * result is shared: a left and a right leg are the same description and so
+ * draw from the same geometry.
+ */
+function useMergedGroups(boxes) {
+  const groups = useMemo(() => {
+    const byMaterial = new Map()
+
+    for (const box of boxes) {
+      const geometry = new THREE.BoxGeometry(box.size[0], box.size[1], box.size[2])
+      if (box.rotation) {
+        geometry.rotateX(box.rotation[0])
+        geometry.rotateY(box.rotation[1])
+        geometry.rotateZ(box.rotation[2])
+      }
+      geometry.translate(box.position[0], box.position[1], box.position[2])
+
+      const list = byMaterial.get(box.material)
+      if (list) list.push(geometry)
+      else byMaterial.set(box.material, [geometry])
+    }
+
+    const out = []
+    for (const [key, list] of byMaterial) {
+      const merged = mergeGeometries(list, false)
+      list.forEach((geometry) => geometry.dispose())
+      if (merged) out.push({ key, geometry: merged })
+    }
+    return out
+  }, [boxes])
+
+  useEffect(() => () => groups.forEach((group) => group.geometry.dispose()), [groups])
+
+  return groups
+}
+
+/** Draws one part's merged geometries with the stage's materials. */
+function PartMeshes({ groups, materials }) {
   return (
-    <mesh material={material} position={position} rotation={rotation} castShadow={castShadow}>
-      <boxGeometry args={size} />
-    </mesh>
+    <>
+      {groups.map((group) => (
+        <mesh
+          key={group.key}
+          geometry={group.geometry}
+          material={materials[group.key]}
+          castShadow={CASTS_SHADOW[group.key]}
+        />
+      ))}
+    </>
   )
+}
+
+/* ------------------------------------------------------- shape description */
+
+const box = (material, position, size, rotation) => ({ material, position, size, rotation })
+
+/**
+ * Torso: a barrel chest over a pale belly, with the flank stripe that gives
+ * every stage a second colour break along its side.
+ */
+function torsoBoxes(evolution) {
+  const out = [
+    // Deeper through the chest than it is long: a cartoon animal, not a lizard.
+    box('body', [-0.18, 1.18, 0], [1.45, 1.28, 1.14]),
+    box('body', [0.5, 1.28, 0], [0.8, 1.05, 1]),
+    box('body', [-0.85, 1.12, 0], [0.8, 1, 1]),
+    // Pale front, from throat to belly - the read that makes a shape look like
+    // an animal rather than a block.
+    box('belly', [-0.12, 0.76, 0], [1.5, 0.46, 0.94]),
+    box('belly', [0.66, 1.04, 0], [0.58, 0.66, 0.84]),
+  ]
+
+  // The pale front carried a little way up each flank, rather than a bright
+  // plate stuck on the side.
+  for (const z of [-0.552, 0.552]) {
+    out.push(box('belly', [-0.05, 1.0, z], [1.3, 0.42, 0.04]))
+  }
+
+  /** Back plates / sail, sized by the stage's plate count. */
+  const count = evolution.plates ?? 0
+  for (let i = 0; i < count; i++) {
+    const t = count === 1 ? 0.5 : i / (count - 1)
+    // Tallest over the hips, tapering toward neck and tail.
+    const height = (evolution.crest ? 0.95 : 0.5) * (0.4 + Math.sin(t * Math.PI) * 0.9)
+    out.push(
+      box('spike', [-0.8 + t * 1.6, 1.55 + height / 2, 0], [0.22, height, evolution.crest ? 0.16 : 0.42])
+    )
+  }
+
+  return out
+}
+
+/** Head: skull, cheeks, snout, jaw, teeth, eyes, and the stage's headgear. */
+function headBoxes(evolution) {
+  const horns = evolution.horns ?? 0
+  const out = [
+    box('body', [0.0, -0.12, 0], [0.78, 0.76, 0.8]),
+    // Skull, widened at the jaw hinge so the face is square rather than wedged.
+    box('body', [0.54, 0.16, 0], [0.98, 0.88, 0.94]),
+    box('body', [0.78, 0.58, 0], [0.66, 0.2, 1]),
+    box('body', [1.18, 0.06, 0], [0.62, 0.54, 0.74]),
+    box('body', [1.26, 0.34, 0], [0.46, 0.22, 0.56]),
+    box('belly', [1.1, -0.3, 0], [0.76, 0.24, 0.68]),
+    // A dark mouth line does more for the face than any amount of geometry.
+    box('pupil', [1.15, -0.14, 0], [0.66, 0.08, 0.7]),
+  ]
+
+  for (const z of [-0.48, 0.48]) {
+    out.push(box('body', [0.66, -0.06, z], [0.66, 0.48, 0.1]))
+    out.push(box('pupil', [1.47, 0.22, z * 0.36], [0.07, 0.1, 0.12]))
+  }
+
+  // Teeth along the upper jaw.
+  for (const z of [-0.26, -0.09, 0.09, 0.26]) {
+    out.push(box('eye', [1.4, -0.06, z], [0.11, 0.2, 0.11]))
+  }
+
+  // Eyes: white, pupil, and a highlight square sitting proud of the pupil.
+  // Set into the skull's corner rather than pasted flat on its cheek.
+  for (const z of [-0.42, 0.42]) {
+    const outward = Math.sign(z)
+    out.push(box('eye', [0.9, 0.36, z], [0.3, 0.32, 0.17]))
+    // Wrapped around the outer front corner, so the dino is looking at you
+    // from a three-quarter view instead of showing a blank white patch.
+    out.push(box('pupil', [1.0, 0.34, z + outward * 0.035], [0.17, 0.23, 0.14]))
+    out.push(box('eye', [1.04, 0.44, z + outward * 0.05], [0.08, 0.09, 0.08]))
+  }
+
+  if (evolution.frill) {
+    out.push(box('spike', [0.16, 0.42, 0], [0.18, 0.86, 1.7]))
+    for (const z of [-0.82, 0.82]) {
+      out.push(box('spike', [0.16, 0.06, z], [0.18, 0.5, 0.34]))
+    }
+    for (const z of [-0.6, 0, 0.6]) {
+      out.push(box('spike', [0.16, 0.9, z], [0.16, 0.28, 0.2]))
+    }
+  }
+
+  if (horns >= 1) out.push(box('spike', [1.4, 0.48, 0], [0.2, 0.54, 0.2], [0, 0, -0.32]))
+  if (horns >= 2) {
+    for (const z of [-0.33, 0.33]) {
+      out.push(box('spike', [0.74, 0.84, z], [0.18, 0.6, 0.18], [z > 0 ? -0.2 : 0.2, 0, -0.1]))
+    }
+  }
+  if (horns >= 3) {
+    for (const z of [-0.5, 0.5]) {
+      out.push(box('spike', [0.4, 0.94, z], [0.16, 0.72, 0.16], [z > 0 ? -0.4 : 0.4, 0, 0.12]))
+    }
+  }
+
+  return out
+}
+
+/** Tail: a tapering chain, with the club or spikes some stages carry. */
+function tailBoxes(evolution) {
+  const out = []
+  const count = 7
+
+  for (let i = 0; i < count; i++) {
+    const t = i / (count - 1)
+    out.push(
+      box('body', [-0.34 - i * 0.36, -t * t * 0.42, 0], [0.46, 0.52 - t * 0.34, 0.52 - t * 0.34])
+    )
+  }
+  // Rounded-off tip, so the tail ends rather than being cut short.
+  out.push(box('body', [-2.68, -0.42, 0], [0.3, 0.2, 0.2]))
+
+  if (evolution.tailSpikes) {
+    out.push(box('spike', [-2.82, -0.44, 0], [0.54, 0.54, 0.54]))
+    for (const z of [-0.38, 0.38]) {
+      out.push(box('spike', [-2.92, -0.44, z], [0.34, 0.2, 0.32]))
+    }
+    out.push(box('spike', [-3.18, -0.44, 0], [0.36, 0.2, 0.32]))
+  }
+
+  return out
 }
 
 /**
- * A leg that pivots at the hip.
+ * One leg: thigh, shin, foot pad, three toes and their claws.
  *
- * The group sits at the hip and everything hangs below it, so a single
- * rotation about Z swings the whole limb forward and back.
+ * The description hangs below the hip, so the group it lives in can swing the
+ * whole limb with a single rotation about Z.
  */
-function Leg({ materials, innerRef, position, thickness = 1, length = 1, clawed = true }) {
-  const { body, spike } = materials
-  return (
-    <group ref={innerRef} position={position}>
-      <Box
-        material={body}
-        position={[0, -0.34 * length, 0]}
-        size={[0.56 * thickness, 0.72 * length, 0.46 * thickness]}
-      />
-      <Box
-        material={body}
-        position={[0.06 * thickness, -0.76 * length, 0]}
-        size={[0.36 * thickness, 0.56 * length, 0.36 * thickness]}
-      />
-      <Box
-        material={body}
-        position={[0.16 * thickness, -1.0 * length, 0]}
-        size={[0.66 * thickness, 0.22, 0.42 * thickness]}
-      />
-      {clawed &&
-        [-0.12, 0.12].map((cz) => (
-          <Box
-            key={cz}
-            material={spike}
-            position={[0.44 * thickness, -1.03 * length, cz]}
-            size={[0.16, 0.14, 0.13]}
-            castShadow={false}
-          />
-        ))}
-    </group>
-  )
-}
+function legBoxes(thickness, length, clawed) {
+  const out = [
+    box('body', [0, -0.32 * length, 0], [0.6 * thickness, 0.74 * length, 0.5 * thickness]),
+    box('body', [0.06 * thickness, -0.76 * length, 0], [0.4 * thickness, 0.58 * length, 0.4 * thickness]),
+    box('body', [0.14 * thickness, -1.02 * length, 0], [0.5 * thickness, 0.2, 0.48 * thickness]),
+  ]
 
-/** Tapering tail built as a chain, so the root group sways the whole thing. */
-function Tail({ materials, innerRef, evolution }) {
-  const { body, spike } = materials
-  const segments = useMemo(() => {
-    const out = []
-    const count = 7
-    for (let i = 0; i < count; i++) {
-      const t = i / (count - 1)
-      out.push({
-        position: [-0.34 - i * 0.36, -t * t * 0.42, 0],
-        size: [0.44, 0.5 - t * 0.32, 0.5 - t * 0.32],
-      })
+  for (const z of [-0.16, 0, 0.16]) {
+    out.push(box('body', [0.42 * thickness, -1.02 * length, z * thickness], [0.32, 0.19, 0.15]))
+    if (clawed) {
+      out.push(box('spike', [0.61 * thickness, -1.04 * length, z * thickness], [0.13, 0.13, 0.11]))
     }
-    return out
-  }, [])
+  }
 
-  return (
-    <group ref={innerRef} position={[-0.85, 1.08, 0]}>
-      {segments.map((segment, i) => (
-        <Box key={i} material={body} position={segment.position} size={segment.size} />
-      ))}
-
-      {evolution.tailSpikes && (
-        <>
-          <Box material={spike} position={[-2.75, -0.44, 0]} size={[0.5, 0.5, 0.5]} />
-          {[-0.36, 0.36].map((z) => (
-            <Box key={z} material={spike} position={[-2.85, -0.44, z]} size={[0.34, 0.18, 0.3]} />
-          ))}
-          <Box
-            material={spike}
-            position={[-3.1, -0.44, 0]}
-            size={[0.34, 0.18, 0.3]}
-            rotation={[0, 0, 0]}
-          />
-        </>
-      )}
-    </group>
-  )
+  return out
 }
 
-/** Head group: skull, jaw, teeth, eyes, horns and optional frill. */
-function Head({ materials, innerRef, evolution }) {
-  const { body, belly, spike, eye, pupil } = materials
-  const horns = evolution.horns ?? 0
-
-  return (
-    <group ref={innerRef} position={[0.95, 1.68, 0]}>
-      {/* Neck */}
-      <Box material={body} position={[0.05, -0.06, 0]} size={[0.6, 0.6, 0.62]} />
-
-      {/* Frill, triceratops style */}
-      {evolution.frill && (
-        <>
-          <Box material={spike} position={[0.16, 0.42, 0]} size={[0.18, 0.8, 1.6]} />
-          <Box material={spike} position={[0.16, 0.06, 0.78]} size={[0.18, 0.5, 0.34]} />
-          <Box material={spike} position={[0.16, 0.06, -0.78]} size={[0.18, 0.5, 0.34]} />
-          {[-0.6, 0, 0.6].map((z) => (
-            <Box
-              key={z}
-              material={spike}
-              position={[0.16, 0.86, z]}
-              size={[0.16, 0.26, 0.2]}
-              castShadow={false}
-            />
-          ))}
-        </>
-      )}
-
-      {/* Skull */}
-      <Box material={body} position={[0.52, 0.12, 0]} size={[0.82, 0.72, 0.8]} />
-      {/* Brow ridge */}
-      <Box material={body} position={[0.68, 0.46, 0]} size={[0.56, 0.16, 0.86]} />
-      {/* Snout */}
-      <Box material={body} position={[1.06, 0.04, 0]} size={[0.5, 0.46, 0.62]} />
-      {/* Lower jaw */}
-      <Box material={belly} position={[1.0, -0.2, 0]} size={[0.62, 0.18, 0.56]} />
-      {/* Nostril block */}
-      <Box material={body} position={[1.28, 0.16, 0]} size={[0.16, 0.2, 0.44]} castShadow={false} />
-
-      {/* Teeth */}
-      {[-0.2, -0.07, 0.07, 0.2].map((z) => (
-        <Box
-          key={z}
-          material={eye}
-          position={[1.26, -0.08, z]}
-          size={[0.1, 0.17, 0.09]}
-          castShadow={false}
-        />
-      ))}
-
-      {/* Eyes */}
-      {[-0.32, 0.32].map((z) => (
-        <group key={z}>
-          <Box material={eye} position={[0.78, 0.3, z]} size={[0.24, 0.24, 0.16]} castShadow={false} />
-          <Box material={pupil} position={[0.88, 0.3, z]} size={[0.08, 0.14, 0.11]} castShadow={false} />
-        </group>
-      ))}
-
-      {/* Nose horn */}
-      {horns >= 1 && (
-        <Box
-          material={spike}
-          position={[1.24, 0.42, 0]}
-          size={[0.18, 0.46, 0.18]}
-          rotation={[0, 0, -0.32]}
-        />
-      )}
-      {/* Brow horns */}
-      {horns >= 2 &&
-        [-0.3, 0.3].map((z) => (
-          <Box
-            key={z}
-            material={spike}
-            position={[0.66, 0.72, z]}
-            size={[0.17, 0.54, 0.17]}
-            rotation={[z > 0 ? -0.2 : 0.2, 0, -0.1]}
-          />
-        ))}
-      {/* Crown horns */}
-      {horns >= 3 &&
-        [-0.46, 0.46].map((z) => (
-          <Box
-            key={z}
-            material={spike}
-            position={[0.36, 0.82, z]}
-            size={[0.15, 0.66, 0.15]}
-            rotation={[z > 0 ? -0.4 : 0.4, 0, 0.12]}
-          />
-        ))}
-    </group>
-  )
+/** A biped's little front arms, three-clawed like the feet. */
+function armBoxes() {
+  const out = [
+    box('body', [0, -0.22, 0], [0.26, 0.46, 0.26]),
+    box('body', [0.12, -0.5, 0], [0.22, 0.32, 0.22]),
+  ]
+  for (const z of [-0.07, 0.07]) {
+    out.push(box('spike', [0.26, -0.64, z], [0.15, 0.13, 0.1]))
+  }
+  return out
 }
 
 /* ------------------------------------------------------------------ dino */
 
+const HEAD_ORIGIN = [0.98, 1.74, 0]
+const TAIL_ORIGIN = [-0.9, 1.12, 0]
+
 /**
- * Blocky placeholder dino, restyled per stage. Faces +X, feet on y = 0.
+ * Blocky dino, restyled per stage. Faces +X, feet on y = 0.
  */
 export function PrimitiveDino({ evolution, materials, rig }) {
-  const { body, belly, spike } = materials
   const quad = evolution.legs === 4
+
+  const shape = useMemo(
+    () => ({
+      torso: torsoBoxes(evolution),
+      head: headBoxes(evolution),
+      tail: tailBoxes(evolution),
+      // Front and back limbs differ in build; both sides of a pair share one
+      // description, and therefore one merged geometry.
+      front: quad ? legBoxes(0.92, 0.82, true) : armBoxes(),
+      back: legBoxes(quad ? 1.05 : 1.2, quad ? 0.9 : 1, true),
+    }),
+    [evolution, quad]
+  )
+
+  // Merged once per part; the leg pairs then draw the same geometry twice.
+  const torso = useMergedGroups(shape.torso)
+  const head = useMergedGroups(shape.head)
+  const tail = useMergedGroups(shape.tail)
+  const front = useMergedGroups(shape.front)
+  const back = useMergedGroups(shape.back)
 
   // Ref plumbing: assign into the shared rig if one was supplied.
   const assign = (key) => (node) => {
     if (rig) rig.current[key] = node
   }
 
-  /** Back plates / sail, sized by the stage's plate count. */
-  const plates = useMemo(() => {
-    const out = []
-    const count = evolution.plates ?? 0
-    for (let i = 0; i < count; i++) {
-      const t = count === 1 ? 0.5 : i / (count - 1)
-      // Tallest over the hips, tapering toward neck and tail.
-      const height = (evolution.crest ? 0.95 : 0.5) * (0.4 + Math.sin(t * Math.PI) * 0.9)
-      out.push({
-        position: [-0.8 + t * 1.6, 1.52 + height / 2, 0],
-        size: [0.2, height, evolution.crest ? 0.16 : 0.4],
-      })
-    }
-    return out
-  }, [evolution.plates, evolution.crest])
+  const frontHip = quad ? [0.5, 1.0, 0.46] : [0.66, 1.2, 0.5]
 
   return (
     <group>
       <group ref={assign('body')}>
-        {/* ----------------------------------------------------------- torso */}
-        <Box material={body} position={[-0.2, 1.15, 0]} size={[1.55, 1.1, 1.05]} />
-        <Box material={body} position={[0.5, 1.22, 0]} size={[0.72, 0.9, 0.9]} />
-        {/* Hips */}
-        <Box material={body} position={[-0.86, 1.08, 0]} size={[0.7, 0.86, 0.92]} />
-        {/* Belly panel */}
-        <Box material={belly} position={[-0.15, 0.78, 0]} size={[1.42, 0.44, 0.92]} />
-        {/* Shoulder stripe adds a second colour break along the flank */}
-        {[-0.54, 0.54].map((z) => (
-          <Box
-            key={z}
-            material={belly}
-            position={[0.1, 1.42, z]}
-            size={[0.9, 0.24, 0.06]}
-            castShadow={false}
-          />
-        ))}
+        <PartMeshes groups={torso} materials={materials} />
 
-        {/* ---------------------------------------------------------- plates */}
-        {plates.map((plate, i) => (
-          <Box key={i} material={spike} position={plate.position} size={plate.size} />
-        ))}
+        <group ref={assign('head')} position={HEAD_ORIGIN}>
+          <PartMeshes groups={head} materials={materials} />
+        </group>
 
-        <Head materials={materials} innerRef={assign('head')} evolution={evolution} />
-        <Tail materials={materials} innerRef={assign('tail')} evolution={evolution} />
+        <group ref={assign('tail')} position={TAIL_ORIGIN}>
+          <PartMeshes groups={tail} materials={materials} />
+        </group>
 
-        {/* ------------------------------------------------- front limbs */}
-        {quad ? (
-          <>
-            <Leg
-              materials={materials}
-              innerRef={assign('legFrontL')}
-              position={[0.5, 1.0, -0.46]}
-              thickness={0.82}
-              length={0.82}
-            />
-            <Leg
-              materials={materials}
-              innerRef={assign('legFrontR')}
-              position={[0.5, 1.0, 0.46]}
-              thickness={0.82}
-              length={0.82}
-            />
-          </>
-        ) : (
-          <>
-            {/* Small arms, still swung by the walk cycle */}
-            <group ref={assign('legFrontL')} position={[0.66, 1.2, -0.5]}>
-              <Box material={body} position={[0, -0.22, 0]} size={[0.24, 0.44, 0.24]} />
-              <Box material={body} position={[0.12, -0.5, 0]} size={[0.2, 0.3, 0.2]} />
-              <Box material={spike} position={[0.24, -0.62, 0]} size={[0.16, 0.14, 0.16]} castShadow={false} />
-            </group>
-            <group ref={assign('legFrontR')} position={[0.66, 1.2, 0.5]}>
-              <Box material={body} position={[0, -0.22, 0]} size={[0.24, 0.44, 0.24]} />
-              <Box material={body} position={[0.12, -0.5, 0]} size={[0.2, 0.3, 0.2]} />
-              <Box material={spike} position={[0.24, -0.62, 0]} size={[0.16, 0.14, 0.16]} castShadow={false} />
-            </group>
-          </>
-        )}
+        <group ref={assign('legFrontL')} position={[frontHip[0], frontHip[1], -frontHip[2]]}>
+          <PartMeshes groups={front} materials={materials} />
+        </group>
+        <group ref={assign('legFrontR')} position={frontHip}>
+          <PartMeshes groups={front} materials={materials} />
+        </group>
 
-        {/* -------------------------------------------------- back legs */}
-        <Leg
-          materials={materials}
-          innerRef={assign('legBackL')}
-          position={[-0.5, 1.06, -0.46]}
-          thickness={quad ? 0.95 : 1.1}
-          length={quad ? 0.9 : 1}
-        />
-        <Leg
-          materials={materials}
-          innerRef={assign('legBackR')}
-          position={[-0.5, 1.06, 0.46]}
-          thickness={quad ? 0.95 : 1.1}
-          length={quad ? 0.9 : 1}
-        />
+        <group ref={assign('legBackL')} position={[-0.5, 1.06, -0.46]}>
+          <PartMeshes groups={back} materials={materials} />
+        </group>
+        <group ref={assign('legBackR')} position={[-0.5, 1.06, 0.46]}>
+          <PartMeshes groups={back} materials={materials} />
+        </group>
       </group>
     </group>
   )

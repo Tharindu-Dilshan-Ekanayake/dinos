@@ -10,6 +10,7 @@ import AreaBanner from './AreaBanner.jsx'
 import EvolutionTrack from './EvolutionTrack.jsx'
 import FloatingTexts from './FloatingTexts.jsx'
 import HealthBar from './HealthBar.jsx'
+import PlayerHealthBar from './PlayerHealthBar.jsx'
 import Leaderboard from './Leaderboard.jsx'
 import LevelSelect from './LevelSelect.jsx'
 import LobbyHUD from './LobbyHUD.jsx'
@@ -130,6 +131,11 @@ function StageProgress() {
     <div className="pointer-events-none absolute left-3 top-[16.5rem] z-10 w-44 sm:top-[15.5rem]">
       <div className="arcade-panel px-3 py-1.5">
         <HealthBar />
+      </div>
+      {/* Your own health sits directly under the pack's, so both sides of the
+          fight read as one readout. */}
+      <div className="arcade-panel mt-1.5 px-3 py-1.5">
+        <PlayerHealthBar />
       </div>
     </div>
   )

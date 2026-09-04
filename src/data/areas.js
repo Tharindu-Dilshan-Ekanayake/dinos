@@ -24,15 +24,19 @@ export const AREAS = [
     fog: '#a9dcc0',
     fogNear: 34,
     fogFar: 96,
-    // Checkered arena floor
+    // Voxel arena floor: checker tones, its edge ring, and its grass blades
     floorA: '#79d152',
     floorB: '#5cb63c',
     floorEdge: '#3f8f2c',
+    tuft: '#a6e75c',
+    flower: '#ffd93d',
     // Terraced cliffs enclosing the arena
     cliff: '#b08968',
     cliffTop: '#79c94f',
     cliffDark: '#8c6a4f',
-    // Rim scatter
+    // The skyline this biome looks out on, and the rim scatter
+    ridge: 'hills',
+    ridgeCap: '#3f8f2c',
     prop: 'tree',
     propColor: '#4faa39',
     propAccent: '#8a5a3b',
@@ -59,9 +63,13 @@ export const AREAS = [
     floorA: '#4a4a55',
     floorB: '#37373f',
     floorEdge: '#25252b',
+    tuft: '#7d4230',
+    flower: null,
     cliff: '#6b4a52',
     cliffTop: '#4a2f3a',
     cliffDark: '#432c33',
+    ridge: 'volcano',
+    ridgeCap: '#ff7a18',
     prop: 'rock',
     propColor: '#57575f',
     propAccent: '#8c3a1f',
@@ -85,9 +93,13 @@ export const AREAS = [
     floorA: '#dff2ff',
     floorB: '#b6ddf2',
     floorEdge: '#8ec4e0',
+    tuft: '#eaf9ff',
+    flower: '#bfe9ff',
     cliff: '#9fd0ea',
     cliffTop: '#f2fbff',
     cliffDark: '#7aaecd',
+    ridge: 'peaks',
+    ridgeCap: '#ffffff',
     prop: 'crystal',
     propColor: '#a9e6ff',
     propAccent: '#ffffff',
@@ -111,9 +123,13 @@ export const AREAS = [
     floorA: '#5d7a3a',
     floorB: '#48602c',
     floorEdge: '#334621',
+    tuft: '#9ac93f',
+    flower: '#d98cff',
     cliff: '#5a5a3a',
     cliffTop: '#7fa83f',
     cliffDark: '#42422a',
+    ridge: 'mounds',
+    ridgeCap: '#7fa83f',
     prop: 'mushroom',
     propColor: '#8e4fd1',
     propAccent: '#c9ff4f',
@@ -137,9 +153,13 @@ export const AREAS = [
     floorA: '#3b2f70',
     floorB: '#2b2154',
     floorEdge: '#1b1440',
+    tuft: '#8f79ea',
+    flower: '#ffe066',
     cliff: '#413178',
     cliffTop: '#7b5be0',
     cliffDark: '#2c2154',
+    ridge: 'shards',
+    ridgeCap: '#c9a3ff',
     prop: 'crystal',
     propColor: '#b39dff',
     propAccent: '#ffe066',
@@ -241,6 +261,16 @@ function shift(hex, hue, light) {
   return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`
 }
 
+/**
+ * A lighter (`light > 0`) or darker shade of a palette colour.
+ *
+ * The ground dressing needs two tones of the same green; deriving them keeps
+ * every biome - including the per-level shifted ones - in step automatically.
+ */
+export function shadeColor(hex, light) {
+  return shift(hex, 0, light)
+}
+
 /** Colours that carry the biome's identity and so shift only slightly. */
 const SHIFTED_KEYS = [
   'skyTop',
@@ -254,6 +284,7 @@ const SHIFTED_KEYS = [
   'cliffDark',
   'propColor',
   'propAccent',
+  'tuft',
   'glow',
   'ambient',
 ]

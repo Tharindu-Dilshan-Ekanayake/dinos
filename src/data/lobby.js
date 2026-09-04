@@ -266,6 +266,30 @@ export const OBSTACLES = [
   ...ENTRANCE_WALL_OBSTACLES,
 ]
 
+/**
+ * Pushes a point into the plaza's open space.
+ *
+ * Same reason as the arena's clamp: the terraces and the arena entrance walls
+ * are single-sided boxes, so a camera swung into one sees through it and the
+ * hub falls apart around the player.
+ *
+ * Mutates and returns the vector.
+ */
+export function clampToPlaza(point, margin = 1.2) {
+  const halfWidth = PLAZA.halfWidth - margin
+  if (point.x > halfWidth) point.x = halfWidth
+  else if (point.x < -halfWidth) point.x = -halfWidth
+
+  // Past the plaza's far end the only open ground is the gateway itself.
+  if (point.z < ARENA_ENTRANCE.wallFromZ) {
+    const gap = ARENA_ENTRANCE.gapHalfWidth - margin * 0.5
+    if (point.x > gap) point.x = gap
+    else if (point.x < -gap) point.x = -gap
+  }
+
+  return point
+}
+
 /* ----------------------------------------------------------------- scenery */
 
 /**
@@ -277,6 +301,45 @@ export const TERRACES = [
   { offset: PLAZA.halfWidth + 17, height: 3.4, width: 12 },
   { offset: PLAZA.halfWidth + 28, height: 5.6, width: 14 },
 ]
+
+/**
+ * Grass blades tufting the terraces that frame the plaza.
+ *
+ * They sit on the terrace tops only - never on the paving or the walkway - so
+ * the hub gets the same overgrown edges as the arena without anything sprouting
+ * where the player actually walks.
+ */
+export function lobbyTufts(clusters = 150) {
+  const items = []
+  let seed = 8112024
+  const rand = () => {
+    seed = (seed * 1664525 + 1013904223) % 4294967296
+    return seed / 4294967296
+  }
+
+  const fromZ = PLAZA.to - 6
+  const spanZ = PLAZA.from - fromZ + 10
+
+  for (let i = 0; i < clusters; i++) {
+    const terrace = TERRACES[i % TERRACES.length]
+    const side = i % 2 === 0 ? -1 : 1
+    const cx = side * (terrace.offset + (rand() - 0.5) * (terrace.width - 1.5))
+    const cz = fromZ + rand() * spanZ
+
+    const blades = 2 + Math.floor(rand() * 3)
+    for (let b = 0; b < blades; b++) {
+      const height = 0.5 + rand() * 0.5
+      items.push({
+        position: [cx + (rand() - 0.5) * 1.2, terrace.height + height / 2, cz + (rand() - 0.5) * 1.2],
+        scale: [0.8 + rand() * 0.5, height, 0.8 + rand() * 0.5],
+        rotation: rand() * Math.PI,
+        tilt: (rand() - 0.5) * 0.2,
+      })
+    }
+  }
+
+  return items
+}
 
 /** Blocky pines on the terraces, laid out deterministically. */
 export function treeLayout(count = 46) {
@@ -291,14 +354,19 @@ export function treeLayout(count = 46) {
     const side = i % 2 === 0 ? -1 : 1
     const terrace = TERRACES[i % TERRACES.length]
     const t = i / count
+    const scale = 0.9 + rand() * 0.85
+    // Inset by the canopy's own half-width, so no tree hangs over the terrace
+    // edge with nothing underneath it.
+    const room = Math.max(0, terrace.width / 2 - 1.35 * scale)
+
     trees.push({
       position: [
-        side * (terrace.offset + (rand() - 0.5) * (terrace.width - 3)),
+        side * (terrace.offset + (rand() - 0.5) * 2 * room),
         0,
         PLAZA.from + 6 - t * (PLAZA.from - PLAZA.to + 22) - rand() * 4,
       ],
       terraceHeight: terrace.height,
-      scale: 0.9 + rand() * 0.85,
+      scale,
       rotation: rand() * Math.PI,
     })
   }
