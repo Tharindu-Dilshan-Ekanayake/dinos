@@ -1,0 +1,309 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: #0b1220;
+  }
+
+  body {
+    /*
+     * "manipulation" opts out of the legacy 300ms double-tap-to-zoom delay, so
+     * taps register instantly on mobile. Combined with the fixed viewport meta
+     * tag this keeps rapid tapping from zooming or scrolling the page.
+     */
+    touch-action: manipulation;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-user-select: none;
+    user-select: none;
+    font-family: 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
+    color: #f8fafc;
+  }
+
+  canvas {
+    touch-action: none;
+    display: block;
+  }
+}
+
+@layer components {
+  /* Chunky arcade-style label used across the HUD. */
+  .hud-label {
+    @apply text-[10px] font-bold uppercase tracking-[0.16em] text-white/55;
+  }
+
+  .hud-panel {
+    @apply rounded-2xl border border-white/10 bg-slate-950/65 backdrop-blur-md shadow-lg shadow-black/40;
+  }
+
+  .hud-button {
+    @apply select-none rounded-xl border border-white/15 bg-white/10 font-semibold
+           text-white/90 transition active:scale-95 disabled:opacity-40
+           disabled:active:scale-100 hover:bg-white/20;
+  }
+
+  /* Reserves space for the iOS home indicator / Android gesture bar. */
+  .safe-bottom {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+
+  .safe-top {
+    padding-top: max(0.75rem, env(safe-area-inset-top));
+  }
+}
+
+/* Text stroke for floating combat numbers rendered in the DOM. */
+.text-outline {
+  text-shadow:
+    -2px -2px 0 rgba(2, 6, 23, 0.9),
+    2px -2px 0 rgba(2, 6, 23, 0.9),
+    -2px 2px 0 rgba(2, 6, 23, 0.9),
+    2px 2px 0 rgba(2, 6, 23, 0.9),
+    0 4px 12px rgba(2, 6, 23, 0.6);
+}
+
+/* ------------------------------------------------------------------ effects */
+
+/*
+ * Floating combat numbers are created as plain DOM nodes and animated purely
+ * by CSS, so a fast clicker never re-renders the React tree to show them.
+ */
+@keyframes float-up {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.55) rotate(var(--tilt, 0deg));
+  }
+  18% {
+    opacity: 1;
+    transform: translate(-50%, -75%) scale(1.12) rotate(var(--tilt, 0deg));
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -220%) scale(0.85) rotate(var(--tilt, 0deg));
+  }
+}
+
+.float-text {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  font-weight: 800;
+  will-change: transform, opacity;
+  animation: float-up 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes banner-sweep {
+  0% {
+    opacity: 0;
+    transform: translateY(-30px) scale(0.9);
+  }
+  12%,
+  72% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-18px) scale(0.97);
+  }
+}
+
+.area-banner {
+  animation: banner-sweep 3s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .float-text,
+  .area-banner {
+    animation-duration: 0.01ms;
+  }
+}
+
+
+/* ================================================================= UI kit ==
+ * Chunky cartoon chrome: thick dark outlines, a bright gradient fill, a hard
+ * drop shadow and an inner highlight. Every HUD surface is built from these
+ * few classes so the whole interface reads as one set.
+ */
+
+@layer components {
+  /* Heavy outlined display text, the way arcade HUDs letter their numbers. */
+  .rb-text {
+    @apply font-black uppercase tracking-wide text-white;
+    -webkit-text-stroke: 2px #201235;
+    paint-order: stroke fill;
+    text-shadow: 0 3px 0 rgba(32, 18, 53, 0.55);
+  }
+
+  .rb-text-sm {
+    -webkit-text-stroke: 1.5px #201235;
+  }
+
+  .rb-text-lg {
+    -webkit-text-stroke: 3px #201235;
+  }
+
+  /* Base surface: dark rim, inner highlight, hard shadow. */
+  .rb-surface {
+    @apply rounded-2xl border-4 border-[#241539];
+    box-shadow:
+      0 6px 0 rgba(24, 12, 40, 0.45),
+      0 10px 18px rgba(12, 6, 24, 0.35),
+      inset 0 3px 0 rgba(255, 255, 255, 0.38),
+      inset 0 -4px 0 rgba(0, 0, 0, 0.16);
+  }
+
+  .rb-panel {
+    @apply rb-surface;
+    background: linear-gradient(180deg, #3a2b57 0%, #241a3c 100%);
+  }
+
+  /* Pressable version: sinks into its own shadow on tap. */
+  .rb-btn {
+    @apply rb-surface select-none transition-transform duration-75 active:translate-y-[3px];
+    @apply active:shadow-[0_2px_0_rgba(24,12,40,0.45)];
+  }
+
+  .rb-btn:disabled {
+    @apply translate-y-0 opacity-55;
+    filter: saturate(0.45);
+  }
+
+  /* -------------------------------------------------------- colour fills */
+  .rb-gold {
+    background: linear-gradient(180deg, #ffe27a 0%, #ffb703 55%, #e88b00 100%);
+  }
+  .rb-green {
+    background: linear-gradient(180deg, #a6f77a 0%, #47c957 55%, #2c9a3d 100%);
+  }
+  .rb-blue {
+    background: linear-gradient(180deg, #8fd8ff 0%, #2f9bf0 55%, #1a6fc4 100%);
+  }
+  .rb-purple {
+    background: linear-gradient(180deg, #d9b3ff 0%, #9a5cf0 55%, #6f31c4 100%);
+  }
+  .rb-red {
+    background: linear-gradient(180deg, #ffb3a8 0%, #f0533f 55%, #c22e1f 100%);
+  }
+  .rb-cyan {
+    background: linear-gradient(180deg, #a8fff0 0%, #21d9c0 55%, #10a48f 100%);
+  }
+  .rb-pink {
+    background: linear-gradient(180deg, #ffbde4 0%, #f45fb0 55%, #c22a80 100%);
+  }
+  .rb-slate {
+    background: linear-gradient(180deg, #6b7a92 0%, #414c63 55%, #2a3244 100%);
+  }
+
+  /* Progress track + fill, matching the level bar in the reference. */
+  .rb-track {
+    @apply overflow-hidden rounded-full border-4 border-[#241539] bg-[#1a1230];
+    box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.55);
+  }
+
+  .rb-fill {
+    @apply h-full rounded-full;
+    background: linear-gradient(180deg, #ffe27a 0%, #ffb703 60%, #ef8a00 100%);
+    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.45);
+  }
+
+  /* Square icon tile used by the left-hand menu column. */
+  .rb-tile {
+    @apply rb-btn flex flex-col items-center justify-center gap-0.5 px-1 py-1.5;
+  }
+
+  /* Small red "!" notification dot. */
+  .rb-badge {
+    @apply absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center
+           rounded-full border-[3px] border-[#241539] text-xs font-black text-white;
+    background: linear-gradient(180deg, #ff8080 0%, #e0243c 100%);
+  }
+}
+
+/* ------------------------------------------------------- arcade UI kit */
+
+/*
+ * Chunky cartoon controls: a thick dark outline, a bright vertical gradient,
+ * and a hard offset shadow instead of a blur, which is what gives the buttons
+ * their sticker-like look. Pressing one sinks it into its own shadow.
+ */
+.arcade {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 3px solid #1e1b16;
+  border-radius: 0.85rem;
+  box-shadow: 0 4px 0 #1e1b16;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #fff;
+  text-shadow:
+    -1.5px -1.5px 0 rgba(24, 20, 16, 0.85),
+    1.5px -1.5px 0 rgba(24, 20, 16, 0.85),
+    -1.5px 1.5px 0 rgba(24, 20, 16, 0.85),
+    1.5px 1.5px 0 rgba(24, 20, 16, 0.85);
+  transition:
+    transform 0.06s ease,
+    box-shadow 0.06s ease,
+    filter 0.12s ease;
+  user-select: none;
+}
+
+.arcade:active:not(:disabled) {
+  transform: translateY(4px);
+  box-shadow: 0 0 0 #1e1b16;
+}
+
+.arcade:disabled {
+  filter: grayscale(0.75) brightness(0.65);
+}
+
+/* A soft highlight along the top edge sells the plastic/candy finish. */
+.arcade::after {
+  content: '';
+  position: absolute;
+  inset: 3px 3px auto 3px;
+  height: 38%;
+  border-radius: 0.55rem 0.55rem 0.9rem 0.9rem;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+
+.arcade-yellow { background: linear-gradient(to bottom, #ffd34d, #f59f0b); }
+.arcade-green  { background: linear-gradient(to bottom, #7ee06a, #3fa832); }
+.arcade-blue   { background: linear-gradient(to bottom, #62c4ff, #2b7fd4); }
+.arcade-purple { background: linear-gradient(to bottom, #c08bff, #7c3aed); }
+.arcade-pink   { background: linear-gradient(to bottom, #ff8ec4, #e0338c); }
+.arcade-red    { background: linear-gradient(to bottom, #ff8a75, #dc2626); }
+.arcade-slate  { background: linear-gradient(to bottom, #8b98ad, #4a5568); }
+
+/* Panel sharing the button's outline, for stat plaques and shop rows. */
+.arcade-panel {
+  border: 3px solid #1e1b16;
+  border-radius: 0.9rem;
+  box-shadow: 0 4px 0 #1e1b16;
+  background: linear-gradient(to bottom, rgba(30, 41, 59, 0.94), rgba(15, 23, 42, 0.94));
+}
+
+/* Bright label used on the stat plaques. */
+.arcade-value {
+  font-weight: 900;
+  color: #fff;
+  text-shadow:
+    -1.5px -1.5px 0 rgba(24, 20, 16, 0.9),
+    1.5px -1.5px 0 rgba(24, 20, 16, 0.9),
+    -1.5px 1.5px 0 rgba(24, 20, 16, 0.9),
+    1.5px 1.5px 0 rgba(24, 20, 16, 0.9);
+}
