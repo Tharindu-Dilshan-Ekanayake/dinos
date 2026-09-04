@@ -76,6 +76,7 @@ export function buildArenaBlocks() {
           position: [sign * centreOffset, height / 2, z],
           size: [tier.depth, height, depth],
           tier: tierIndex,
+          face: 'side',
           top: height,
         })
       }
@@ -97,6 +98,7 @@ export function buildArenaBlocks() {
         position: [x, height / 2, backZ],
         size: [backStep * 1.02, height, tier.depth],
         tier: tierIndex,
+        face: 'back',
         top: height,
       })
     }
@@ -106,13 +108,23 @@ export function buildArenaBlocks() {
 }
 
 /**
+ * Half-width of the widest prop at scale 1 - a tree's lower canopy.
+ *
+ * Props are inset from their block's edges by this much, so a canopy always
+ * has terrace underneath it. Placing by trunk alone put the trunk on the block
+ * and left the canopy hanging over the drop, which reads as a floating tree
+ * however well planted the trunk actually is.
+ */
+const PROP_HALF_WIDTH = 1.45
+
+/**
  * Scatter of rim props standing on the terraces.
  *
- * Props are placed on top of real wall blocks, so nothing floats and nothing
- * intersects the arena floor.
+ * Props are placed on top of real wall blocks, so nothing floats, nothing
+ * overhangs a cliff edge, and nothing intersects the arena floor.
  */
-export function buildArenaProps(blocks, count = 44) {
-  const rand = makeRandom(4242)
+export function buildArenaProps(blocks, seed = 0, count = 44) {
+  const rand = makeRandom(4242 + seed * 3571)
   const props = []
 
   // Only the outer two tiers get props - the innermost wall stays clean so it
@@ -125,13 +137,19 @@ export function buildArenaProps(blocks, count = 44) {
     const [bx, , bz] = block.position
     const [sx, , sz] = block.size
 
+    const scale = 0.75 + rand() * 0.8
+    const half = PROP_HALF_WIDTH * scale
+    // Whatever room is left on the block once the canopy is accounted for.
+    const roomX = Math.max(0, sx / 2 - half)
+    const roomZ = Math.max(0, sz / 2 - half)
+
     props.push({
       position: [
-        bx + (rand() - 0.5) * sx * 0.7,
+        bx + (rand() - 0.5) * 2 * roomX,
         block.top,
-        bz + (rand() - 0.5) * sz * 0.7,
+        bz + (rand() - 0.5) * 2 * roomZ,
       ],
-      scale: 0.75 + rand() * 0.95,
+      scale,
       rotation: rand() * Math.PI * 2,
     })
   }
@@ -160,6 +178,169 @@ export function buildGlowVeins(count = 26) {
   }
 
   return veins
+}
+
+/* --------------------------------------------------- voxel ground dressing */
+
+/*
+ * Every builder below takes the level's index as a seed. The walls are shared
+ * layout - they decide where you can walk - but the dressing is not, and two
+ * chambers wearing an identical scatter is obvious when you can see the next
+ * one through the gate.
+ */
+
+/**
+ * The floor is a single texture, which from above reads as wallpaper. These
+ * are the blocky colour patches painted over it - the lighter and darker
+ * clearings that make the ground look built out of blocks rather than printed.
+ *
+ * Boxes rather than decals: a 6cm lip catches the key light and gives the
+ * patch an edge, which is exactly how the reference art reads.
+ */
+export function buildGroundPatches(seed = 0, count = 18) {
+  const rand = makeRandom(5150 + seed * 7919)
+  const patches = []
+
+  const spanZ = ARENA.frontZ - ARENA.backZ
+
+  for (let i = 0; i < count; i++) {
+    const x = (rand() - 0.5) * 2 * (ARENA.halfWidth - 2)
+    const z = ARENA.backZ + 1 + rand() * (spanZ - 2)
+
+    // Keep the fighting pad clear: the ring around it has to stay readable.
+    if (Math.hypot(x, z) < ARENA.padRadius + 1.2) continue
+
+    patches.push({
+      position: [x, 0.03, z],
+      scale: [2.6 + rand() * 6, 0.06, 2.6 + rand() * 6],
+      light: rand() < 0.5,
+    })
+  }
+
+  return patches
+}
+
+/** True where a piece of ground dressing would sit on something in use. */
+function blockedGround(x, z) {
+  if (Math.hypot(x, z) < ARENA.padRadius + 0.5) return true
+  // The exit gate and both return pads.
+  if (z < ARENA.backZ + 5 && Math.abs(x) < ARENA.gapHalfWidth + 4.2) return true
+  return false
+}
+
+/**
+ * Grass blades and pebbles standing on the chamber floor.
+ *
+ * Blades come in clusters of two to four so the ground looks tufted rather
+ * than evenly stubbled, but every blade is one instance of the same box - the
+ * clustering costs nothing at draw time.
+ */
+export function buildGroundScatter(seed = 0, clusters = 46, pebbleCount = 18) {
+  const rand = makeRandom(60613 + seed * 6151)
+  const tufts = []
+  const pebbles = []
+  const flowers = []
+
+  const spanZ = ARENA.frontZ - ARENA.backZ
+
+  for (let i = 0; i < clusters; i++) {
+    const cx = (rand() - 0.5) * 2 * (ARENA.halfWidth - 1)
+    const cz = ARENA.backZ + 0.8 + rand() * (spanZ - 1)
+    if (blockedGround(cx, cz)) continue
+
+    const blades = 3 + Math.floor(rand() * 3)
+    for (let b = 0; b < blades; b++) {
+      const height = 0.4 + rand() * 0.4
+      tufts.push({
+        position: [cx + (rand() - 0.5) * 0.8, height / 2, cz + (rand() - 0.5) * 0.8],
+        scale: [0.75 + rand() * 0.45, height, 0.75 + rand() * 0.45],
+        rotation: rand() * Math.PI,
+        // A slight lean stops a cluster looking like a row of fence posts.
+        tilt: (rand() - 0.5) * 0.3,
+      })
+    }
+
+    // Roughly one clump in three is flowering. They grow out of a tuft rather
+    // than standing alone, which is what keeps them from reading as litter
+    // dropped on the grass.
+    if (rand() < 0.34) {
+      flowers.push({
+        position: [cx + (rand() - 0.5) * 0.7, 0, cz + (rand() - 0.5) * 0.7],
+        scale: 0.85 + rand() * 0.5,
+        rotation: rand() * Math.PI,
+      })
+    }
+  }
+
+  for (let i = 0; i < pebbleCount; i++) {
+    const x = (rand() - 0.5) * 2 * (ARENA.halfWidth - 1)
+    const z = ARENA.backZ + 0.8 + rand() * (spanZ - 1)
+    if (blockedGround(x, z)) continue
+
+    // Flat and low: a stone lying in the grass, not a crate dropped on it.
+    const height = 0.11 + rand() * 0.13
+    pebbles.push({
+      position: [x, height / 2, z],
+      scale: [0.3 + rand() * 0.36, height, 0.3 + rand() * 0.36],
+      rotation: rand() * Math.PI,
+    })
+  }
+
+  return { tufts, pebbles, flowers }
+}
+
+/**
+ * Chunks breaking up the cliff faces.
+ *
+ * A terrace made of plain boxes reads as a wall; the reference art hangs
+ * loose blocks off it and piles rubble at its foot, which is what turns the
+ * same silhouette into carved rock. Positions are derived from the wall blocks
+ * themselves, so a chunk can never float away from the face it belongs to.
+ */
+export function buildCliffDetails(blocks, seed = 0) {
+  const rand = makeRandom(24680 + seed * 4093)
+  const items = []
+
+  for (const block of blocks) {
+    const [bx, , bz] = block.position
+    const [sx, , sz] = block.size
+
+    // The direction pointing from this block back into the arena.
+    const inward = block.face === 'side' ? [-Math.sign(bx) || 1, 0] : [0, 1]
+
+    // Chunks embedded in the face, half sunk into the wall.
+    if (rand() < 0.62) {
+      const size = 0.9 + rand() * 1.4
+      const along = (rand() - 0.5) * 0.62
+      items.push({
+        position: [
+          bx + inward[0] * (sx / 2) + (inward[0] === 0 ? along * sx : 0),
+          block.top * (0.2 + rand() * 0.5),
+          bz + inward[1] * (sz / 2) + (inward[1] === 0 ? along * sz : 0),
+        ],
+        scale: [size, size * (0.7 + rand() * 0.6), size],
+        rotation: (rand() - 0.5) * 0.5,
+      })
+    }
+
+    // Rubble at the foot of the innermost terrace only - the outer tiers are
+    // too far back for anyone to read the detail.
+    if (block.tier === 0 && rand() < 0.5) {
+      const height = 0.5 + rand() * 0.9
+      const along = (rand() - 0.5) * 0.7
+      items.push({
+        position: [
+          bx + inward[0] * (sx / 2 + 0.4 + rand() * 1.1) + (inward[0] === 0 ? along * sx : 0),
+          height / 2,
+          bz + inward[1] * (sz / 2 + 0.4 + rand() * 1.1) + (inward[1] === 0 ? along * sz : 0),
+        ],
+        scale: [height * (0.9 + rand() * 0.8), height, height * (0.9 + rand() * 0.8)],
+        rotation: rand() * Math.PI,
+      })
+    }
+  }
+
+  return items
 }
 
 /* ------------------------------------------------------------- corridor */
@@ -204,6 +385,51 @@ export const ARENA_BOUNDS = {
  */
 export const PASSAGE_LENGTH =
   CHAMBER_SPAN - (ARENA_BOUNDS.maxZ - ARENA_BOUNDS.minZ)
+
+/**
+ * Pushes a point into the corridor's open space.
+ *
+ * The camera needs this as much as the dino does. A chamber is a slot between
+ * two cliffs, and the cliffs are single-sided boxes: a camera swung sideways
+ * ends up *inside* one, sees straight through its back faces, and the wall
+ * simply vanishes - leaving the trees standing on top of it hanging in the sky
+ * over an empty green plain.
+ *
+ * Mutates and returns the vector.
+ */
+export function clampToCorridor(point, playerZ = null, margin = 1.4) {
+  // Which chamber's stretch of corridor this point is in.
+  const stage = Math.round(-point.z / CHAMBER_SPAN)
+  const localZ = point.z - chamberOrigin(stage)
+
+  // The hollow itself, not the player's inset bounds - the camera is allowed
+  // right up to the wall, it just may not go inside it.
+  const inChamber = localZ >= ARENA.backZ && localZ <= ARENA.frontZ
+  // Inside a chamber you have the full hollow; between them, only the gap cut
+  // through the back wall.
+  const halfWidth = inChamber
+    ? ARENA.halfWidth - margin
+    : Math.max(0.5, PASSAGE_HALF_WIDTH - margin * 0.5)
+
+  if (point.x > halfWidth) point.x = halfWidth
+  else if (point.x < -halfWidth) point.x = -halfWidth
+
+  /*
+   * While the player is still inside the hollow, the camera stays on their
+   * side of the back wall. Swinging it round to face the dino would otherwise
+   * push it through the sealed gate, and the barrier is translucent from
+   * behind - the whole screen washes out.
+   */
+  if (playerZ !== null) {
+    const playerLocalZ = playerZ - chamberOrigin(Math.round(-playerZ / CHAMBER_SPAN))
+    if (playerLocalZ >= ARENA.backZ && playerLocalZ <= ARENA.frontZ) {
+      const back = chamberOrigin(Math.round(-playerZ / CHAMBER_SPAN)) + ARENA.backZ + 1.5
+      if (point.z < back) point.z = back
+    }
+  }
+
+  return point
+}
 
 export const ARENA_PLAYER_SPEED = 9
 export const ARENA_PLAYER_TURN_SPEED = 10

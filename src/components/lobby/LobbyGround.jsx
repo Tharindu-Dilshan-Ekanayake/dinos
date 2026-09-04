@@ -7,67 +7,107 @@ import {
   LOBBY_PALETTE,
   PLAZA,
   TERRACES,
+  lobbyTufts,
   treeLayout,
 } from '../../data/lobby.js'
+import { voxelMaterial } from '../../systems/voxelTexture.js'
+import InstancedBlocks from '../InstancedBlocks.jsx'
 
 /**
  * The hub's terrain: a checkered stone concourse, bright grass lanes either
- * side, the raised left tier and its stairs, grass terraces stepping up to a
- * timber fence, and blocky pines behind it.
+ * side, the raised left tier and its stairs, grass-topped dirt terraces
+ * stepping up to a timber fence, and blocky pines behind it.
  *
- * Everything is flat-shaded boxes on a handful of shared materials, and the
- * concourse tiling is one texture rather than thousands of tile meshes - so
- * the whole environment stays around thirty draw calls and runs on a phone.
+ * Everything is flat-shaded boxes wearing procedural voxel textures - grass on
+ * the lids, dirt down the faces, the way terrain is cut in a block game - and
+ * the paving is one tiling texture rather than thousands of tile meshes. The
+ * trees and the grass tufts are instanced, so the whole environment stays
+ * around thirty draw calls and runs on a phone.
  */
 
-/** Procedural checker, drawn once into a canvas. Cheaper than tile meshes. */
-function makeCheckerTexture(light, dark, size = 64) {
-  const canvas = document.createElement('canvas')
-  canvas.width = size
-  canvas.height = size
-  const ctx = canvas.getContext('2d')
-
-  ctx.fillStyle = light
-  ctx.fillRect(0, 0, size, size)
-  ctx.fillStyle = dark
-  ctx.fillRect(0, 0, size / 2, size / 2)
-  ctx.fillRect(size / 2, size / 2, size / 2, size / 2)
-
-  // A soft grout line keeps the tiling readable from a distance.
-  ctx.strokeStyle = 'rgba(0,0,0,0.10)'
-  ctx.lineWidth = 2
-  ctx.strokeRect(0, 0, size / 2, size / 2)
-  ctx.strokeRect(size / 2, size / 2, size / 2, size / 2)
-
-  const texture = new THREE.CanvasTexture(canvas)
-  texture.wrapS = THREE.RepeatWrapping
-  texture.wrapT = THREE.RepeatWrapping
-  texture.magFilter = THREE.NearestFilter
-  texture.colorSpace = THREE.SRGBColorSpace
-  return texture
-}
-
+/**
+ * Voxel textures are UV-mapped per box face, so a repeat that gives square
+ * cells on a terrace lid smears them across its riser. Anything the player can
+ * see two faces of gets a material per orientation, tuned to that face.
+ */
 function useLobbyMaterials() {
   const bundle = useMemo(() => {
     const make = (color, extra = {}) =>
       new THREE.MeshStandardMaterial({ color, roughness: 0.92, flatShading: true, ...extra })
 
-    const checker = makeCheckerTexture('#e6ebf2', '#c3ccd8')
-    checker.repeat.set(PLAZA.halfWidth, (PLAZA.from - PLAZA.to) / 2)
+    const grass = (color, repeat, seed) =>
+      voxelMaterial(color, {
+        cells: 8,
+        variance: 0.08,
+        fleck: 0.3,
+        fleckDepth: 0.17,
+        repeat,
+        seed,
+      })
 
-    const laneChecker = makeCheckerTexture('#79d45f', '#5fbb46')
-    laneChecker.repeat.set(4, (PLAZA.from - PLAZA.to) / 2)
+    /** Paving: a jittered checker with grout, sized to one-metre slabs. */
+    const paving = (color, accent, repeat, seed) =>
+      voxelMaterial(color, {
+        pattern: 'tiles',
+        cells: 4,
+        variance: 0.05,
+        fleckDepth: 0.14,
+        accent,
+        repeat,
+        roughness: 0.9,
+        seed,
+      })
+
+    /** Coursed stone for the tier and its steps. */
+    const masonry = (repeat, seed) =>
+      voxelMaterial('#aeb8c6', {
+        pattern: 'bricks',
+        cells: 6,
+        variance: 0.08,
+        fleckDepth: 0.2,
+        repeat,
+        seed,
+      })
+
+    const plazaLength = PLAZA.from - PLAZA.to
 
     return {
-      grass: make(LOBBY_PALETTE.grass),
-      grassMid: make('#54ad3e'),
-      grassDark: make(LOBBY_PALETTE.grassDark),
-      grassTop: make('#6fca52'),
-      tier: make('#aeb8c6'),
-      tierTop: new THREE.MeshStandardMaterial({ roughness: 0.9 }),
-      concourse: new THREE.MeshStandardMaterial({ map: checker, roughness: 0.9 }),
-      tierSurface: new THREE.MeshStandardMaterial({ map: checker, roughness: 0.9 }),
-      lane: new THREE.MeshStandardMaterial({ map: laneChecker, roughness: 0.95 }),
+      // Lids: the terraces run along Z, the back one along X, so their repeats
+      // are transposed.
+      field: grass('#6fca52', [48, 52], 11),
+      terraceTops: [
+        grass(LOBBY_PALETTE.grass, [2, 20], 23),
+        grass('#54ad3e', [2, 20], 29),
+        grass(LOBBY_PALETTE.grassDark, [2, 20], 31),
+      ],
+      backTop: grass('#54ad3e', [20, 2], 43),
+      // Faces: dirt, cut away under the grass.
+      soil: voxelMaterial(LOBBY_PALETTE.wall, {
+        cells: 8,
+        variance: 0.11,
+        fleck: 0.36,
+        fleckDepth: 0.24,
+        repeat: [20, 1],
+        seed: 53,
+      }),
+      /*
+       * Three masonry materials, not one. A box UV-maps every face to 0-1, so
+       * the repeat that makes square bricks on the tier's long flank turns the
+       * same bricks into vertical streaks on its narrow end - which is exactly
+       * what the stair sides were doing.
+       */
+      stoneLong: masonry([10, 1], 67),
+      stoneWide: masonry([2, 1], 71),
+      stoneNarrow: masonry([1, 1], 73),
+      stoneStep: masonry([7, 1], 79),
+      concourse: paving('#e6ebf2', '#c3ccd8', [PLAZA.halfWidth / 2, plazaLength / 4], 83),
+      tierSurface: paving(
+        '#e6ebf2',
+        '#c3ccd8',
+        [(LEFT_TIER.maxX - LEFT_TIER.minX) / 4, (LEFT_TIER.maxZ - LEFT_TIER.minZ) / 4],
+        89
+      ),
+      lane: paving('#79d45f', '#5fbb46', [1.6, plazaLength / 4], 97),
       kerb: make(LOBBY_PALETTE.pathEdge),
       post: make('#a9713f'),
       rail: make('#c98a4b'),
@@ -75,16 +115,18 @@ function useLobbyMaterials() {
       leaf: make('#48b356'),
       leafMid: make('#3a9c48'),
       leafDark: make('#2f7d3b'),
-      textures: [checker, laneChecker],
+      tuft: make('#a6e75c', { roughness: 0.85 }),
     }
   }, [])
 
+  // Materials are ours; their maps belong to the shared texture cache.
   useEffect(
     () => () => {
-      bundle.textures.forEach((t) => t.dispose())
-      Object.values(bundle).forEach((m) => {
-        if (m instanceof THREE.Material) m.dispose()
-      })
+      Object.values(bundle)
+        .flat()
+        .forEach((m) => {
+          if (m instanceof THREE.Material) m.dispose()
+        })
     },
     [bundle]
   )
@@ -129,55 +171,64 @@ function Fence({ materials, from, to, x, axis = 'z' }) {
   )
 }
 
-/** Blocky pine: a trunk with three shrinking canopy blocks. */
-function Trees({ materials }) {
-  const trees = useMemo(() => treeLayout(46), [])
-  const trunk = useMemo(() => new THREE.BoxGeometry(0.55, 1.8, 0.55), [])
-  const tier = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
+/**
+ * Blocky pines: a trunk under three shrinking canopy blocks, the middle one
+ * turned off-square so a stack of boxes does not read as a smooth cone.
+ *
+ * Four dozen trees are four instanced draw calls - one per block of the tree -
+ * rather than nearly two hundred meshes.
+ */
+const TREE_PARTS = [
+  { key: 'trunk', size: [0.55, 1.8, 0.55], y: 0.9, material: 'trunk' },
+  { key: 'lower', size: [2.6, 1.3, 2.6], y: 2.3, material: 'leafDark' },
+  { key: 'mid', size: [2, 1.1, 2], y: 3.4, rotation: 0.5, material: 'leafMid' },
+  { key: 'top', size: [1.25, 0.95, 1.25], y: 4.35, material: 'leaf' },
+]
 
-  useEffect(
-    () => () => {
-      trunk.dispose()
-      tier.dispose()
-    },
-    [trunk, tier]
+function Trees({ materials }) {
+  const trees = useMemo(
+    () =>
+      treeLayout(46).map((tree) => ({
+        position: [tree.position[0], tree.terraceHeight ?? 0, tree.position[2]],
+        rotation: tree.rotation,
+        scale: tree.scale,
+      })),
+    []
   )
+
+  const geometries = useMemo(
+    () =>
+      TREE_PARTS.map(
+        (part) => new THREE.BoxGeometry(part.size[0], part.size[1], part.size[2])
+      ),
+    []
+  )
+
+  useEffect(() => () => geometries.forEach((g) => g.dispose()), [geometries])
 
   return (
-    <group>
-      {trees.map((tree, i) => (
-        <group
-          key={i}
-          position={[tree.position[0], tree.terraceHeight ?? 0, tree.position[2]]}
-          rotation-y={tree.rotation}
-          scale={tree.scale}
-        >
-          <mesh geometry={trunk} material={materials.trunk} position={[0, 0.9, 0]} castShadow />
-          <mesh
-            geometry={tier}
-            material={materials.leafDark}
-            position={[0, 2.3, 0]}
-            scale={[2.6, 1.3, 2.6]}
-            castShadow
-          />
-          <mesh
-            geometry={tier}
-            material={materials.leafMid}
-            position={[0, 3.4, 0]}
-            scale={[2, 1.1, 2]}
-            castShadow
-          />
-          <mesh
-            geometry={tier}
-            material={materials.leaf}
-            position={[0, 4.35, 0]}
-            scale={[1.25, 0.95, 1.25]}
-            castShadow
-          />
-        </group>
+    <>
+      {TREE_PARTS.map((part, i) => (
+        <InstancedBlocks
+          key={part.key}
+          items={trees}
+          geometry={geometries[i]}
+          material={materials[part.material]}
+          part={{ position: [0, part.y, 0], rotation: part.rotation ?? 0 }}
+          castShadow
+        />
       ))}
-    </group>
+    </>
   )
+}
+
+/** Grass blades tufting the terraces. One taper, scaled and leaned per blade. */
+function Tufts({ materials }) {
+  const items = useMemo(() => lobbyTufts(), [])
+  const geometry = useMemo(() => new THREE.CylinderGeometry(0.045, 0.11, 1, 4), [])
+  useEffect(() => () => geometry.dispose(), [geometry])
+
+  return <InstancedBlocks items={items} geometry={geometry} material={materials.tuft} />
 }
 
 export default function LobbyGround() {
@@ -189,14 +240,65 @@ export default function LobbyGround() {
   const walk = PLAZA.walkwayHalfWidth
   const y = PLAZA.pathHeight
 
-  // Terrace geometry comes from the layout data so the tree scatter and the
-  // steps they stand on can never drift apart.
-  const terraceMaterials = ['grass', 'grassMid', 'grassDark']
+  /** Grass lid, dirt sides: [+x, -x, +y, -y, +z, -z]. */
+  const terraceMaterials = useMemo(
+    () =>
+      materials.terraceTops.map((top) => [
+        materials.soil,
+        materials.soil,
+        top,
+        materials.soil,
+        materials.soil,
+        materials.soil,
+      ]),
+    [materials]
+  )
+
+  /*
+   * Face order is [+x, -x, +y, -y, +z, -z]. The tier is a long flank seen from
+   * the plaza; a step is a wide tread with two narrow ends - so each gets the
+   * masonry cut for the face it shows.
+   */
+  const tierMaterials = useMemo(
+    () => [
+      materials.stoneLong,
+      materials.stoneLong,
+      materials.stoneWide,
+      materials.stoneWide,
+      materials.stoneWide,
+      materials.stoneWide,
+    ],
+    [materials]
+  )
+
+  const stepMaterials = useMemo(
+    () => [
+      materials.stoneNarrow,
+      materials.stoneNarrow,
+      materials.stoneStep,
+      materials.stoneStep,
+      materials.stoneStep,
+      materials.stoneStep,
+    ],
+    [materials]
+  )
+
+  const backMaterials = useMemo(
+    () => [
+      materials.soil,
+      materials.soil,
+      materials.backTop,
+      materials.soil,
+      materials.soil,
+      materials.soil,
+    ],
+    [materials]
+  )
 
   return (
     <group>
       {/* Base grass field under everything */}
-      <mesh material={materials.grassTop} position={[0, -0.4, centreZ]} receiveShadow>
+      <mesh material={materials.field} position={[0, -0.4, centreZ]} receiveShadow>
         <boxGeometry args={[260, 0.8, 280]} />
       </mesh>
 
@@ -233,7 +335,7 @@ export default function LobbyGround() {
         [-1, 1].map((side) => (
           <mesh
             key={`${i}-${side}`}
-            material={materials[terraceMaterials[i % terraceMaterials.length]]}
+            material={terraceMaterials[i % terraceMaterials.length]}
             position={[side * terrace.offset, terrace.height / 2, centreZ]}
             receiveShadow
             castShadow
@@ -245,7 +347,7 @@ export default function LobbyGround() {
 
       {/* Raised left tier carrying the back row of stage podiums */}
       <mesh
-        material={materials.tier}
+        material={tierMaterials}
         position={[
           (LEFT_TIER.minX + LEFT_TIER.maxX) / 2,
           LEFT_TIER.height / 2,
@@ -280,13 +382,19 @@ export default function LobbyGround() {
       {/* Stairs up to the tier, matching groundHeightAt's step function */}
       {Array.from({ length: LEFT_STAIRS.steps }, (_, i) => {
         const depth = (LEFT_STAIRS.toZ - LEFT_STAIRS.fromZ) / LEFT_STAIRS.steps
-        const height = ((i + 1) / LEFT_STAIRS.steps) * LEFT_TIER.height
-        // Step 0 is the top one, nearest the tier edge.
+        /*
+         * Step 0 is the TOP one, nearest the tier edge, and they get shorter
+         * walking away from it - the staircase climbs onto the tier. The
+         * height has to count down with `i` for that: counting up drew the
+         * flight back to front, so it descended toward the tier it is meant to
+         * climb, and the dino walked through mid-air over the low end.
+         */
+        const height = ((LEFT_STAIRS.steps - i) / LEFT_STAIRS.steps) * LEFT_TIER.height
         const z = LEFT_STAIRS.fromZ + depth * (i + 0.5)
         return (
           <mesh
             key={i}
-            material={materials.tier}
+            material={stepMaterials}
             position={[
               (LEFT_STAIRS.minX + LEFT_STAIRS.maxX) / 2,
               height / 2,
@@ -302,7 +410,7 @@ export default function LobbyGround() {
 
       {/* Back terrace closing the far end */}
       <mesh
-        material={materials.grassMid}
+        material={backMaterials}
         position={[0, 1.7, PLAZA.to - 9]}
         receiveShadow
         castShadow
@@ -337,6 +445,7 @@ export default function LobbyGround() {
         />
       ))}
 
+      <Tufts materials={materials} />
       <Trees materials={materials} />
     </group>
   )

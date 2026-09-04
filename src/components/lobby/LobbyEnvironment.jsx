@@ -1,8 +1,12 @@
-import { useLayoutEffect, useMemo } from 'react'
-import { useThree } from '@react-three/fiber'
+import { useLayoutEffect, useMemo, useRef } from 'react'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { LOBBY_PALETTE, PLAZA } from '../../data/lobby.js'
+import { playerPosition } from '../../systems/playerState.js'
+import Birds from '../Birds.jsx'
 import GradientSky from '../GradientSky.jsx'
+import SkyBody from '../SkyBody.jsx'
+import VoxelClouds from '../VoxelClouds.jsx'
 
 /**
  * Bright daytime lighting for the hub. Fixed colours - unlike the arena, the
@@ -10,6 +14,18 @@ import GradientSky from '../GradientSky.jsx'
  */
 export default function LobbyEnvironment() {
   const scene = useThree((s) => s.scene)
+  const skyRef = useRef()
+
+  /*
+   * The sky rides with the player.
+   *
+   * Anchored at the world origin it does not fit inside the camera's far
+   * plane once the player walks down the plaza, and the far side of the dome
+   * gets clipped away - which shows as a hole punched in the sky.
+   */
+  useFrame(() => {
+    if (skyRef.current) skyRef.current.position.set(playerPosition.x, 0, playerPosition.z)
+  })
 
   const colors = useMemo(
     () => ({
@@ -64,7 +80,15 @@ export default function LobbyEnvironment() {
       <primitive object={lightTarget} position={[0, 0, centreZ]} />
       <directionalLight position={[-14, 10, -18]} intensity={0.45} color="#bcd9ff" />
 
-      <GradientSky topColor={colors.top} bottomColor={colors.bottom} radius={110} offset={22} />
+      <group ref={skyRef}>
+        <GradientSky topColor={colors.top} bottomColor={colors.bottom} radius={100} offset={22} />
+        {/* Beyond the tree line but inside the dome, so the hub has a horizon
+            to sit in rather than an empty gradient. */}
+        <VoxelClouds color="#f4fbff" radius={80} height={38} count={16} seed={4242} />
+        <SkyBody color="#fff4c9" elevation={0.62} size={7} />
+      </group>
+
+      <Birds />
     </>
   )
 }

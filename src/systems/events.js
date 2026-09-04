@@ -39,6 +39,7 @@ export const EVENTS = {
   GATE_PROMPT: 'gatePrompt',
   RESPAWN: 'respawn',
   DEATH: 'death',
+  PLAYER_HURT: 'playerHurt',
   STAGE_ENTER: 'stageEnter',
   CLAIM_WINS: 'claimWins',
   SCENE_CHANGE: 'sceneChange',

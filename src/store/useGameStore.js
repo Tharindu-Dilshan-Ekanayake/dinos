@@ -13,9 +13,12 @@ import { EVOLUTIONS, evolutionIndexForWins } from '../data/evolutions.js'
 import {
   BASE_STRENGTH,
   REBIRTH_WINS_REQUIRED,
+  STRENGTH_PER_HIT,
   computeClickPower,
   rebirthMultiplier,
+  strengthForClear,
 } from '../data/progression.js'
+import { CLEAR_HEAL, MAX_PLAYER_HEALTH } from '../data/combat.js'
 import {
   UPGRADES,
   critBonus,
@@ -44,6 +47,8 @@ function freshRun() {
     runWins: 0,
     /** Damage earned by standing on training pads. Reset by a rebirth. */
     trainedPower: 0,
+    /** Damage earned by fighting - every blow landed and every level cleared. */
+    battlePower: 0,
     unlockedIndex: 0,
     equippedIndex: 0,
     evolutionIndex: 0,
@@ -63,7 +68,10 @@ function derive(state) {
   const evolutionIndex = effectiveEvolution(state.unlockedIndex, state.equippedIndex)
   const evolution = EVOLUTIONS[evolutionIndex] ?? EVOLUTIONS[0]
   const strength =
-    BASE_STRENGTH + strengthFromLevels(state.upgradeLevels.strength) + (state.trainedPower ?? 0)
+    BASE_STRENGTH +
+    strengthFromLevels(state.upgradeLevels.strength) +
+    (state.trainedPower ?? 0) +
+    (state.battlePower ?? 0)
   const clickPower = computeClickPower(strength, evolution.power, state.rebirths)
   return {
     evolutionIndex,
@@ -87,6 +95,8 @@ const initial = (() => {
     // Death is transient: you always come back at the hub.
     dead: false,
     deathReason: null,
+    /** Your own health in the arena. Transient - a run always starts whole. */
+    playerHealth: MAX_PLAYER_HEALTH,
     // Transient, never persisted.
     comboCount: 0,
     lastClickAt: 0,
@@ -112,6 +122,7 @@ const initial = (() => {
         crit: Number(save.upgradeLevels?.crit) || 0,
       }
       base.trainedPower = Math.max(0, Number(save.trainedPower) || 0)
+      base.battlePower = Math.max(0, Number(save.battlePower) || 0)
       base.unlockedIndex = evolutionIndexForWins(base.totalWins)
       base.equippedIndex = Number.isInteger(save.equippedIndex)
         ? Math.min(base.unlockedIndex, Math.max(0, save.equippedIndex))
@@ -184,7 +195,15 @@ export const useGameStore = create((set, get) => ({
     })
 
     if (remaining > 0) {
-      set({ enemyHealth: remaining })
+      // Swinging is itself training: every blow that lands grows the dino a
+      // little, so time in the arena is never wasted even on a level you end
+      // up walking back out of.
+      if (meta.source === 'click') {
+        const battlePower = s.battlePower + STRENGTH_PER_HIT
+        set({ enemyHealth: remaining, battlePower, ...derive({ ...s, battlePower }) })
+      } else {
+        set({ enemyHealth: remaining })
+      }
       return
     }
 
@@ -205,6 +224,9 @@ export const useGameStore = create((set, get) => ({
     const reward = stageReward(clearedIndex)
 
     const atEnd = clearedIndex >= MAX_STAGES - 1
+    // Winning a fight is worth real power, and the deeper the fight the more
+    // it is worth - that is what keeps the climb ahead of the entry gates.
+    const battlePower = s.battlePower + strengthForClear(clearedIndex)
 
     set({
       // Wins are carried, not banked. They only become spendable when you
@@ -214,6 +236,11 @@ export const useGameStore = create((set, get) => ({
       enemyHealth: 0,
       stageCleared: true,
       bestStage: atEnd ? s.bestStage : Math.max(s.bestStage, clearedIndex + 1),
+      battlePower,
+      // A clear patches you up, but never all the way: press on deep enough
+      // and you arrive at the next pack already hurt.
+      playerHealth: Math.min(MAX_PLAYER_HEALTH, s.playerHealth + CLEAR_HEAL),
+      ...derive({ ...s, battlePower }),
     })
 
     emit(EVENTS.STAGE_CLEAR, { stageIndex: clearedIndex, boss, reward, atEnd })
@@ -245,6 +272,7 @@ export const useGameStore = create((set, get) => ({
       runWins: 0,
       dead: false,
       deathReason: null,
+      playerHealth: MAX_PLAYER_HEALTH,
       areaIndex: 0,
     })
     if (s.areaIndex !== 0) emit(EVENTS.AREA_CHANGE, { from: s.areaIndex, to: 0 })
@@ -281,6 +309,8 @@ export const useGameStore = create((set, get) => ({
       stageIndex: 0,
       enemyHealth: stageHealth(0),
       stageCleared: false,
+      // Walking out of the arena patches the dino up for the next run.
+      playerHealth: MAX_PLAYER_HEALTH,
       areaIndex: 0,
       ...derive(next),
     })
@@ -369,13 +399,51 @@ export const useGameStore = create((set, get) => ({
     return true
   },
 
-  /** Your dino was not strong enough for the level it walked into. */
+  /**
+   * The pack got its teeth into you.
+   *
+   * Called from the arena's own frame loop, batched rather than per bite, so a
+   * fight is not writing store state sixty times a second. Health at or below
+   * zero is death - the run is over and everything carried is gone.
+   */
+  hurtPlayer(amount) {
+    const s = get()
+    if (s.dead || amount <= 0) return
+
+    const playerHealth = s.playerHealth - amount
+    if (playerHealth > 0) {
+      set({ playerHealth })
+      emit(EVENTS.PLAYER_HURT, { amount, health: playerHealth, max: MAX_PLAYER_HEALTH })
+      return
+    }
+
+    set({ playerHealth: 0 })
+    emit(EVENTS.PLAYER_HURT, { amount, health: 0, max: MAX_PLAYER_HEALTH })
+    get()._killPlayer({ cause: 'slain', stageIndex: s.stageIndex })
+  },
+
+  /** Health creeping back once nothing has bitten you for a moment. */
+  healPlayer(amount) {
+    const s = get()
+    if (s.dead || amount <= 0 || s.playerHealth >= MAX_PLAYER_HEALTH) return
+    set({ playerHealth: Math.min(MAX_PLAYER_HEALTH, s.playerHealth + amount) })
+  },
+
+  /**
+   * Your dino fell - either it walked into a level it had no business
+   * entering, or the pack in the one it was in wore it down.
+   */
   _killPlayer(reason) {
     const s = get()
     if (s.dead) return
     // Everything carried this run is lost. That is the whole reason the
     // Return pads are worth stepping on.
-    set({ dead: true, deathReason: { ...reason, lostWins: s.runWins }, runWins: 0 })
+    set({
+      dead: true,
+      deathReason: { cause: 'underpowered', ...reason, lostWins: s.runWins },
+      runWins: 0,
+      playerHealth: 0,
+    })
     emit(EVENTS.DEATH, { ...reason, lostWins: s.runWins })
   },
 
@@ -389,6 +457,7 @@ export const useGameStore = create((set, get) => ({
       enemyHealth: stageHealth(0),
       stageCleared: false,
       runWins: 0,
+      playerHealth: MAX_PLAYER_HEALTH,
       areaIndex: 0,
     })
     emit(EVENTS.RESPAWN)

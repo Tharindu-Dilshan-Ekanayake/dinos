@@ -44,6 +44,7 @@ function serialise(state) {
     autoFight: state.autoFight,
     upgradeLevels: { ...state.upgradeLevels },
     trainedPower: state.trainedPower,
+    battlePower: state.battlePower,
     bestStage: state.bestStage,
     playerName: state.playerName,
     savedAt: Date.now(),

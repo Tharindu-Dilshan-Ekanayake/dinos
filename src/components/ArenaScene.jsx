@@ -1,9 +1,12 @@
-import { Suspense } from 'react'
+import { Suspense, useCallback } from 'react'
 import { Physics } from '@react-three/rapier'
+import { clampToCorridor } from '../data/arena.js'
+import { playerPosition } from '../systems/playerState.js'
 import ArenaEnvironment from './arena/ArenaEnvironment.jsx'
 import ArenaPlayer from './arena/ArenaPlayer.jsx'
 import ArenaCombat from './arena/ArenaCombat.jsx'
 import ArenaFightCatcher from './arena/ArenaFightCatcher.jsx'
+import EnemyAttacks from './arena/EnemyAttacks.jsx'
 import EnemyPack from './arena/EnemyPack.jsx'
 import EntryGate from './arena/EntryGate.jsx'
 import ExitGate from './arena/ExitGate.jsx'
@@ -21,15 +24,21 @@ import IdleDamage from './IdleDamage.jsx'
  * moving between the two never changes how the dino handles.
  */
 export default function ArenaScene() {
+  // Where the open space is depends on where the dino is standing, so the
+  // camera's clamp is handed the live player position rather than importing it
+  // into the layout data.
+  const clampCamera = useCallback((point) => clampToCorridor(point, playerPosition.z), [])
+
   return (
     <>
       <IdleDamage />
-      <LobbyCamera />
+      <LobbyCamera clamp={clampCamera} />
       <ArenaEnvironment />
 
       <ArenaFightCatcher />
       <ArenaPlayer />
       <EnemyPack />
+      <EnemyAttacks />
       <EntryGate />
       <ExitGate />
       <ReturnPads />
