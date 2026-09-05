@@ -9,6 +9,7 @@ import {
   LOBBY_PALETTE,
 } from '../../data/lobby.js'
 import { MAX_STAGES } from '../../data/stages.js'
+import { wallStones } from '../../data/lobby.js'
 import { useGameStore } from '../../store/useGameStore.js'
 import { playerPosition } from '../../systems/playerState.js'
 import { voxelMaterial } from '../../systems/voxelTexture.js'
@@ -136,7 +137,7 @@ export default function ArenaGate() {
       // Coursed stone, tiled along the wall's length rather than square, so the
       // bricks stay brick-shaped on a face four times longer than it is tall.
       wall: voxelMaterial('#9aa3ad', {
-        pattern: 'bricks',
+        pattern: 'studs',
         cells: 6,
         variance: 0.09,
         fleckDepth: 0.22,
@@ -144,7 +145,7 @@ export default function ArenaGate() {
         seed: 17,
       }),
       pillar: voxelMaterial('#aab3bd', {
-        pattern: 'bricks',
+        pattern: 'studs',
         cells: 8,
         variance: 0.08,
         fleckDepth: 0.2,
@@ -153,14 +154,14 @@ export default function ArenaGate() {
       }),
       cap: flat('#6d7681'),
       merlon: voxelMaterial('#7f8893', {
-        pattern: 'bricks',
+        pattern: 'studs',
         cells: 4,
         variance: 0.09,
         fleckDepth: 0.22,
         seed: 23,
       }),
       tread: voxelMaterial('#c9d1d9', {
-        pattern: 'bricks',
+        pattern: 'studs',
         cells: 4,
         variance: 0.07,
         fleckDepth: 0.18,
@@ -270,6 +271,9 @@ export default function ArenaGate() {
     const pillars = []
     const pillarCaps = []
     const merlons = []
+    // Individual stones over the inner faces, so eleven metres of wall reads
+    // as courses of masonry rather than one tall grey slab.
+    const stones = []
 
     for (const side of [-1, 1]) {
       // Pillars stand proud of the inner face, so they catch the light.
@@ -287,9 +291,21 @@ export default function ArenaGate() {
           scale: [E.wallWidth * 0.82, 1.1, 1.3],
         })
       }
+
+      stones.push(
+        ...wallStones({
+          axis: 'z',
+          from: E.wallFromZ,
+          to: E.wallToZ,
+          faceAt: side * INNER_FACE_X,
+          height: E.wallHeight,
+          block: 2.4,
+          seed: 41 + side,
+        })
+      )
     }
 
-    return { pillars, pillarCaps, merlons }
+    return { pillars, pillarCaps, merlons, stones }
   }, [])
 
   useFrame((_, rawDelta) => {
@@ -362,6 +378,13 @@ export default function ArenaGate() {
         geometry={geometries.block}
         material={materials.merlon}
         castShadow
+      />
+      <InstancedBlocks
+        items={wallBlocks.stones}
+        geometry={geometries.block}
+        material={materials.pillar}
+        castShadow
+        receiveShadow
       />
 
       {/* Grass shoulders running up to the walls */}

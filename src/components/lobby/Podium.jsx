@@ -187,7 +187,7 @@ export default function Podium({ podium }) {
           outlineWidth={0.018}
           outlineColor="#0b1220"
         >
-          {`x${formatNumber(evolution.power)} Damage`}
+          {`+${formatNumber(evolution.power)} Damage / click`}
         </Text>
 
         <Text

@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Billboard, Text } from '@react-three/drei'
 import * as THREE from 'three'
@@ -6,6 +6,7 @@ import { PAD_RADIUS, padRate, padUnlocked } from '../../data/training.js'
 import { formatNumber } from '../../data/progression.js'
 import { useGameStore } from '../../store/useGameStore.js'
 import { playerPosition } from '../../systems/playerState.js'
+import { voxelTexture } from '../../systems/voxelTexture.js'
 
 /**
  * A training pad: stand on it and your dino trains, adding permanent Damage at
@@ -25,8 +26,26 @@ export default function TrainingPad({ pad, position }) {
   const anim = useRef({ active: 0, phase: Math.random() * 6 })
 
   const materials = useMemo(() => {
+    /*
+     * The belt.
+     *
+     * The pad's studs are a *cloned* map so this one can scroll on its own -
+     * the cache hands out shared textures, and offsetting a shared one would
+     * set every pad in the row running at once. Cloning shares the image and
+     * costs only its own offset.
+     */
+    const belt = voxelTexture(unlocked ? pad.color : '#4b5563', {
+      pattern: 'studs',
+      cells: 4,
+      variance: 0.05,
+      fleckDepth: 0.24,
+      repeat: [3, 3],
+      seed: 77,
+    }).clone()
+    belt.needsUpdate = true
+
     const surface = new THREE.MeshStandardMaterial({
-      color: unlocked ? pad.color : '#4b5563',
+      map: belt,
       roughness: 0.55,
       flatShading: true,
       emissive: new THREE.Color(unlocked ? pad.accent : '#111827'),
@@ -37,8 +56,33 @@ export default function TrainingPad({ pad, position }) {
       roughness: 0.6,
       flatShading: true,
     })
-    return { surface, frame }
+    // Chunkier, darker blocks under the belt - the machine it runs on.
+    const base = new THREE.MeshStandardMaterial({
+      color: unlocked ? '#4a5468' : '#2f3644',
+      roughness: 0.85,
+      flatShading: true,
+    })
+    const lamp = new THREE.MeshStandardMaterial({
+      color: unlocked ? pad.accent : '#3f4654',
+      emissive: new THREE.Color(unlocked ? pad.accent : '#000000'),
+      emissiveIntensity: unlocked ? 0.9 : 0,
+      roughness: 0.4,
+      flatShading: true,
+    })
+    return { surface, frame, base, lamp, belt }
   }, [pad, unlocked])
+
+  // The belt owns its cloned map, so it has to hand it back.
+  useEffect(
+    () => () => {
+      materials.belt.dispose()
+      materials.surface.dispose()
+      materials.frame.dispose()
+      materials.base.dispose()
+      materials.lamp.dispose()
+    },
+    [materials]
+  )
 
   useFrame((_, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05)
@@ -65,21 +109,50 @@ export default function TrainingPad({ pad, position }) {
       beamRef.current.material.opacity = a.active * 0.35
       beamRef.current.rotation.y += delta * 1.2
     }
+
+    // The belt always creeps; standing on it winds it up to speed.
+    if (unlocked) {
+      materials.belt.offset.y -= delta * (0.06 + a.active * 0.55)
+    }
   })
 
   const rate = padRate(pad)
 
   return (
     <group position={position}>
-      {/* Raised frame + glowing surface */}
-      <mesh material={materials.frame} position={[0, 0.14, 0]} receiveShadow castShadow>
-        <boxGeometry args={[4, 0.28, 4]} />
+      {/* A stepped machine: dark plinth, bright frame, belt on top. */}
+      <mesh material={materials.base} position={[0, 0.09, 0]} receiveShadow castShadow>
+        <boxGeometry args={[4.5, 0.18, 4.5]} />
       </mesh>
-      <mesh ref={padRef} material={materials.surface} position={[0, 0.3, 0]} receiveShadow>
-        <boxGeometry args={[3.5, 0.1, 3.5]} />
+      <mesh material={materials.frame} position={[0, 0.26, 0]} receiveShadow castShadow>
+        <boxGeometry args={[4, 0.24, 4]} />
+      </mesh>
+      <mesh ref={padRef} material={materials.surface} position={[0, 0.42, 0]} receiveShadow>
+        <boxGeometry args={[3.4, 0.14, 3.4]} />
       </mesh>
 
-      <mesh ref={glowRef} position={[0, 0.37, 0]} rotation-x={-Math.PI / 2}>
+      {/* Rollers at the belt's ends, the way a treadmill reads. */}
+      {[-1.72, 1.72].map((z) => (
+        <mesh key={z} material={materials.base} position={[0, 0.42, z]} castShadow>
+          <boxGeometry args={[3.7, 0.3, 0.34]} />
+        </mesh>
+      ))}
+
+      {/* Corner bollards with lit caps - it looks powered now. */}
+      {[-1, 1].map((sx) =>
+        [-1, 1].map((sz) => (
+          <group key={`${sx}-${sz}`} position={[sx * 2.05, 0, sz * 2.05]}>
+            <mesh material={materials.base} position={[0, 0.5, 0]} castShadow>
+              <boxGeometry args={[0.42, 1, 0.42]} />
+            </mesh>
+            <mesh material={materials.lamp} position={[0, 1.12, 0]}>
+              <boxGeometry args={[0.32, 0.26, 0.32]} />
+            </mesh>
+          </group>
+        ))
+      )}
+
+      <mesh ref={glowRef} position={[0, 0.51, 0]} rotation-x={-Math.PI / 2}>
         <ringGeometry args={[1.2, 1.7, 6]} />
         <meshBasicMaterial
           color={unlocked ? pad.accent : '#6b7280'}

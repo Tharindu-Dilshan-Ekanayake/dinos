@@ -21,12 +21,15 @@ export const RATING = {
  */
 export default function StageHeadline() {
   const stageIndex = useGameStore((s) => s.stageIndex)
-  const clickPower = useGameStore((s) => s.clickPower)
+  // Both selectors collapse a per-click number into something that changes
+  // rarely - a rating key and a piece of display text.
+  const ratingKey = useGameStore((s) => damageRating(s.clickPower, s.stageIndex))
+  const damageText = useGameStore((s) => formatNumber(s.clickPower))
   const areaIndex = useGameStore((s) => s.areaIndex)
 
   const area = AREAS[areaIndex] ?? AREAS[0]
   const recommended = recommendedDamage(stageIndex)
-  const rating = RATING[damageRating(clickPower, stageIndex)] ?? RATING.fair
+  const rating = RATING[ratingKey] ?? RATING.fair
   const boss = isBoss(stageIndex)
 
   return (
@@ -56,7 +59,7 @@ export default function StageHeadline() {
         <div
           className={`mt-1 rounded-md px-2 py-0.5 text-center text-[9px] font-bold uppercase tracking-wide ${rating.chip}`}
         >
-          {rating.label} - you hit {formatNumber(clickPower)}
+          {rating.label} - you hit {damageText}
         </div>
       </div>
     </div>

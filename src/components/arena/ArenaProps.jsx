@@ -1,5 +1,8 @@
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
+import { treeBoxes } from '../../data/foliage.js'
+import { mergeBoxesByMaterial } from '../../systems/mergeBoxes.js'
+import { voxelTintMap } from '../../systems/voxelTexture.js'
 import InstancedBlocks from '../InstancedBlocks.jsx'
 
 /**
@@ -10,8 +13,9 @@ import InstancedBlocks from '../InstancedBlocks.jsx'
  * extruded. Nothing here is a sphere: the rim has to read as the same voxel
  * world as the terrain it stands on.
  *
- * Each block of a prop is drawn as one InstancedMesh across the whole scatter,
- * so four dozen trees cost four draw calls rather than two hundred.
+ * A prop's blocks are welded into one geometry per material before they are
+ * instanced, so a tree built from fourteen cubes draws in the same two calls a
+ * tree built from two would. That is what pays for the chunky canopies.
  */
 
 /**
@@ -25,51 +29,52 @@ function withColors(main, accent, colorMain, colorAccent) {
   return { main, accent }
 }
 
-const blockMaterial = (extra = {}) =>
-  new THREE.MeshStandardMaterial({ roughness: 0.88, flatShading: true, ...extra })
+/**
+ * Moulded studs, tinted at runtime.
+ *
+ * The map is painted white so it multiplies against `material.color`, which
+ * these props hold by reference from the live biome palette - a colour baked
+ * into the canvas would freeze every prop on the first biome it saw.
+ */
+const STUD_MAP = { pattern: 'studs', cells: 4, variance: 0.06, fleckDepth: 0.22, seed: 61 }
 
-/** Blocky conifer: a slab trunk under three staggered canopy blocks. */
+const blockMaterial = (extra = {}) =>
+  new THREE.MeshStandardMaterial({
+    roughness: 0.88,
+    flatShading: true,
+    map: voxelTintMap(STUD_MAP),
+    ...extra,
+  })
+
+/**
+ * Chunky conifer: a stacked trunk under a cluster of canopy cubes.
+ *
+ * The shape is shared with the hub's terraces - see data/foliage.js - so both
+ * halves of the game grow the same trees.
+ */
 function treeParts(colorMain, colorAccent) {
+  const boxes = treeBoxes({ seed: 7 }).map((part) => ({
+    ...part,
+    // The scatter carries only two tints, so the whole canopy rides the main
+    // colour and the trunk rides the accent.
+    material: part.material === 'trunk' ? 'accent' : 'main',
+  }))
+
   return {
-    parts: [
-      { geometry: new THREE.BoxGeometry(0.5, 2, 0.5), position: [0, 1, 0], material: 'accent' },
-      { geometry: new THREE.BoxGeometry(2.8, 1.2, 2.8), position: [0, 2.5, 0], material: 'main' },
-      {
-        geometry: new THREE.BoxGeometry(2.05, 1.1, 2.05),
-        position: [0, 3.5, 0],
-        // Turned off-square: two stacked boxes in line read as one tapered
-        // cone, which is exactly the shape this is trying not to be.
-        rotation: 0.5,
-        material: 'main',
-      },
-      { geometry: new THREE.BoxGeometry(1.15, 0.95, 1.15), position: [0, 4.3, 0], material: 'main' },
-    ],
+    boxes,
     ...withColors(blockMaterial(), blockMaterial({ roughness: 0.95 }), colorMain, colorAccent),
   }
 }
 
-/** Boulder pile: three blocks tipped against each other. */
+/** Boulder pile: blocks tipped against each other, with rubble alongside. */
 function rockParts(colorMain, colorAccent) {
   return {
-    parts: [
-      {
-        geometry: new THREE.BoxGeometry(1.9, 1.3, 1.7),
-        position: [0, 0.62, 0],
-        rotation: 0.3,
-        material: 'main',
-      },
-      {
-        geometry: new THREE.BoxGeometry(1.15, 0.9, 1.2),
-        position: [0.15, 1.55, -0.1],
-        rotation: -0.45,
-        material: 'main',
-      },
-      {
-        geometry: new THREE.BoxGeometry(0.85, 0.65, 0.85),
-        position: [1.25, 0.32, 0.2],
-        rotation: 0.6,
-        material: 'accent',
-      },
+    boxes: [
+      { material: 'main', position: [0, 0.62, 0], size: [1.9, 1.3, 1.7], rotation: [0, 0.3, 0] },
+      { material: 'main', position: [0.15, 1.55, -0.1], size: [1.15, 0.9, 1.2], rotation: [0, -0.45, 0] },
+      { material: 'main', position: [-0.9, 0.4, 0.5], size: [0.9, 0.8, 0.95], rotation: [0, 0.8, 0] },
+      { material: 'accent', position: [1.25, 0.32, 0.2], size: [0.85, 0.65, 0.85], rotation: [0, 0.6, 0] },
+      { material: 'accent', position: [0.2, 2.15, 0.1], size: [0.6, 0.5, 0.6], rotation: [0, 0.2, 0] },
     ],
     ...withColors(
       blockMaterial({ roughness: 1 }),
@@ -81,27 +86,24 @@ function rockParts(colorMain, colorAccent) {
 }
 
 /**
- * Faceted shard, used for both ice and cosmic crystal.
+ * Stepped shard, used for both ice and cosmic crystal.
  *
- * A four-sided tapered prism: still a hard-edged solid, but tapered, so the
- * crystal biomes do not look like the rock biome in a different colour.
+ * Blocks shrinking as they rise rather than a smooth taper, so the crystal
+ * biomes still read as built out of the same bricks as everything else while
+ * not looking like the rock biome in a different colour.
  */
 function crystalParts(colorMain, colorAccent) {
   const facet = { roughness: 0.2, flatShading: true, transparent: true }
   return {
-    parts: [
-      {
-        geometry: new THREE.CylinderGeometry(0.3, 0.75, 3, 4),
-        position: [0, 1.5, 0],
-        rotation: 0.4,
-        material: 'main',
-      },
-      {
-        geometry: new THREE.CylinderGeometry(0.18, 0.46, 1.8, 4),
-        position: [0.95, 0.9, 0.2],
-        rotation: -0.35,
-        material: 'accent',
-      },
+    // Stepped rather than tapered: a crystal built out of shrinking blocks
+    // belongs in this world in a way a smooth cone does not.
+    boxes: [
+      { material: 'main', position: [0, 0.5, 0], size: [1.15, 1, 1.15], rotation: [0, 0.4, 0] },
+      { material: 'main', position: [0, 1.45, 0], size: [0.85, 1, 0.85], rotation: [0, 0.4, 0] },
+      { material: 'main', position: [0, 2.3, 0], size: [0.55, 0.8, 0.55], rotation: [0, 0.4, 0] },
+      { material: 'main', position: [0, 2.95, 0], size: [0.3, 0.6, 0.3], rotation: [0, 0.4, 0] },
+      { material: 'accent', position: [0.95, 0.4, 0.2], size: [0.7, 0.8, 0.7], rotation: [0, -0.35, 0] },
+      { material: 'accent', position: [0.95, 1.1, 0.2], size: [0.42, 0.7, 0.42], rotation: [0, -0.35, 0] },
     ],
     ...withColors(
       blockMaterial({ ...facet, metalness: 0.1, opacity: 0.9 }),
@@ -115,15 +117,12 @@ function crystalParts(colorMain, colorAccent) {
 /** Capped marsh fungus, squared off. */
 function mushroomParts(colorMain, colorAccent) {
   return {
-    parts: [
-      { geometry: new THREE.BoxGeometry(0.45, 1.5, 0.45), position: [0, 0.75, 0], material: 'accent' },
-      { geometry: new THREE.BoxGeometry(2.1, 0.55, 2.1), position: [0, 1.75, 0], material: 'main' },
-      {
-        geometry: new THREE.BoxGeometry(1.25, 0.45, 1.25),
-        position: [0, 2.2, 0],
-        rotation: 0.4,
-        material: 'main',
-      },
+    boxes: [
+      { material: 'accent', position: [0, 0.4, 0], size: [0.6, 0.8, 0.6] },
+      { material: 'accent', position: [0, 1.1, 0], size: [0.45, 0.7, 0.45] },
+      { material: 'main', position: [0, 1.75, 0], size: [2.1, 0.55, 2.1] },
+      { material: 'main', position: [0, 2.2, 0], size: [1.25, 0.45, 1.25], rotation: [0, 0.4, 0] },
+      { material: 'main', position: [0, 2.6, 0], size: [0.6, 0.35, 0.6], rotation: [0, 0.8, 0] },
     ],
     ...withColors(blockMaterial({ roughness: 0.7 }), blockMaterial(), colorMain, colorAccent),
   }
@@ -140,12 +139,13 @@ export default function ArenaProps({ items, kind, colorMain, colorAccent }) {
   // Rebuilt only when the biome's prop type changes - once per area, not per frame.
   const kit = useMemo(() => {
     const build = BUILDERS[kind] ?? BUILDERS.tree
-    return build(colorMain, colorAccent)
+    const built = build(colorMain, colorAccent)
+    return { ...built, groups: mergeBoxesByMaterial(built.boxes) }
   }, [kind, colorMain, colorAccent])
 
   useEffect(
     () => () => {
-      kit.parts.forEach((part) => part.geometry.dispose())
+      kit.groups.forEach((group) => group.geometry.dispose())
       kit.main.dispose()
       kit.accent.dispose()
     },
@@ -154,13 +154,12 @@ export default function ArenaProps({ items, kind, colorMain, colorAccent }) {
 
   return (
     <>
-      {kit.parts.map((part, i) => (
+      {kit.groups.map((group) => (
         <InstancedBlocks
-          key={i}
+          key={group.key}
           items={items}
-          geometry={part.geometry}
-          material={part.material === 'accent' ? kit.accent : kit.main}
-          part={part}
+          geometry={group.geometry}
+          material={group.key === 'accent' ? kit.accent : kit.main}
           castShadow
         />
       ))}

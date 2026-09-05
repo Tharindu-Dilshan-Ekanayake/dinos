@@ -21,6 +21,8 @@ const CLICK_COLOR = new THREE.Color('#ffe066')
 const CRIT_COLOR = new THREE.Color('#ff5d8f')
 const CLEAR_COLOR = new THREE.Color('#7cf7ff')
 const BOSS_COLOR = new THREE.Color('#ffb703')
+/** Enemy breath: what a bite looks like landing on you. */
+const BITE_COLOR = new THREE.Color('#ff6a2b')
 
 export default function HitParticles() {
   const meshRef = useRef()
@@ -123,6 +125,24 @@ export default function HitParticles() {
           life: 0.55,
         })
       }),
+      /*
+       * The pack biting back. Fired from the player rather than the enemy so
+       * it reads as damage taken wherever the dino that landed it is standing,
+       * and thrown low and wide so it never hides the fight behind it.
+       */
+      on(EVENTS.PLAYER_HURT, ({ amount, max }) => {
+        const share = max > 0 ? Math.min(1, amount / max) : 0.1
+        burst(playerPosition, {
+          count: 10 + Math.round(share * 40),
+          speed: 6,
+          spread: 0.7,
+          color: BITE_COLOR,
+          size: 0.16,
+          life: 0.55,
+          upward: 0.7,
+        })
+      }),
+
       on(EVENTS.STAGE_CLEAR, ({ boss }) => {
         burst(lastImpact, {
           count: boss ? 90 : 46,

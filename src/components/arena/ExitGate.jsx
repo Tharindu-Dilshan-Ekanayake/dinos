@@ -23,7 +23,9 @@ const HEIGHT = 5
 export default function ExitGate() {
   const stageIndex = useGameStore((s) => s.stageIndex)
   const stageCleared = useGameStore((s) => s.stageCleared)
-  const clickPower = useGameStore((s) => s.clickPower)
+  // A boolean, not the number: this is a 3D component and re-reconciling it on
+  // every click would be paid for in the frame budget.
+  const strongEnough = useGameStore((s) => s.clickPower >= requiredDamage(s.stageIndex + 1))
   const dead = useGameStore((s) => s.dead)
 
   const barrierRef = useRef()
@@ -36,7 +38,7 @@ export default function ExitGate() {
   const atEnd = nextIndex >= MAX_STAGES
   const required = atEnd ? 0 : requiredDamage(nextIndex)
   const recommended = atEnd ? 0 : recommendedDamage(nextIndex)
-  const survivable = atEnd || clickPower >= required
+  const survivable = atEnd || strongEnough
   const nextIsBoss = !atEnd && isBoss(nextIndex)
 
   // Re-arm the trigger whenever the level changes.

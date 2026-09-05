@@ -40,6 +40,7 @@ export const EVENTS = {
   RESPAWN: 'respawn',
   DEATH: 'death',
   PLAYER_HURT: 'playerHurt',
+  DAMAGE_GAIN: 'damageGain',
   STAGE_ENTER: 'stageEnter',
   CLAIM_WINS: 'claimWins',
   SCENE_CHANGE: 'sceneChange',

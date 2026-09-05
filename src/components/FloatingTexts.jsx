@@ -68,6 +68,22 @@ export default function FloatingTexts() {
         }
       }),
 
+      /*
+       * The damage a click *earns*, as opposed to the damage it deals. Thrown
+       * up and to the right of the tap so it never lands on top of the hit
+       * number, and tinted green because it is the number that only ever goes
+       * up - which is the whole hook of the game.
+       */
+      on(EVENTS.DAMAGE_GAIN, ({ gain, screen }) => {
+        const [cx, cy] = screen ?? centre()
+        spawn(
+          `+${formatNumber(gain)} 💪`,
+          cx + 34 + Math.random() * 18,
+          cy - 26 - Math.random() * 16,
+          'text-[20px] text-emerald-300'
+        )
+      }),
+
       on(EVENTS.STAGE_CLEAR, ({ reward, boss }) => {
         const [cx, cy] = centre()
         spawn(

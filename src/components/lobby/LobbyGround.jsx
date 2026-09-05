@@ -7,9 +7,13 @@ import {
   LOBBY_PALETTE,
   PLAZA,
   TERRACES,
+  lobbyBlocks,
   lobbyTufts,
   treeLayout,
+  wallStones,
 } from '../../data/lobby.js'
+import { treeBoxes } from '../../data/foliage.js'
+import { mergeBoxesByMaterial } from '../../systems/mergeBoxes.js'
 import { voxelMaterial } from '../../systems/voxelTexture.js'
 import InstancedBlocks from '../InstancedBlocks.jsx'
 
@@ -37,6 +41,7 @@ function useLobbyMaterials() {
 
     const grass = (color, repeat, seed) =>
       voxelMaterial(color, {
+        pattern: 'studs',
         cells: 8,
         variance: 0.08,
         fleck: 0.3,
@@ -45,23 +50,38 @@ function useLobbyMaterials() {
         seed,
       })
 
-    /** Paving: a jittered checker with grout, sized to one-metre slabs. */
+    /**
+     * Paving: a checker of moulded slabs. Studs on the plaza too, not just on
+     * the grass - in this world every surface is a moulded brick, and a smooth
+     * plaza in the middle of it was the one place that gave the game away.
+     */
     const paving = (color, accent, repeat, seed) =>
       voxelMaterial(color, {
-        pattern: 'tiles',
+        pattern: 'studs',
         cells: 4,
         variance: 0.05,
-        fleckDepth: 0.14,
+        fleckDepth: 0.16,
         accent,
         repeat,
         roughness: 0.9,
         seed,
       })
 
+    /** Moulded blocks for anything built out of them: trees, trunks, crates. */
+    const studded = (color, seed) =>
+      voxelMaterial(color, {
+        pattern: 'studs',
+        cells: 4,
+        variance: 0.07,
+        fleckDepth: 0.22,
+        roughness: 0.85,
+        seed,
+      })
+
     /** Coursed stone for the tier and its steps. */
     const masonry = (repeat, seed) =>
-      voxelMaterial('#aeb8c6', {
-        pattern: 'bricks',
+      voxelMaterial('#c9d6e8', {
+        pattern: 'studs',
         cells: 6,
         variance: 0.08,
         fleckDepth: 0.2,
@@ -100,21 +120,21 @@ function useLobbyMaterials() {
       stoneWide: masonry([2, 1], 71),
       stoneNarrow: masonry([1, 1], 73),
       stoneStep: masonry([7, 1], 79),
-      concourse: paving('#e6ebf2', '#c3ccd8', [PLAZA.halfWidth / 2, plazaLength / 4], 83),
+      concourse: paving('#fdf6e3', '#ffd9a0', [PLAZA.halfWidth / 2, plazaLength / 4], 83),
       tierSurface: paving(
-        '#e6ebf2',
-        '#c3ccd8',
+        '#fdf6e3',
+        '#ffd9a0',
         [(LEFT_TIER.maxX - LEFT_TIER.minX) / 4, (LEFT_TIER.maxZ - LEFT_TIER.minZ) / 4],
         89
       ),
-      lane: paving('#79d45f', '#5fbb46', [1.6, plazaLength / 4], 97),
+      lane: paving('#8ce85f', '#6ad04a', [1.6, plazaLength / 4], 97),
       kerb: make(LOBBY_PALETTE.pathEdge),
       post: make('#a9713f'),
       rail: make('#c98a4b'),
-      trunk: make('#7a5230'),
-      leaf: make('#48b356'),
-      leafMid: make('#3a9c48'),
-      leafDark: make('#2f7d3b'),
+      trunk: studded('#7a5230', 91),
+      leaf: studded('#4fc25e', 93),
+      leafMid: studded('#3a9c48', 95),
+      leafDark: studded('#2f8a41', 97),
       tuft: make('#a6e75c', { roughness: 0.85 }),
     }
   }, [])
@@ -172,19 +192,13 @@ function Fence({ materials, from, to, x, axis = 'z' }) {
 }
 
 /**
- * Blocky pines: a trunk under three shrinking canopy blocks, the middle one
- * turned off-square so a stack of boxes does not read as a smooth cone.
+ * Blocky pines: a stacked trunk under a cluster of canopy cubes.
  *
- * Four dozen trees are four instanced draw calls - one per block of the tree -
- * rather than nearly two hundred meshes.
+ * The shape comes from data/foliage.js, so the hub and the arena grow the same
+ * tree. Its blocks are welded into one geometry per tint before instancing, so
+ * a fourteen-cube tree draws in three calls across the whole terrace - fewer
+ * than the four the old three-slab tree needed.
  */
-const TREE_PARTS = [
-  { key: 'trunk', size: [0.55, 1.8, 0.55], y: 0.9, material: 'trunk' },
-  { key: 'lower', size: [2.6, 1.3, 2.6], y: 2.3, material: 'leafDark' },
-  { key: 'mid', size: [2, 1.1, 2], y: 3.4, rotation: 0.5, material: 'leafMid' },
-  { key: 'top', size: [1.25, 0.95, 1.25], y: 4.35, material: 'leaf' },
-]
-
 function Trees({ materials }) {
   const trees = useMemo(
     () =>
@@ -196,26 +210,129 @@ function Trees({ materials }) {
     []
   )
 
-  const geometries = useMemo(
+  const groups = useMemo(() => mergeBoxesByMaterial(treeBoxes({ seed: 3 })), [])
+
+  useEffect(
+    () => () => groups.forEach((group) => group.geometry.dispose()),
+    [groups]
+  )
+
+  /** foliage.js names the tints; the hub already has materials for them. */
+  const tint = {
+    trunk: materials.trunk,
+    leaf: materials.leafDark,
+    leafLight: materials.leaf,
+  }
+
+  return (
+    <>
+      {groups.map((group) => (
+        <InstancedBlocks
+          key={group.key}
+          items={trees}
+          geometry={group.geometry}
+          material={tint[group.key] ?? materials.leaf}
+          castShadow
+        />
+      ))}
+    </>
+  )
+}
+
+/**
+ * Real stones standing proud of the raised tier's faces.
+ *
+ * The tier is a nine-by-thirty-nine metre slab, and no amount of brick texture
+ * stops something that size reading as one poured lump. These are separate
+ * blocks with gaps between them, so the light catches every course.
+ */
+function TierStones({ material }) {
+  const items = useMemo(() => {
+    const height = LEFT_TIER.height
+    const out = []
+    // The long flank that faces the plaza, and the near end you walk past.
+    out.push(
+      ...wallStones({
+        axis: 'z',
+        from: LEFT_TIER.minZ,
+        to: LEFT_TIER.maxZ,
+        faceAt: LEFT_TIER.maxX,
+        height,
+        seed: 21,
+      })
+    )
+    out.push(
+      ...wallStones({
+        axis: 'x',
+        from: LEFT_TIER.minX,
+        to: LEFT_TIER.maxX,
+        faceAt: LEFT_TIER.maxZ,
+        height,
+        seed: 33,
+      })
+    )
+    return out
+  }, [])
+
+  const geometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
+  useEffect(() => () => geometry.dispose(), [geometry])
+
+  return (
+    <InstancedBlocks items={items} geometry={geometry} material={material} castShadow receiveShadow />
+  )
+}
+
+/** Primary colours, in the order lobbyBlocks' `tone` indexes them. */
+const BLOCK_TONES = ['#ff5d5d', '#ffd23f', '#4fc3ff', '#a06bff', '#3fd68a']
+
+/**
+ * Stacks of bright toy blocks around the hub's edges.
+ *
+ * One instanced mesh per colour, each wearing the same studs as the ground, so
+ * a heap of them costs five draw calls and still reads as moulded bricks.
+ */
+function ToyBlocks() {
+  const stacks = useMemo(() => lobbyBlocks(), [])
+  const geometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
+
+  const materials = useMemo(
     () =>
-      TREE_PARTS.map(
-        (part) => new THREE.BoxGeometry(part.size[0], part.size[1], part.size[2])
+      BLOCK_TONES.map((color, i) =>
+        voxelMaterial(color, {
+          pattern: 'studs',
+          cells: 4,
+          variance: 0.06,
+          fleckDepth: 0.2,
+          roughness: 0.75,
+          seed: 200 + i,
+        })
       ),
     []
   )
 
-  useEffect(() => () => geometries.forEach((g) => g.dispose()), [geometries])
+  const byTone = useMemo(
+    () => BLOCK_TONES.map((_, tone) => stacks.filter((item) => item.tone === tone)),
+    [stacks]
+  )
+
+  useEffect(
+    () => () => {
+      geometry.dispose()
+      materials.forEach((m) => m.dispose())
+    },
+    [geometry, materials]
+  )
 
   return (
     <>
-      {TREE_PARTS.map((part, i) => (
+      {byTone.map((items, tone) => (
         <InstancedBlocks
-          key={part.key}
-          items={trees}
-          geometry={geometries[i]}
-          material={materials[part.material]}
-          part={{ position: [0, part.y, 0], rotation: part.rotation ?? 0 }}
+          key={tone}
+          items={items}
+          geometry={geometry}
+          material={materials[tone]}
           castShadow
+          receiveShadow
         />
       ))}
     </>
@@ -445,7 +562,9 @@ export default function LobbyGround() {
         />
       ))}
 
+      <TierStones material={materials.stoneNarrow} />
       <Tufts materials={materials} />
+      <ToyBlocks />
       <Trees materials={materials} />
     </group>
   )

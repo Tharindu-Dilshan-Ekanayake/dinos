@@ -102,28 +102,33 @@ export default function EnemyDino({ slot, appearance, home, boss }) {
     let moving = 0
 
     if (alive) {
+      /*
+       * The whole pack comes for you, not just the one you happen to be
+       * hitting. Each takes its own post on a ring around the player - spaced
+       * by slot, at slightly different stand-off distances - so five of them
+       * surround you rather than stacking into one dino-shaped column.
+       *
+       * The one you are actually fighting pushes in closest, which keeps the
+       * target readable in the middle of a scrum.
+       */
+      const ring = (isTarget ? ENEMY_STOP_DISTANCE : ENEMY_STOP_DISTANCE + 0.9) +
+        (slot % 3) * 0.45
+      const spread = (slot / Math.max(1, packState.slotCount)) * Math.PI * 2
+      const aimX = playerPosition.x + Math.cos(spread) * ring
+      const aimZ = playerPosition.z + Math.sin(spread) * ring
+
       const dx = playerPosition.x - a.x
       const dz = playerPosition.z - a.z
-      const distance = Math.hypot(dx, dz) || 1
 
-      // The one you are fighting closes in; the rest hold their posts. That
-      // keeps the arena readable while still bringing the fight to you.
-      if (isTarget && distance > ENEMY_STOP_DISTANCE) {
-        const step = ENEMY_SPEED * scaled
-        a.x += (dx / distance) * step
-        a.z += (dz / distance) * step
-        moving = 1
-      } else if (!isTarget) {
-        // Drift back toward the formation post.
-        const hx = home[0] - a.x
-        const hz = home[2] - a.z
-        const homeDistance = Math.hypot(hx, hz)
-        if (homeDistance > 0.4) {
-          const step = Math.min(homeDistance, ENEMY_SPEED * 0.55 * scaled)
-          a.x += (hx / homeDistance) * step
-          a.z += (hz / homeDistance) * step
-          moving = 0.55
-        }
+      const ax = aimX - a.x
+      const az = aimZ - a.z
+      const toPost = Math.hypot(ax, az)
+
+      if (toPost > 0.35) {
+        const step = Math.min(toPost, ENEMY_SPEED * scaled)
+        a.x += (ax / toPost) * step
+        a.z += (az / toPost) * step
+        moving = Math.min(1, toPost / 2)
       }
 
       // Always glare at the player. The rig faces +X, so this is atan2(-dz, dx).

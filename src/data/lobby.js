@@ -1,4 +1,5 @@
 import { EVOLUTIONS } from './evolutions.js'
+import { TREE_HALF_WIDTH } from './foliage.js'
 import { TRAINING_PADS } from './training.js'
 
 /**
@@ -341,6 +342,114 @@ export function lobbyTufts(clusters = 150) {
   return items
 }
 
+/**
+ * The individual stones of a wall face.
+ *
+ * A brick *texture* on one big slab reads as a photograph of a wall; real
+ * blocks standing a few centimetres proud of it read as a wall. This lays a
+ * grid of them over a face, courses offset like real masonry, each one nudged
+ * so the surface is never perfectly flat.
+ *
+ * `axis` says which way the face runs: 'z' for the long flanks either side of
+ * the plaza, 'x' for the ends. Returns items ready for InstancedBlocks.
+ */
+export function wallStones({
+  axis = 'z',
+  from,
+  to,
+  faceAt,
+  baseY = 0,
+  height,
+  block = 2.2,
+  depth = 0.32,
+  seed = 11,
+}) {
+  let state = seed * 2654435761 % 4294967296
+  const rand = () => {
+    state = (state * 1664525 + 1013904223) % 4294967296
+    return state / 4294967296
+  }
+
+  const items = []
+  const rows = Math.max(1, Math.round(height / block))
+  const rowHeight = height / rows
+  const span = Math.abs(to - from)
+  const start = Math.min(from, to)
+
+  for (let row = 0; row < rows; row++) {
+    // Every other course steps half a block along, the way stone is laid.
+    const offset = row % 2 === 0 ? 0 : block / 2
+    const columns = Math.max(1, Math.ceil((span - offset) / block))
+    const width = (span - offset) / columns
+
+    for (let col = 0; col < columns; col++) {
+      const along = start + offset + width * (col + 0.5)
+      const y = baseY + rowHeight * (row + 0.5)
+      // A hair of variation in how far each stone stands out.
+      const proud = depth * (0.75 + rand() * 0.5)
+
+      items.push({
+        position:
+          axis === 'z' ? [faceAt, y, along] : [along, y, faceAt],
+        scale:
+          axis === 'z'
+            ? [proud * 2, rowHeight * 0.9, width * 0.92]
+            : [width * 0.92, rowHeight * 0.9, proud * 2],
+      })
+    }
+  }
+
+  return items
+}
+
+/**
+ * Bright toy blocks stacked around the hub's edges.
+ *
+ * The hub was green, grey and brown - honest, and a bit sober for a game about
+ * cartoon dinosaurs. These are just stacks of primary-coloured cubes sitting on
+ * the terraces, the way a box of bricks looks when it has been tipped out, and
+ * they do more for the place than any amount of extra terrain would.
+ *
+ * `tone` indexes the colour list in the ground component; blocks are drawn one
+ * instanced mesh per colour, so seventy of them cost five draw calls.
+ */
+export function lobbyBlocks(stacks = 46, tones = 5) {
+  const items = []
+  let seed = 90210
+  const rand = () => {
+    seed = (seed * 1664525 + 1013904223) % 4294967296
+    return seed / 4294967296
+  }
+
+  const fromZ = PLAZA.to - 4
+  const spanZ = PLAZA.from - fromZ + 8
+
+  for (let i = 0; i < stacks; i++) {
+    const terrace = TERRACES[i % TERRACES.length]
+    const side = i % 2 === 0 ? -1 : 1
+    const cx = side * (terrace.offset + (rand() - 0.5) * (terrace.width - 3))
+    const cz = fromZ + rand() * spanZ
+
+    // One to three cubes, each a little smaller and turned off the one below.
+    const height = 1 + Math.floor(rand() * 3)
+    let base = terrace.height
+    let size = 1.5 + rand() * 0.9
+
+    for (let level = 0; level < height; level++) {
+      items.push({
+        position: [cx + (rand() - 0.5) * 0.4, base + size / 2, cz + (rand() - 0.5) * 0.4],
+        scale: size,
+        rotation: rand() * Math.PI,
+        tone: Math.floor(rand() * tones),
+      })
+      base += size
+      size *= 0.78
+    }
+  }
+
+  return items
+}
+
 /** Blocky pines on the terraces, laid out deterministically. */
 export function treeLayout(count = 46) {
   const trees = []
@@ -357,7 +466,7 @@ export function treeLayout(count = 46) {
     const scale = 0.9 + rand() * 0.85
     // Inset by the canopy's own half-width, so no tree hangs over the terrace
     // edge with nothing underneath it.
-    const room = Math.max(0, terrace.width / 2 - 1.35 * scale)
+    const room = Math.max(0, terrace.width / 2 - TREE_HALF_WIDTH * scale)
 
     trees.push({
       position: [

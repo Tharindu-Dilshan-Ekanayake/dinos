@@ -77,6 +77,7 @@ export default function Chamber({ palette, origin, stage = 0 }) {
 
   const materials = useMemo(() => {
     const ground = voxelMaterial(palette.floorA, {
+      pattern: 'studs',
       cells: 8,
       variance: 0.075,
       fleck: 0.3,
@@ -88,6 +89,7 @@ export default function Chamber({ palette, origin, stage = 0 }) {
       seed: 21,
     })
     const dirt = voxelMaterial(palette.cliff, {
+      pattern: 'studs',
       cells: 8,
       variance: 0.11,
       fleck: 0.36,
@@ -99,6 +101,7 @@ export default function Chamber({ palette, origin, stage = 0 }) {
       ground,
       dirt,
       stone: voxelMaterial(palette.cliffDark, {
+        pattern: 'studs',
         cells: 8,
         variance: 0.1,
         fleck: 0.34,
@@ -106,6 +109,7 @@ export default function Chamber({ palette, origin, stage = 0 }) {
         seed: 89,
       }),
       cap: voxelMaterial(palette.cliffTop, {
+        pattern: 'studs',
         cells: 8,
         variance: 0.09,
         fleck: 0.3,
@@ -114,6 +118,7 @@ export default function Chamber({ palette, origin, stage = 0 }) {
         seed: 71,
       }),
       chunk: voxelMaterial(shadeColor(palette.cliff, -0.06), {
+        pattern: 'studs',
         cells: 4,
         variance: 0.12,
         fleck: 0.4,
@@ -122,6 +127,7 @@ export default function Chamber({ palette, origin, stage = 0 }) {
       }),
       // Two tones of the floor, laid over it as blocky clearings.
       patchLight: voxelMaterial(shadeColor(palette.floorA, 0.07), {
+        pattern: 'studs',
         cells: 8,
         variance: 0.07,
         fleck: 0.26,
@@ -130,6 +136,7 @@ export default function Chamber({ palette, origin, stage = 0 }) {
         seed: 37,
       }),
       patchDark: voxelMaterial(palette.floorB, {
+        pattern: 'studs',
         cells: 8,
         variance: 0.07,
         fleck: 0.26,

@@ -10,8 +10,9 @@ import * as THREE from 'three'
  * NEAREST magnification keeps the cells hard-edged however close the camera
  * gets.
  *
- * Three patterns, one for each kind of surface the game has: `cells` for
- * ground and rock, `bricks` for built walls and steps, `tiles` for paving.
+ * Four patterns, one for each kind of surface the game has: `cells` for loose
+ * rock, `studs` for moulded ground and terrain blocks, `bricks` for built walls
+ * and steps, `tiles` for paving.
  *
  * Textures are cached and shared: a chamber's four surfaces are three meshes
  * apiece across three mounted chambers, and rebuilding a canvas for each would
@@ -136,7 +137,52 @@ function paintTiles(ctx, rgb, rand, { cells, variance, fleckDepth, accent }) {
   }
 }
 
-const PAINTERS = { cells: paintCells, bricks: paintBricks, tiles: paintTiles }
+/**
+ * Moulded plastic bricks: a regular grid of raised studs.
+ *
+ * The other patterns scatter their detail; this one does not, because the look
+ * it is copying is manufactured. Every stud sits dead centre in its cell with a
+ * lit top-left edge and a shaded bottom-right one, which is all it takes for a
+ * flat texture to read as a surface with bumps on it.
+ */
+function paintStuds(ctx, rgb, rand, { cells, variance, fleckDepth, accent }) {
+  const step = TEXTURE_SIZE / cells
+  const stud = Math.max(2, Math.round(step * 0.46))
+  const inset = Math.round((step - stud) / 2)
+  const edge = Math.max(1, Math.round(stud * 0.18))
+  // With an accent the studs sit on a checker, which is how paving reads in
+  // this kind of game: two tones of slab, every one of them moulded.
+  const accentRgb = accent ? parseHex(accent) : null
+
+  for (let y = 0; y < cells; y++) {
+    for (let x = 0; x < cells; x++) {
+      const base = accentRgb && (x + y) % 2 === 1 ? accentRgb : rgb
+
+      // A whisper of jitter per tile stops a large surface banding.
+      ctx.fillStyle = tone(base, (rand() - 0.5) * 2 * variance * 0.5)
+      ctx.fillRect(x * step, y * step, step, step)
+
+      const sx = x * step + inset
+      const sy = y * step + inset
+
+      // Shadowed face first, then the stud, then its lit edge on top.
+      ctx.fillStyle = tone(base, -fleckDepth)
+      ctx.fillRect(sx, sy, stud, stud)
+      ctx.fillStyle = tone(base, -fleckDepth * 0.35)
+      ctx.fillRect(sx, sy, stud - edge, stud - edge)
+      ctx.fillStyle = tone(base, fleckDepth * 0.5)
+      ctx.fillRect(sx, sy, stud - edge, edge)
+      ctx.fillRect(sx, sy, edge, stud - edge)
+    }
+  }
+}
+
+const PAINTERS = {
+  cells: paintCells,
+  bricks: paintBricks,
+  tiles: paintTiles,
+  studs: paintStuds,
+}
 
 function paint(color, options) {
   const canvas = document.createElement('canvas')
@@ -204,6 +250,19 @@ export function voxelTexture(color, options = {}) {
   }
   cache.set(key, texture)
   return texture
+}
+
+/**
+ * A neutral map for surfaces whose colour is set at runtime.
+ *
+ * `voxelMaterial` bakes the colour into the canvas, which is wrong for
+ * anything tinted from a live palette - the arena's rim props hold their
+ * THREE.Color by reference so a biome can lerp them. This paints the pattern
+ * in white instead, and since a map multiplies against `material.color`, the
+ * studs come out in whatever colour the caller is flying that frame.
+ */
+export function voxelTintMap(options = {}) {
+  return voxelTexture('#ffffff', options)
 }
 
 /**

@@ -13,10 +13,9 @@ import { EVOLUTIONS, evolutionIndexForWins } from '../data/evolutions.js'
 import {
   BASE_STRENGTH,
   REBIRTH_WINS_REQUIRED,
-  STRENGTH_PER_HIT,
   computeClickPower,
+  damageForClear,
   rebirthMultiplier,
-  strengthForClear,
 } from '../data/progression.js'
 import { CLEAR_HEAL, MAX_PLAYER_HEALTH } from '../data/combat.js'
 import {
@@ -27,6 +26,7 @@ import {
   upgradeCost,
 } from '../data/upgrades.js'
 import { areaIndexForStage } from '../data/areas.js'
+import { MIN_HITS_TO_CLEAR, enemyCountForStage } from '../data/arena.js'
 import { EVENTS, emit } from '../systems/events.js'
 import { loadSave } from '../systems/persistence.js'
 
@@ -72,7 +72,7 @@ function derive(state) {
     strengthFromLevels(state.upgradeLevels.strength) +
     (state.trainedPower ?? 0) +
     (state.battlePower ?? 0)
-  const clickPower = computeClickPower(strength, evolution.power, state.rebirths)
+  const clickPower = computeClickPower(strength, state.rebirths)
   return {
     evolutionIndex,
     strength,
@@ -162,7 +162,24 @@ export const useGameStore = create((set, get) => ({
     const crit = Math.random() < s.critChance
     const damage = crit ? s.clickPower * CRIT_MULTIPLIER : s.clickPower
 
-    set({ comboCount: combo, lastClickAt: now })
+    /*
+     * Every click makes the dino permanently stronger by its own damage, in
+     * the hub as well as the arena. This sits in `attack` rather than in the
+     * damage pipeline on purpose: swinging is what trains you, whether or not
+     * there is anything in front of you to hit.
+     */
+    const gain = EVOLUTIONS[s.evolutionIndex]?.power ?? 1
+    const battlePower = s.battlePower + gain
+
+    set({
+      comboCount: combo,
+      lastClickAt: now,
+      battlePower,
+      ...derive({ ...s, battlePower }),
+    })
+    // Announced separately from the blow that lands, because the growth
+    // happens whether or not there was anything in front of you to hit.
+    emit(EVENTS.DAMAGE_GAIN, { gain, screen })
     get()._applyDamage(damage, { source: 'click', crit, combo, point, screen })
   },
 
@@ -182,7 +199,23 @@ export const useGameStore = create((set, get) => ({
     // hit would fall straight through to _clearStage and pay out again.
     if (s.stageCleared || s.dead) return
 
-    const remaining = s.enemyHealth - damage
+    /*
+     * One blow can finish the dino in front of you and no more.
+     *
+     * The pack shares a single health pool, so without a ceiling a player who
+     * had over-levelled a stage removed the whole pool in one hit and five
+     * dinos dropped together the instant they walked in - no fight at all, and
+     * no chance for the pack to land a bite. The cap is one enemy's share of
+     * the pool, with a floor so a lone boss still takes a few swings.
+     *
+     * It only ever binds when you are over-geared: at the level's own gate
+     * your damage is well under it, and nothing here changes.
+     */
+    const max = stageHealth(s.stageIndex)
+    const slots = Math.max(1, enemyCountForStage(s.stageIndex, isBoss(s.stageIndex)))
+    const applied = Math.min(damage, max / Math.max(slots, MIN_HITS_TO_CLEAR))
+
+    const remaining = s.enemyHealth - applied
 
     emit(EVENTS.HIT, {
       damage,
@@ -195,15 +228,7 @@ export const useGameStore = create((set, get) => ({
     })
 
     if (remaining > 0) {
-      // Swinging is itself training: every blow that lands grows the dino a
-      // little, so time in the arena is never wasted even on a level you end
-      // up walking back out of.
-      if (meta.source === 'click') {
-        const battlePower = s.battlePower + STRENGTH_PER_HIT
-        set({ enemyHealth: remaining, battlePower, ...derive({ ...s, battlePower }) })
-      } else {
-        set({ enemyHealth: remaining })
-      }
+      set({ enemyHealth: remaining })
       return
     }
 
@@ -226,7 +251,7 @@ export const useGameStore = create((set, get) => ({
     const atEnd = clearedIndex >= MAX_STAGES - 1
     // Winning a fight is worth real power, and the deeper the fight the more
     // it is worth - that is what keeps the climb ahead of the entry gates.
-    const battlePower = s.battlePower + strengthForClear(clearedIndex)
+    const battlePower = s.battlePower + damageForClear(clearedIndex)
 
     set({
       // Wins are carried, not banked. They only become spendable when you
@@ -292,9 +317,13 @@ export const useGameStore = create((set, get) => ({
     const carried = s.runWins
     const totalWins = s.totalWins + carried
     const nextUnlocked = evolutionIndexForWins(totalWins)
-    // A player riding the newest tier keeps riding it; one who deliberately
-    // equipped an older look from a podium keeps their choice.
-    const nextEquipped = s.equippedIndex >= s.unlockedIndex ? nextUnlocked : s.equippedIndex
+    /*
+     * Unlocking a tier never equips it. Walking out of the arena with enough
+     * Wins opens the podium; stepping up to that podium and choosing it is a
+     * separate act, and it should be, because a dino is the rate your damage
+     * grows at rather than a strictly-better hat.
+     */
+    const nextEquipped = s.equippedIndex
 
     const next = { ...s, totalWins, unlockedIndex: nextUnlocked, equippedIndex: nextEquipped }
 
