@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Billboard, Text } from '@react-three/drei'
 import * as THREE from 'three'
-import { PAD_RADIUS, padRate, padUnlocked } from '../../data/training.js'
+import { PAD_RADIUS, buildPadDecor, padRate, padUnlocked } from '../../data/training.js'
 import { formatNumber } from '../../data/progression.js'
 import { useGameStore } from '../../store/useGameStore.js'
 import { playerPosition } from '../../systems/playerState.js'
 import { voxelTexture } from '../../systems/voxelTexture.js'
+import InstancedBlocks from '../InstancedBlocks.jsx'
 
 /**
  * A training pad: stand on it and your dino trains, adding permanent Damage at
@@ -69,20 +70,35 @@ export default function TrainingPad({ pad, position }) {
       roughness: 0.4,
       flatShading: true,
     })
-    return { surface, frame, base, lamp, belt }
+    /*
+     * The dressing standing around the machine. Two materials for the whole
+     * thing however many pieces it has: the dark blocks it is built out of,
+     * and the ones that glow.
+     */
+    const decorDull = new THREE.MeshStandardMaterial({
+      color: unlocked ? '#3c4457' : '#2f3644',
+      roughness: 0.9,
+      flatShading: true,
+    })
+    const decorLit = new THREE.MeshStandardMaterial({
+      color: unlocked ? pad.color : '#4b5563',
+      emissive: new THREE.Color(unlocked ? pad.accent : '#000000'),
+      emissiveIntensity: unlocked ? 0.55 : 0,
+      roughness: 0.5,
+      flatShading: true,
+    })
+
+    return { surface, frame, base, lamp, belt, decorDull, decorLit }
   }, [pad, unlocked])
 
-  // The belt owns its cloned map, so it has to hand it back.
-  useEffect(
-    () => () => {
-      materials.belt.dispose()
-      materials.surface.dispose()
-      materials.frame.dispose()
-      materials.base.dispose()
-      materials.lamp.dispose()
-    },
-    [materials]
-  )
+  /** Fixed for the life of the pad - the layout never changes, only its tint. */
+  const decor = useMemo(() => buildPadDecor(pad.deco, pad.multiplier), [pad])
+  const decorGeometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
+  useEffect(() => () => decorGeometry.dispose(), [decorGeometry])
+
+  // The belt owns its cloned map, so it has to hand that back too - which is
+  // why this walks the whole bundle rather than naming the materials.
+  useEffect(() => () => Object.values(materials).forEach((m) => m.dispose()), [materials])
 
   useFrame((_, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05)
@@ -151,6 +167,25 @@ export default function TrainingPad({ pad, position }) {
           </group>
         ))
       )}
+
+      {/*
+        The pad's own dressing - bullion, crystals, a lava crust, ice spikes,
+        whatever this rung of the ladder is. Two draws whatever it is made of,
+        and all of it outside the belt so it never stands where the dino does.
+      */}
+      <InstancedBlocks
+        items={decor.dull}
+        geometry={decorGeometry}
+        material={materials.decorDull}
+        castShadow
+        receiveShadow
+      />
+      <InstancedBlocks
+        items={decor.lit}
+        geometry={decorGeometry}
+        material={materials.decorLit}
+        castShadow
+      />
 
       <mesh ref={glowRef} position={[0, 0.51, 0]} rotation-x={-Math.PI / 2}>
         <ringGeometry args={[1.2, 1.7, 6]} />

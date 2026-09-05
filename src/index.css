@@ -259,6 +259,14 @@
     box-shadow 0.06s ease,
     filter 0.12s ease;
   user-select: none;
+  /*
+   * A tap must never select the label under it, scroll the page, or - the one
+   * that actually bit - fire the browser's double-tap zoom, which on a phone
+   * turned a fast second attack into the whole HUD lurching.
+   */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  cursor: pointer;
 }
 
 .arcade:active:not(:disabled) {
@@ -266,8 +274,19 @@
   box-shadow: 0 0 0 #1e1b16;
 }
 
+/* Keyboard users get the same affordance the mouse does. */
+.arcade:focus-visible {
+  outline: 3px solid #fff8d6;
+  outline-offset: 3px;
+}
+
+/*
+ * A disabled control has to look unavailable *and* say so on contact - greying
+ * alone reads as "dark button" on a bright scene.
+ */
 .arcade:disabled {
   filter: grayscale(0.75) brightness(0.65);
+  cursor: not-allowed;
 }
 
 /* A soft highlight along the top edge sells the plastic/candy finish. */
