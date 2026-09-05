@@ -69,13 +69,22 @@ function tone(c, { type = 'sine', from, to, start, duration, gain = 0.3, curve =
   osc.stop(start + duration + 0.02)
 }
 
-/** Filtered noise burst - the "thwack" body of an impact. */
-function noise(c, { start, duration, gain = 0.3, freq = 1800, q = 1, type = 'bandpass' }) {
+/**
+ * Filtered noise burst - the "thwack" body of an impact.
+ *
+ * `sweepTo` slides the filter over the life of the burst, which is the whole
+ * difference between a hit (a fixed band, over in 70ms) and a swing through
+ * the air (a band falling away from you).
+ */
+function noise(c, { start, duration, gain = 0.3, freq = 1800, sweepTo, q = 1, type = 'bandpass' }) {
   const src = c.createBufferSource()
   src.buffer = getNoiseBuffer(c)
   const filter = c.createBiquadFilter()
   filter.type = type
   filter.frequency.setValueAtTime(freq, start)
+  if (sweepTo !== undefined && sweepTo !== freq) {
+    filter.frequency.exponentialRampToValueAtTime(Math.max(20, sweepTo), start + duration)
+  }
   filter.Q.value = q
   const env = c.createGain()
   env.gain.setValueAtTime(0.0001, start)
@@ -107,6 +116,143 @@ export function playHit({ intensity = 0.3, combo = 0, crit = false } = {}) {
     tone(c, { type: 'square', from: base * 3, to: base * 6, start: t + 0.01, duration: 0.16, gain: 0.1 })
     noise(c, { start: t, duration: 0.2, gain: 0.1, freq: 4200, q: 2, type: 'highpass' })
   }
+}
+
+/**
+ * The swing itself, played the moment the button goes down.
+ *
+ * Separate from playHit on purpose: the swing is the input and the hit is the
+ * result, and hearing both is what makes a blow feel like it travelled. A
+ * swing that finds nothing still swishes - that is the feedback that you were
+ * out of range.
+ */
+export function playSwing({ heavy = false, connects = true } = {}) {
+  const c = ensureContext()
+  if (!c || muted) return
+  const t = c.currentTime
+  const level = connects ? 1 : 0.55
+
+  noise(c, {
+    start: t,
+    duration: heavy ? 0.26 : 0.18,
+    gain: (heavy ? 0.13 : 0.095) * level,
+    freq: 2800,
+    sweepTo: 520,
+    q: 0.8,
+  })
+  tone(c, {
+    type: 'sine',
+    from: heavy ? 250 : 330,
+    to: 110,
+    start: t,
+    duration: 0.13,
+    gain: 0.055 * level,
+  })
+}
+
+/**
+ * A dino getting its teeth into you: a snap with a growl under it.
+ *
+ * The pack biting back used to be completely silent - health simply drained
+ * while you were looking at the enemy you were hitting rather than the four
+ * behind you. This is the warning.
+ */
+export function playBite({ heavy = false, style = 'snap' } = {}) {
+  const c = ensureContext()
+  if (!c || muted) return
+  const t = c.currentTime
+
+  /*
+   * Fire is a different animal from teeth: a long roar of filtered noise
+   * sweeping *upward* into a crackle, with no snap at the front of it. Hearing
+   * which one hit you is half of knowing what is standing behind you.
+   */
+  if (style === 'fire') {
+    noise(c, {
+      start: t,
+      duration: heavy ? 0.62 : 0.44,
+      gain: heavy ? 0.19 : 0.14,
+      freq: 320,
+      sweepTo: 2600,
+      q: 0.7,
+    })
+    noise(c, {
+      start: t + 0.05,
+      duration: heavy ? 0.5 : 0.34,
+      gain: 0.08,
+      freq: 5200,
+      q: 1.1,
+      type: 'highpass',
+    })
+    tone(c, {
+      type: 'sawtooth',
+      from: heavy ? 110 : 150,
+      to: 58,
+      start: t,
+      duration: heavy ? 0.5 : 0.34,
+      gain: 0.075,
+    })
+    return
+  }
+
+  noise(c, {
+    start: t,
+    duration: heavy ? 0.13 : 0.09,
+    gain: heavy ? 0.2 : 0.14,
+    freq: heavy ? 1600 : 2400,
+    sweepTo: heavy ? 220 : 380,
+    q: 1.3,
+  })
+  tone(c, {
+    type: 'sawtooth',
+    from: heavy ? 140 : 185,
+    to: 68,
+    start: t,
+    duration: heavy ? 0.3 : 0.2,
+    gain: 0.1,
+  })
+  tone(c, { type: 'square', from: 88, to: 54, start: t + 0.02, duration: 0.16, gain: 0.045 })
+}
+
+/** Your own dino yelping. Throttled by the caller - bites come in flurries. */
+export function playHurt() {
+  const c = ensureContext()
+  if (!c || muted) return
+  const t = c.currentTime
+  tone(c, { type: 'sawtooth', from: 420, to: 180, start: t, duration: 0.22, gain: 0.1 })
+  noise(c, { start: t, duration: 0.12, gain: 0.07, freq: 1400, sweepTo: 500, q: 0.9 })
+}
+
+/**
+ * One footfall: a low thud with a scuff of dirt over it.
+ *
+ * Deliberately the cheapest voice in the file - two nodes, no sweep - because
+ * a pack of seven running at you lands a foot every few frames between them.
+ * Thinning by distance and by a shared rate limit is the caller's job; see
+ * systems/footsteps.js.
+ */
+export function playFootstep({ intensity = 1, gain = 1, pitch = 1 } = {}) {
+  const c = ensureContext()
+  if (!c || muted || gain <= 0.02) return
+  const t = c.currentTime
+  const level = 0.085 * gain * (0.55 + intensity * 0.45)
+
+  tone(c, {
+    type: 'sine',
+    from: 138 * pitch,
+    to: 58 * pitch,
+    start: t,
+    duration: 0.085,
+    gain: level,
+  })
+  noise(c, {
+    start: t,
+    duration: 0.05,
+    gain: level * 0.5,
+    freq: 950 * pitch,
+    q: 0.7,
+    type: 'lowpass',
+  })
 }
 
 /** Rising arpeggio + thump when a stage dies. */

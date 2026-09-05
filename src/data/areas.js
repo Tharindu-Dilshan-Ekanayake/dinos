@@ -12,6 +12,16 @@
  */
 export const AREA_TRANSITION_SECONDS = 1.4
 
+/*
+ * A note on the fog numbers below.
+ *
+ * They used to close between seventy-eight and ninety-six, which is barely two
+ * chambers: standing at a gate marked "Back to Stage 1" you could not actually
+ * see Stage 1, and the levels ahead dissolved before you reached the doorway
+ * out. They now reach past three chambers in either direction, which is what
+ * makes the corridor read as a corridor rather than as one room at a time.
+ * `HORIZON_DISTANCE` in data/weather.js sits beyond all of them on purpose.
+ */
 export const AREAS = [
   {
     id: 'jungle',
@@ -22,8 +32,8 @@ export const AREAS = [
     skyTop: '#2f7fd4',
     skyBottom: '#bde9ff',
     fog: '#a9dcc0',
-    fogNear: 34,
-    fogFar: 96,
+    fogNear: 54,
+    fogFar: 154,
     // Voxel arena floor: checker tones, its edge ring, and its grass blades
     floorA: '#79d152',
     floorB: '#5cb63c',
@@ -58,8 +68,8 @@ export const AREAS = [
     skyTop: '#3a1220',
     skyBottom: '#ff9d4d',
     fog: '#8a3a24',
-    fogNear: 28,
-    fogFar: 84,
+    fogNear: 45,
+    fogFar: 134,
     floorA: '#4a4a55',
     floorB: '#37373f',
     floorEdge: '#25252b',
@@ -88,8 +98,8 @@ export const AREAS = [
     skyTop: '#1b4a86',
     skyBottom: '#d6f4ff',
     fog: '#b9e4f5',
-    fogNear: 32,
-    fogFar: 92,
+    fogNear: 51,
+    fogFar: 147,
     floorA: '#dff2ff',
     floorB: '#b6ddf2',
     floorEdge: '#8ec4e0',
@@ -118,8 +128,8 @@ export const AREAS = [
     skyTop: '#1e2f1a',
     skyBottom: '#a8d84f',
     fog: '#6f9440',
-    fogNear: 26,
-    fogFar: 78,
+    fogNear: 42,
+    fogFar: 125,
     floorA: '#5d7a3a',
     floorB: '#48602c',
     floorEdge: '#334621',
@@ -148,8 +158,8 @@ export const AREAS = [
     skyTop: '#0a0620',
     skyBottom: '#6c3fd6',
     fog: '#3b2470',
-    fogNear: 30,
-    fogFar: 88,
+    fogNear: 48,
+    fogFar: 141,
     floorA: '#3b2f70',
     floorB: '#2b2154',
     floorEdge: '#1b1440',

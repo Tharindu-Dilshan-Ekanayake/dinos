@@ -20,6 +20,17 @@ import { playerPosition } from '../../systems/playerState.js'
  */
 const LOOK_HEIGHT = 2.1
 
+/**
+ * Steepest the shot is allowed to get.
+ *
+ * A corridor has no room sideways, so a camera swung side-on in one gets
+ * squeezed in until it is a few metres from the dino - and at that range the
+ * orbit's eight metres of height is a near vertical view of your own back,
+ * which is what every stage boundary used to look like. Height is the thing to
+ * give up there: a camera with nowhere to stand back to comes down instead.
+ */
+const MAX_LOOK_DOWN = 0.62
+
 export default function LobbyCamera({ clamp }) {
   const camera = useThree((s) => s.camera)
   const gl = useThree((s) => s.gl)
@@ -46,6 +57,19 @@ export default function LobbyCamera({ clamp }) {
     // Frame-rate independent smoothing.
     current.current.lerp(desired.current, 1 - Math.pow(0.0008, delta))
     if (clamp) clamp(current.current)
+
+    /*
+     * However close the clamp pulled it in, keep the shot readable. Capped
+     * against the distance actually achieved rather than the one asked for, so
+     * it eases down as the walls close in and back up as they open out.
+     */
+    const eye = playerPosition.y + LOOK_HEIGHT
+    const reach = Math.hypot(
+      current.current.x - playerPosition.x,
+      current.current.z - playerPosition.z
+    )
+    const ceiling = eye + reach * Math.tan(MAX_LOOK_DOWN)
+    if (current.current.y > ceiling) current.current.y = ceiling
 
     lookTarget.current.set(playerPosition.x, playerPosition.y + LOOK_HEIGHT, playerPosition.z)
     lookAt.current.lerp(lookTarget.current, 1 - Math.pow(0.0006, delta))

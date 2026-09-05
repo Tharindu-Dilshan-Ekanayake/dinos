@@ -1,9 +1,11 @@
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import {
+  APPROACH_EDGE_Z,
   ARENA,
   CHAMBER_SPAN,
   buildArenaBlocks,
+  buildArenaMouth,
   buildArenaProps,
   buildCliffDetails,
   buildGlowVeins,
@@ -44,7 +46,27 @@ const CAP_SINK = 0.08
 const CAP_RISE = CAP_HEIGHT - CAP_SINK
 
 export default function Chamber({ palette, origin, stage = 0 }) {
-  const blocks = useMemo(() => buildArenaBlocks(), [])
+  /*
+   * The first chamber gets a wall across its near end. Every other one has the
+   * previous chamber's back wall standing there already; chamber zero has no
+   * previous chamber, so without this the arena simply had no mouth and Stage 1
+   * looked out over an endless empty plain.
+   */
+  const isMouth = stage === 0
+  const blocks = useMemo(
+    () => (isMouth ? [...buildArenaBlocks(), ...buildArenaMouth()] : buildArenaBlocks()),
+    [isMouth]
+  )
+
+  /*
+   * Ground enough to stand that wall on, and to carry the floor texture out to
+   * it rather than ending in bare bedrock halfway there. It stops dead at the
+   * mouth's far face: past that the ground belongs to the approach and falls
+   * away to the hub, and a slab reaching over that edge would both hide the
+   * stairs and z-fight the landing it lay on top of.
+   */
+  const slabDepth = isMouth ? APPROACH_EDGE_Z + CHAMBER_SPAN / 2 : CHAMBER_SPAN
+  const slabZ = isMouth ? (APPROACH_EDGE_Z - CHAMBER_SPAN / 2) / 2 : 0
   const props = useMemo(() => buildArenaProps(blocks, stage), [blocks, stage])
   const veins = useMemo(() => buildGlowVeins(), [])
 
@@ -84,7 +106,7 @@ export default function Chamber({ palette, origin, stage = 0 }) {
       fleckDepth: 0.16,
       repeat: [
         Math.round(FLOOR_WIDTH / GROUND_SPAN),
-        Math.round(CHAMBER_SPAN / GROUND_SPAN),
+        Math.round(slabDepth / GROUND_SPAN),
       ],
       seed: 21,
     })
@@ -173,7 +195,7 @@ export default function Chamber({ palette, origin, stage = 0 }) {
         toneMapped: false,
       }),
     }
-  }, [palette])
+  }, [palette, slabDepth])
 
   /** Grass on the lid, dirt down the sides: [+x, -x, +y, -y, +z, -z]. */
   const slabMaterials = useMemo(
@@ -225,11 +247,11 @@ export default function Chamber({ palette, origin, stage = 0 }) {
         what you see where the terrain is cut away.
       */}
       <mesh
-        position-y={-FLOOR_THICKNESS / 2}
+        position={[0, -FLOOR_THICKNESS / 2, slabZ]}
         material={slabMaterials}
         receiveShadow
       >
-        <boxGeometry args={[FLOOR_WIDTH, FLOOR_THICKNESS, CHAMBER_SPAN]} />
+        <boxGeometry args={[FLOOR_WIDTH, FLOOR_THICKNESS, slabDepth]} />
       </mesh>
 
       {/* Blocky clearings breaking up the grass. */}

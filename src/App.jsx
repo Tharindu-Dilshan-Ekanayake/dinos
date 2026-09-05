@@ -25,7 +25,12 @@ export default function App() {
         // pixels for no visible gain on a scene this stylised.
         dpr={[1, 1.75]}
         gl={{ antialias: true, powerPreference: 'high-performance' }}
-        camera={{ position: [0, 3.1, 12.2], fov: 40, near: 0.1, far: 140 }}
+        /*
+         * The far plane has to clear the skydome, which now sits well past the
+         * fog so that three chambers of corridor can be seen in front of it.
+         * At the old 140 the far end of the corridor was simply clipped away.
+         */
+        camera={{ position: [0, 3.1, 12.2], fov: 40, near: 0.1, far: 460 }}
       >
         <Suspense fallback={null}>
           <Scene />

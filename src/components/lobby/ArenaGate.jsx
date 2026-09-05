@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Billboard, Text } from '@react-three/drei'
+import { Billboard } from '@react-three/drei'
 import * as THREE from 'three'
 import {
   ARENA_ENTRANCE,
@@ -8,14 +8,44 @@ import {
   ARENA_STAIR_TOP_Z,
   LOBBY_PALETTE,
 } from '../../data/lobby.js'
-import { MAX_STAGES } from '../../data/stages.js'
+import { APPROACH_DROP, APPROACH_EDGE_Z, LOBBY_Z_OFFSET } from '../../data/arena.js'
+import { paletteForStage } from '../../data/areas.js'
+import { formatNumber } from '../../data/progression.js'
+import { MAX_STAGES, damageRating, recommendedDamage } from '../../data/stages.js'
 import { wallStones } from '../../data/lobby.js'
 import { useGameStore } from '../../store/useGameStore.js'
 import { playerPosition } from '../../systems/playerState.js'
 import { voxelMaterial } from '../../systems/voxelTexture.js'
 import InstancedBlocks from '../InstancedBlocks.jsx'
+import Chamber from '../arena/Chamber.jsx'
+import HeadlineText from '../HeadlineText.jsx'
 
 const E = ARENA_ENTRANCE
+
+/** Stage 1's own colours, so the view up the stairs is the level, not a guess. */
+const STAGE_ONE_PALETTE = paletteForStage(0)
+
+/** Matches the arena's own gate headline, so one colour means one thing. */
+const RATING_COLOR = {
+  easy: '#7ee06a',
+  fair: '#ffd166',
+  risky: '#ff9f43',
+  blocked: '#ff6b6b',
+}
+
+/*
+ * The flat bit between the top step and the chamber's floor slab.
+ *
+ * Its far edge is the mouth wall's outer face, which in hub coordinates is
+ * `APPROACH_EDGE_Z - LOBBY_Z_OFFSET` - the same seam the arena's own view of
+ * the hub is built against, read from the other side.
+ */
+const CHAMBER_EDGE_Z = APPROACH_EDGE_Z - LOBBY_Z_OFFSET
+const LANDING_DEPTH = ARENA_STAIR_TOP_Z - CHAMBER_EDGE_Z
+const LANDING_Z = (ARENA_STAIR_TOP_Z + CHAMBER_EDGE_Z) / 2
+const LANDING_THICKNESS = 1.6
+/** Matches the chamber's own slab, so the two meet without a step. */
+const CHAMBER_FLOOR_WIDTH = 110
 const WALL_CENTRE_X = E.gapHalfWidth + E.wallWidth / 2
 const WALL_LENGTH = E.wallFromZ - E.wallToZ
 const WALL_MID_Z = (E.wallFromZ + E.wallToZ) / 2
@@ -69,47 +99,6 @@ const LANTERNS = [
 const BANNERS = [E.wallFromZ - 2.6, E.wallFromZ - 9.4]
 
 /**
- * Trees on the rise past the stair top, laid out deterministically and kept
- * clear of the corridor's sight line so they frame the gap rather than block
- * it.
- */
-const BEYOND_TREES = (() => {
-  const out = []
-  let seed = 5150
-  const rand = () => {
-    seed = (seed * 1664525 + 1013904223) % 4294967296
-    return seed / 4294967296
-  }
-  // Terraces the trees can stand on: [z centre, half depth, top height].
-  const terraces = [
-    [-5, 6, 0],
-    [-16, 6, 2.7],
-    [-28, 8, 7.6],
-  ]
-  for (let i = 0; i < 26; i++) {
-    const terrace = terraces[i % terraces.length]
-    const z = terrace[0] + (rand() - 0.5) * terrace[1] * 1.6
-    // Bias away from dead centre so the trees frame the corridor's sight line
-    // rather than plugging it.
-    const side = i % 2 === 0 ? -1 : 1
-    const x = side * (2.5 + rand() * 26)
-    out.push({
-      position: [x, terrace[2], z],
-      scale: 0.8 + rand() * 0.9,
-      rotation: rand() * Math.PI,
-    })
-  }
-  return out
-})()
-
-/** Blocks of one tree, drawn as one instanced mesh each. */
-const TREE_PARTS = [
-  { key: 'trunk', size: [0.6, 2, 0.6], y: 1, material: 'trunk' },
-  { key: 'lower', size: [3, 2.2, 3], y: 3.1, material: 'leaves' },
-  { key: 'upper', size: [2, 1.6, 2], y: 4.8, rotation: 0.5, material: 'leavesLight' },
-]
-
-/**
  * The way out of the hub.
  *
  * A carpeted staircase climbing between two battlemented stone walls, with the
@@ -125,6 +114,9 @@ const TREE_PARTS = [
 export default function ArenaGate() {
   const enterArena = useGameStore((s) => s.enterArena)
   const bestStage = useGameStore((s) => s.bestStage)
+  // A rating key rather than the number itself: this is a 3D component, and it
+  // must not re-reconcile every time a click lands.
+  const ratingKey = useGameStore((s) => damageRating(s.clickPower, 0))
 
   const carpetGlow = useRef()
   const anim = useRef({ near: 0, phase: 0, armed: false })
@@ -193,9 +185,6 @@ export default function ArenaGate() {
         repeat: [16, 1],
         seed: 41,
       }),
-      trunk: flat('#8a5a3b', { roughness: 0.95 }),
-      leaves: flat('#3f9a35'),
-      leavesLight: flat('#54bb45'),
     }
   }, [])
 
@@ -204,9 +193,6 @@ export default function ArenaGate() {
   const geometries = useMemo(
     () => ({
       block: new THREE.BoxGeometry(1, 1, 1),
-      trunk: new THREE.BoxGeometry(...TREE_PARTS[0].size),
-      lower: new THREE.BoxGeometry(...TREE_PARTS[1].size),
-      upper: new THREE.BoxGeometry(...TREE_PARTS[2].size),
     }),
     []
   )
@@ -441,33 +427,27 @@ export default function ArenaGate() {
       )}
 
       {/*
-        Scenery past the top of the stairs. Without it the gap between the
-        walls frames nothing but empty sky, and the climb reads as a dead end
-        rather than somewhere you are going.
+        Stage 1, standing where Stage 1 actually is.
+        
+        The gap between the walls used to frame three stand-in terraces with
+        scattered trees on them, so the climb led to a piece of scenery that
+        looked nothing like the level at the top of it. This is the real
+        chamber - the same component the arena mounts - shifted into hub space
+        by the same two numbers the arena uses to put the hub at the bottom of
+        these stairs. Walk up and you arrive in the place you were looking at.
       */}
-      <group position={[0, E.stepCount * E.stepRise, ARENA_STAIR_TOP_Z]}>
-        {/* Flat landing, then two terraces climbing to fill the opening. */}
-        <mesh material={groundMaterials} position={[0, -0.6, -5]} receiveShadow>
-          <boxGeometry args={[80, 1.2, 12]} />
-        </mesh>
-        <mesh material={groundMaterials} position={[0, 1, -16]} receiveShadow castShadow>
-          <boxGeometry args={[80, 3.4, 12]} />
-        </mesh>
-        <mesh material={groundMaterials} position={[0, 3.6, -28]} receiveShadow castShadow>
-          <boxGeometry args={[80, 8, 16]} />
-        </mesh>
-
-        {TREE_PARTS.map((part) => (
-          <InstancedBlocks
-            key={part.key}
-            items={BEYOND_TREES}
-            geometry={geometries[part.key]}
-            material={materials[part.material]}
-            part={{ position: [0, part.y, 0], rotation: part.rotation ?? 0 }}
-            castShadow
-          />
-        ))}
+      <group position={[0, APPROACH_DROP, -LOBBY_Z_OFFSET]}>
+        <Chamber stage={0} palette={STAGE_ONE_PALETTE} origin={0} />
       </group>
+
+      {/* The landing bridging the top step to the chamber's own floor. */}
+      <mesh
+        material={groundMaterials}
+        position={[0, APPROACH_DROP - LANDING_THICKNESS / 2, LANDING_Z]}
+        receiveShadow
+      >
+        <boxGeometry args={[CHAMBER_FLOOR_WIDTH, LANDING_THICKNESS, LANDING_DEPTH]} />
+      </mesh>
 
       {/* Warm light spilling down the runner as you approach */}
       <mesh
@@ -486,32 +466,33 @@ export default function ArenaGate() {
         />
       </mesh>
 
-      {/* Sign hanging over the gap */}
-      <Billboard position={[0, 7.4, E.stepFromZ - 2]}>
-        <Text
-          position={[0, 0.5, 0]}
-          fontSize={0.62}
-          color="#ffffff"
-          anchorX="center"
-          anchorY="middle"
-          outlineWidth={0.075}
-          outlineColor="#2b3245"
-          maxWidth={9}
-          textAlign="center"
+      {/*
+        The sign over the gap, in the same words every gate in the arena uses:
+        the level through it, and what it wants from you.
+        
+        Every line has to fit the gap it hangs in. This sign sits *between* the
+        two walls, which are eleven high and seven apart, and the old headline
+        was almost eight wide - so both walls ate an end of it and it read
+        "efeat all enemies firs". Nothing here is wider than the opening.
+      */}
+      <Billboard position={[0, 7.6, E.stepFromZ - 2]}>
+        <HeadlineText size={1.05} y={1.1} shadow="#2b3245">
+          Stage 1
+        </HeadlineText>
+        <HeadlineText size={0.34} y={0.15} color="#e6ecff" shadow="#2b3245">
+          Recommended Damage:
+        </HeadlineText>
+        <HeadlineText
+          size={0.72}
+          y={-0.62}
+          color={RATING_COLOR[ratingKey] ?? RATING_COLOR.fair}
+          shadow="#2b3245"
         >
-          {'Defeat all enemies first!'}
-        </Text>
-        <Text
-          position={[0, -0.3, 0]}
-          fontSize={0.34}
-          color="#ffe9f0"
-          anchorX="center"
-          anchorY="middle"
-          outlineWidth={0.04}
-          outlineColor="#2b3245"
-        >
-          {`Every run starts at Stage 1  -  best ${Math.min(MAX_STAGES, bestStage + 1)}`}
-        </Text>
+          {formatNumber(recommendedDamage(0))}
+        </HeadlineText>
+        <HeadlineText size={0.3} y={-1.42} color="#ffe9f0" shadow="#2b3245">
+          {`Best so far: Stage ${Math.min(MAX_STAGES, bestStage + 1)}`}
+        </HeadlineText>
       </Billboard>
     </group>
   )

@@ -37,6 +37,9 @@ function serialise(state) {
     stageIndex: state.stageIndex,
     enemyHealth: state.enemyHealth,
     stageCleared: state.stageCleared,
+    // What the run has already done to the corridor behind it. Without this a
+    // reload mid-run restocks every level you had walked back through.
+    chamberHealth: { ...state.chamberHealth },
     equippedIndex: state.equippedIndex,
     scene: state.scene,
     rebirths: state.rebirths,

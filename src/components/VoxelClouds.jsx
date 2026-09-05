@@ -23,9 +23,19 @@ function makeRandom(seed) {
   }
 }
 
+/** The radius the clouds were originally drawn and sized at. */
+const REFERENCE_RADIUS = 78
+
 function buildClouds(count, radius, height, seed) {
   const rand = makeRandom(seed)
   const blocks = []
+  /*
+   * Pushed out past the fog so the corridor can be seen down its whole length
+   * without cloud in it, and scaled by the same factor - height included, or
+   * the whole cover slides down onto the horizon - so the sky overhead comes
+   * out looking exactly as it did.
+   */
+  const scale = radius / REFERENCE_RADIUS
 
   for (let i = 0; i < count; i++) {
     // Spread around the ring, then jittered so the spacing is not a clock face.
@@ -33,7 +43,7 @@ function buildClouds(count, radius, height, seed) {
     const distance = radius * (0.78 + rand() * 0.42)
     const cx = Math.cos(angle) * distance
     const cz = Math.sin(angle) * distance
-    const cy = height * (0.7 + rand() * 0.6)
+    const cy = height * scale * (0.7 + rand() * 0.6)
     const bulk = 0.8 + rand() * 0.8
 
     // Each cloud is a few slabs shoved together, biggest first. They overlap
@@ -44,14 +54,14 @@ function buildClouds(count, radius, height, seed) {
       const taper = 1 - p / (pieces + 2)
       blocks.push({
         position: [
-          cx + (rand() - 0.5) * 6.5 * bulk,
-          cy + (rand() - 0.5) * 1.6,
-          cz + (rand() - 0.5) * 6.5 * bulk,
+          cx + (rand() - 0.5) * 6.5 * bulk * scale,
+          cy + (rand() - 0.5) * 1.6 * scale,
+          cz + (rand() - 0.5) * 6.5 * bulk * scale,
         ],
         scale: [
-          (6 + rand() * 6) * bulk * taper,
-          (2.6 + rand() * 1.8) * taper,
-          (6 + rand() * 5) * bulk * taper,
+          (6 + rand() * 6) * bulk * taper * scale,
+          (2.6 + rand() * 1.8) * taper * scale,
+          (6 + rand() * 5) * bulk * taper * scale,
         ],
         rotation: rand() * Math.PI,
       })

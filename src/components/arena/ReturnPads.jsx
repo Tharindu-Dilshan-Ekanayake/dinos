@@ -6,6 +6,7 @@ import { RETURN_PADS, RETURN_PAD_RADIUS, chamberOrigin } from '../../data/arena.
 import { formatNumber } from '../../data/progression.js'
 import { useGameStore } from '../../store/useGameStore.js'
 import { playerPosition } from '../../systems/playerState.js'
+import { fadeText, signOpacity } from '../../systems/signage.js'
 
 /**
  * Cash-out pads at the end of a cleared level.
@@ -23,6 +24,7 @@ export default function ReturnPads() {
 
   const group = useRef()
   const padRefs = useRef([])
+  const labelRefs = useRef([])
   const armed = useRef(false)
   const anim = useRef({ show: 0, phase: 0 })
 
@@ -30,10 +32,19 @@ export default function ReturnPads() {
     () => ({
       base: new THREE.MeshStandardMaterial({ color: '#2f5fb8', roughness: 0.7 }),
       top: new THREE.MeshStandardMaterial({
+        color: '#cfe9ff',
+        emissive: '#7fc4ff',
+        emissiveIntensity: 0.35,
+        roughness: 0.5,
+      }),
+      // A little gold cup over the pad, so the offer reads at a glance before
+      // any of the writing under it does.
+      trophy: new THREE.MeshStandardMaterial({
         color: '#ffc93c',
         emissive: '#ff9e00',
-        emissiveIntensity: 0.4,
-        roughness: 0.5,
+        emissiveIntensity: 0.5,
+        roughness: 0.45,
+        flatShading: true,
       }),
     }),
     []
@@ -67,13 +78,27 @@ export default function ReturnPads() {
     // Nearest pad wins; both do the same thing.
     const origin = chamberOrigin(stageIndex)
     let inside = false
-    for (const pad of RETURN_PADS) {
-      const distance = Math.hypot(
+
+    const distances = RETURN_PADS.map((pad) =>
+      Math.hypot(
         playerPosition.x - pad.position[0],
         playerPosition.z - (origin + pad.position[2])
       )
-      if (distance <= RETURN_PAD_RADIUS) inside = true
-    }
+    )
+    inside = distances.some((distance) => distance <= RETURN_PAD_RADIUS)
+
+    /*
+     * Only the nearer pad speaks. The two offer the identical deal and stand
+     * either side of the exit, so labelling both wrote "+7 Wins / Return"
+     * twice across the middle of the screen - and from anywhere between them
+     * they are the same distance away, so both were always at full volume.
+     */
+    const nearest = distances.indexOf(Math.min(...distances))
+    RETURN_PADS.forEach((_, i) => {
+      const shown = i === nearest ? signOpacity(distances[i]) * a.show : 0
+      fadeText(labelRefs.current[i * 2], shown)
+      fadeText(labelRefs.current[i * 2 + 1], shown)
+    })
 
     if (!inside) armed.current = true
     if (inside && armed.current) {
@@ -99,25 +124,45 @@ export default function ReturnPads() {
             <boxGeometry args={[RETURN_PAD_RADIUS * 1.5, 0.12, RETURN_PAD_RADIUS * 1.5]} />
           </mesh>
 
-          <Billboard position={[0, 2.5, 0]}>
+          <Billboard position={[0, 2.2, 0]}>
+            {/* Cup, stem and base - the same three boxes everything else in
+                this world is built out of. */}
+            <group position={[-1.02, 0.3, 0]}>
+              <mesh material={materials.trophy} position={[0, 0.16, 0]}>
+                <boxGeometry args={[0.34, 0.3, 0.18]} />
+              </mesh>
+              <mesh material={materials.trophy} position={[0, -0.06, 0]}>
+                <boxGeometry args={[0.11, 0.14, 0.11]} />
+              </mesh>
+              <mesh material={materials.trophy} position={[0, -0.17, 0]}>
+                <boxGeometry args={[0.3, 0.09, 0.16]} />
+              </mesh>
+            </group>
+
             <Text
-              position={[0, 0.34, 0]}
-              fontSize={0.44}
+              ref={(el) => {
+                labelRefs.current[i * 2] = el
+              }}
+              position={[0.22, 0.3, 0]}
+              fontSize={0.34}
               color="#ffd166"
               anchorX="center"
               anchorY="middle"
-              outlineWidth={0.055}
+              outlineWidth={0.048}
               outlineColor="#12100e"
             >
               {`+${formatNumber(runWins)} Wins`}
             </Text>
             <Text
-              position={[0, -0.22, 0]}
-              fontSize={0.38}
+              ref={(el) => {
+                labelRefs.current[i * 2 + 1] = el
+              }}
+              position={[0.22, -0.1, 0]}
+              fontSize={0.26}
               color="#ffffff"
               anchorX="center"
               anchorY="middle"
-              outlineWidth={0.05}
+              outlineWidth={0.04}
               outlineColor="#12100e"
             >
               Return

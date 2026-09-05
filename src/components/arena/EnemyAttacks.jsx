@@ -9,11 +9,25 @@ import {
   REGEN_DELAY,
   enemyBite,
 } from '../../data/combat.js'
-import { stageHealth } from '../../data/stages.js'
+import { enemyAttackStyle } from '../../data/enemies.js'
+import { isBoss, stageHealth } from '../../data/stages.js'
 import { useGameStore } from '../../store/useGameStore.js'
+import { playBite, playHurt } from '../../systems/audio.js'
+import { EVENTS, emit } from '../../systems/events.js'
 import { enemySlots, packState, slotHealthRatio } from '../../systems/arenaEnemies.js'
 import { playerPosition } from '../../systems/playerState.js'
 import { getTimeScale } from '../../systems/timeScale.js'
+
+/**
+ * Floor on the gap between two audible bites.
+ *
+ * A pack's cooldowns drift into step surprisingly easily, and five chomps on
+ * the same frame is one loud click rather than five bites.
+ */
+const BITE_SOUND_INTERVAL = 0.12
+
+/** How often your own dino is allowed to yelp, however hard it is being hit. */
+const HURT_SOUND_INTERVAL = 0.7
 
 /**
  * The pack biting back.
@@ -36,6 +50,8 @@ export default function EnemyAttacks() {
       pendingHeal: 0,
       sinceHit: REGEN_DELAY,
       flush: 0,
+      sinceBiteSound: BITE_SOUND_INTERVAL,
+      sinceHurtSound: HURT_SOUND_INTERVAL,
     }),
     []
   )
@@ -59,10 +75,13 @@ export default function EnemyAttacks() {
 
     if (store.dead) return
 
+    state.sinceBiteSound += delta
+    state.sinceHurtSound += delta
+
     if (!store.stageCleared) {
       const ratio = Math.max(0, Math.min(1, store.enemyHealth / stageHealth(store.stageIndex)))
       const bite = enemyBite(store.clickPower, store.stageIndex)
-      const rangeSquared = ENEMY_ATTACK_RANGE * ENEMY_ATTACK_RANGE
+      const boss = isBoss(store.stageIndex)
 
       for (let slot = 0; slot < packState.slotCount; slot++) {
         if (slotHealthRatio(ratio, slot, packState.slotCount) <= 0) {
@@ -70,21 +89,52 @@ export default function EnemyAttacks() {
           continue
         }
 
+        /*
+         * Every shape fights its own way. A sailback breathes fire from twice
+         * the reach of a runner's teeth, and a shielded one hits half as often
+         * for half again as hard - so a pack is a set of problems rather than
+         * five copies of one.
+         */
+        const style = enemyAttackStyle(slot, boss)
+        const reach = ENEMY_ATTACK_RANGE * style.reach
+
         const enemy = enemySlots[slot]
         const dx = playerPosition.x - enemy.x
         const dz = playerPosition.z - enemy.z
 
-        if (dx * dx + dz * dz > rangeSquared) {
+        if (dx * dx + dz * dz > reach * reach) {
           // Out of reach: it has to wind up again next time it closes.
           state.cooldowns[slot] = 0
           continue
         }
 
         state.cooldowns[slot] += delta
-        if (state.cooldowns[slot] >= ENEMY_ATTACK_INTERVAL) {
-          state.cooldowns[slot] -= ENEMY_ATTACK_INTERVAL
-          state.pendingDamage += bite
+        const interval = ENEMY_ATTACK_INTERVAL * style.interval
+        if (state.cooldowns[slot] >= interval) {
+          state.cooldowns[slot] -= interval
+          state.pendingDamage += bite * style.power
           state.sinceHit = 0
+
+          // The blow itself, for whatever wants to draw it.
+          emit(EVENTS.ENEMY_ATTACK, {
+            slot,
+            tell: style.tell,
+            color: style.color,
+            from: [enemy.x, enemy.z],
+            to: [playerPosition.x, playerPosition.z],
+            boss,
+          })
+
+          // Health is committed in batches, but a blow is a moment - it has to
+          // be heard when it lands, not when the store next catches up.
+          if (state.sinceBiteSound >= BITE_SOUND_INTERVAL) {
+            state.sinceBiteSound = 0
+            playBite({ heavy: boss || style.sound === 'heavy', style: style.sound })
+          }
+          if (state.sinceHurtSound >= HURT_SOUND_INTERVAL) {
+            state.sinceHurtSound = 0
+            playHurt()
+          }
         }
       }
     }

@@ -1,15 +1,18 @@
 import { Suspense, useCallback } from 'react'
 import { Physics } from '@react-three/rapier'
-import { clampToCorridor } from '../data/arena.js'
+import { ARENA, chamberOrigin, clampToCorridor } from '../data/arena.js'
+import { useGameStore } from '../store/useGameStore.js'
 import { playerPosition } from '../systems/playerState.js'
 import ArenaEnvironment from './arena/ArenaEnvironment.jsx'
 import ArenaPlayer from './arena/ArenaPlayer.jsx'
 import ArenaCombat from './arena/ArenaCombat.jsx'
 import ArenaFightCatcher from './arena/ArenaFightCatcher.jsx'
+import ArenaTravel from './arena/ArenaTravel.jsx'
+import EnemyAttackEffects from './arena/EnemyAttackEffects.jsx'
 import EnemyAttacks from './arena/EnemyAttacks.jsx'
 import EnemyPack from './arena/EnemyPack.jsx'
-import EntryGate from './arena/EntryGate.jsx'
-import ExitGate from './arena/ExitGate.jsx'
+import GateHeadline from './arena/GateHeadline.jsx'
+import Gates from './arena/Gates.jsx'
 import ReturnPads from './arena/ReturnPads.jsx'
 import LobbyCamera from './lobby/LobbyCamera.jsx'
 import DebrisField from './DebrisField.jsx'
@@ -27,7 +30,16 @@ export default function ArenaScene() {
   // Where the open space is depends on where the dino is standing, so the
   // camera's clamp is handed the live player position rather than importing it
   // into the layout data.
-  const clampCamera = useCallback((point) => clampToCorridor(point, playerPosition.z), [])
+  const clampCamera = useCallback((point) => {
+    // Only a *sealed* gate holds the camera back; once the chamber is clear
+    // the corridor is one continuous space and the camera may follow you
+    // through it.
+    const { stageIndex, stageCleared } = useGameStore.getState()
+    const sealedZ = stageCleared
+      ? null
+      : chamberOrigin(stageIndex) + ARENA.backZ + 1.5
+    return clampToCorridor(point, playerPosition, sealedZ)
+  }, [])
 
   return (
     <>
@@ -36,11 +48,13 @@ export default function ArenaScene() {
       <ArenaEnvironment />
 
       <ArenaFightCatcher />
+      <ArenaTravel />
       <ArenaPlayer />
       <EnemyPack />
       <EnemyAttacks />
-      <EntryGate />
-      <ExitGate />
+      <EnemyAttackEffects />
+      <Gates />
+      <GateHeadline />
       <ReturnPads />
       <ArenaCombat />
 

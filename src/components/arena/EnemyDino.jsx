@@ -1,10 +1,16 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Billboard } from '@react-three/drei'
-import { ENEMY_SPEED, ENEMY_STOP_DISTANCE } from '../../data/arena.js'
+import {
+  ARENA_BOUNDS,
+  ENEMY_SPEED,
+  ENEMY_STOP_DISTANCE,
+  chamberOrigin,
+} from '../../data/arena.js'
 import { stageHealth } from '../../data/stages.js'
 import { useGameStore } from '../../store/useGameStore.js'
 import { EVENTS, on } from '../../systems/events.js'
+import { createStepper } from '../../systems/footsteps.js'
 import { getTimeScale } from '../../systems/timeScale.js'
 import { playerPosition } from '../../systems/playerState.js'
 import { enemySlots, packState, slotHealthRatio } from '../../systems/arenaEnemies.js'
@@ -40,9 +46,17 @@ export default function EnemyDino({ slot, appearance, home, boss }) {
     flash: 0,
     hurt: 0,
     death: 0,
-    wasAlive: true,
+    // Null until the first frame in a chamber tells us what this slot's state
+    // actually is. See the frame loop.
+    wasAlive: null,
     bob: slot * 1.7,
   })
+
+  // Footfalls scale with the body: a boss lands like a boss.
+  const step = useMemo(
+    () => createStepper({ scale: appearance.scale, gain: 0.8, shared: true }),
+    [appearance.scale]
+  )
 
   // A fresh pack marches back to its posts whenever the stage changes.
   const stageIndex = useGameStore((s) => s.stageIndex)
@@ -51,7 +65,7 @@ export default function EnemyDino({ slot, appearance, home, boss }) {
     a.x = home[0]
     a.z = home[2]
     a.death = 0
-    a.wasAlive = true
+    a.wasAlive = null
     a.facing = -Math.PI / 2
   }, [stageIndex, home])
 
@@ -75,6 +89,17 @@ export default function EnemyDino({ slot, appearance, home, boss }) {
     const ratio = Math.max(0, Math.min(1, enemyHealth / stageHealth(currentStage)))
     const own = slotHealthRatio(ratio, slot, packState.slotCount)
     const alive = own > 0
+
+    /*
+     * First frame in this chamber: adopt whatever state the level is actually
+     * in, rather than assuming a standing dino. Walking back into a level you
+     * already cleared would otherwise play the whole pack's death animation at
+     * you again, every single time you passed through.
+     */
+    if (a.wasAlive === null) {
+      a.wasAlive = alive
+      a.death = 0
+    }
 
     // Falling: run the death animation once, then stay down.
     if (!alive && a.wasAlive) {
@@ -100,6 +125,8 @@ export default function EnemyDino({ slot, appearance, home, boss }) {
     // --- movement ---
     const isTarget = packState.targetSlot === slot
     let moving = 0
+    const wasX = a.x
+    const wasZ = a.z
 
     if (alive) {
       /*
@@ -139,9 +166,28 @@ export default function EnemyDino({ slot, appearance, home, boss }) {
       a.facing += diff * Math.min(1, delta * 6)
     }
 
+    /*
+     * A pack holds its own chamber and will not follow you out through the
+     * gap. Letting them chase into the corridor put five dinos in a passage
+     * barely wider than one of them - and, the moment you crossed the
+     * boundary, inside the next level's terrace wall. Breaking off and walking
+     * back is meant to work; this is what makes it an escape.
+     */
+    const origin = chamberOrigin(currentStage)
+    const localZ = a.z - origin
+    if (localZ < ARENA_BOUNDS.minZ) a.z = origin + ARENA_BOUNDS.minZ
+    else if (localZ > ARENA_BOUNDS.maxZ) a.z = origin + ARENA_BOUNDS.maxZ
+    if (a.x < ARENA_BOUNDS.minX) a.x = ARENA_BOUNDS.minX
+    else if (a.x > ARENA_BOUNDS.maxX) a.x = ARENA_BOUNDS.maxX
+
+    // Held against its own wall by that clamp, a dino still chasing you would
+    // otherwise run on the spot - legs, footsteps and all.
+    if (Math.abs(a.x - wasX) + Math.abs(a.z - wasZ) < 1e-4) moving = 0
+
     a.speed += (moving - a.speed) * Math.min(1, delta * 10)
     a.stride += delta * (2.2 + a.speed * 8)
     animateDinoRig(rig.current, a.speed, a.stride)
+    if (alive) step(a.stride, a.speed, { x: a.x, z: a.z })
 
     // Publish position so the combat system can measure range against it.
     enemySlots[slot]?.set(a.x, 0, a.z)

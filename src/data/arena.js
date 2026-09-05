@@ -1,4 +1,17 @@
 import { TREE_HALF_WIDTH } from './foliage.js'
+/*
+ * The hub's own layout, used to build the view back out of the arena's mouth.
+ * Imported rather than copied so the two halves of the game can never disagree
+ * about where the staircase between them is.
+ */
+import {
+  ARENA_ENTRANCE,
+  ARENA_STAIR_TOP_Z,
+  LEFT_TIER,
+  PLAZA,
+  PODIUMS,
+  TRAINING_POSITIONS,
+} from './lobby.js'
 
 /**
  * Battle arena level geometry.
@@ -110,6 +123,212 @@ export function buildArenaBlocks() {
   })
 
   return blocks
+}
+
+/**
+ * How far past `frontZ` the mouth wall's outermost tier reaches.
+ *
+ * Also how much extra ground chamber zero needs under it, since the wall would
+ * otherwise stand off the end of the chamber's own floor slab.
+ */
+export const MOUTH_DEPTH = TIERS[TIERS.length - 1].inset + TIERS[TIERS.length - 1].depth
+
+/**
+ * The mouth of the arena: a front wall for the very first chamber.
+ *
+ * Every other chamber has the previous one's back wall standing in front of
+ * it - that is the wall you look back *through* into the level you came from,
+ * and what makes the corridor read as a corridor at all. Chamber zero has no
+ * chamber before it, so it had nothing: Stage 1 opened onto an endless flat
+ * plain with no edge to the world anywhere in sight.
+ *
+ * Built as the back wall's mirror, so the way home and the way on read as the
+ * same kind of doorway.
+ */
+export function buildArenaMouth() {
+  const rand = makeRandom(31337)
+  const blocks = []
+
+  TIERS.forEach((tier, tierIndex) => {
+    const offset = ARENA.halfWidth + tier.inset
+    const z = ARENA.frontZ + tier.inset + tier.depth / 2
+    const span = offset + tier.depth
+    const count = Math.max(1, Math.round((span * 2) / 3.2))
+    const step = (span * 2) / count
+
+    for (let i = 0; i < count; i++) {
+      const x = -span + step * (i + 0.5)
+      // Open all the way through, exactly like the wall it mirrors: this is
+      // the doorway you look back down at the stairs and the hub.
+      if (Math.abs(x) < ARENA.gapHalfWidth + step * 0.5) continue
+
+      const height = tier.height * (0.86 + rand() * 0.32)
+      blocks.push({
+        position: [x, height / 2, z],
+        size: [step * 1.02, height, tier.depth],
+        tier: tierIndex,
+        face: 'front',
+        top: height,
+      })
+    }
+  })
+
+  return blocks
+}
+
+/* ------------------------------------------------ the way back to the hub */
+
+/**
+ * Everything past the arena's mouth: the stairs down, and the hub at the
+ * bottom of them.
+ *
+ * Stage 1's doorway looks back at where the run started. None of it is
+ * walkable - you leave through the doorway itself, a few paces short of the
+ * top step - but a corridor you can walk both ways has to show you both of its
+ * ends, and a blank plain out there said the opposite: that the arena was all
+ * there was, and that the way home led nowhere.
+ *
+ * It is built from the hub's *own* measurements rather than a sketch of them,
+ * so the flight of steps you climb in the lobby is the same flight you look
+ * down from up here, and the podiums are still where you left them.
+ */
+
+/** Ground outside the mouth begins at the far face of the mouth wall. */
+export const APPROACH_EDGE_Z = ARENA.frontZ + MOUTH_DEPTH
+
+/** Flat ground between the doorway and the top step. */
+const LANDING_DEPTH = 4.5
+
+/** How far the hub sits below the arena floor: the staircase's whole climb. */
+export const APPROACH_DROP = ARENA_ENTRANCE.stepCount * ARENA_ENTRANCE.stepRise
+
+/**
+ * Hub Z to arena Z.
+ *
+ * Both scenes run along the same axes, so the hub only has to be slid down the
+ * corridor until its staircase lands on the arena's landing. X needs no
+ * mapping at all: the podiums you walk past on your left on the way in are on
+ * your right looking back out, which is exactly what turning round does.
+ */
+export const LOBBY_Z_OFFSET = APPROACH_EDGE_Z + LANDING_DEPTH - ARENA_STAIR_TOP_Z
+
+/** Hub Y to arena Y - the arena floor is the top of the stairs. */
+function lobbyY(y) {
+  return y - APPROACH_DROP
+}
+
+/** Hub Z to arena Z. */
+function lobbyZ(z) {
+  return z + LOBBY_Z_OFFSET
+}
+
+/**
+ * How far out the view runs.
+ *
+ * Far enough to carry the whole plaza now that the fog reaches three chambers
+ * rather than two - the hub is only ninety units off the mouth, so all of it
+ * lands inside the haze rather than half of it being cut away.
+ */
+const APPROACH_FAR_Z = 170
+
+/**
+ * The whole view out of the mouth, grouped by the material each piece wears.
+ *
+ * Every slab is given its top face and cut off at a common floor underneath,
+ * so nothing in the view can be seen from below and no two pieces leave a
+ * seam of sky between them.
+ */
+export function buildHubApproach() {
+  const e = ARENA_ENTRANCE
+  const base = lobbyY(0) - 4
+
+  const paving = []
+  const steps = []
+  const walkway = []
+  const grass = []
+  const wall = []
+  const wallTop = []
+  const podium = []
+  const pad = []
+
+  /** A block given the world Y of its top face, filled down to `base`. */
+  const slab = (into, x, top, z, width, depth) => {
+    const height = top - base
+    into.push({ position: [x, top - height / 2, z], scale: [width, height, depth] })
+  }
+
+  // --- the ground the hub stands on ---------------------------------------
+  const groundFrom = APPROACH_EDGE_Z
+  const groundDepth = APPROACH_FAR_Z - groundFrom
+  slab(grass, 0, lobbyY(0), groundFrom + groundDepth / 2, 150, groundDepth)
+
+  // --- paving, and the lighter walkway down the middle ---------------------
+  const plazaFrom = lobbyZ(PLAZA.to)
+  const plazaTo = Math.min(APPROACH_FAR_Z, lobbyZ(PLAZA.from))
+  const plazaDepth = plazaTo - plazaFrom
+  const plazaZ = plazaFrom + plazaDepth / 2
+  slab(paving, 0, lobbyY(PLAZA.pathHeight), plazaZ, PLAZA.halfWidth * 2, plazaDepth)
+  walkway.push({
+    position: [0, lobbyY(PLAZA.pathHeight) + 0.05, plazaZ],
+    scale: [PLAZA.walkwayHalfWidth * 2, 0.1, plazaDepth],
+  })
+
+  // --- the landing, and the flight down ------------------------------------
+  slab(steps, 0, 0, APPROACH_EDGE_Z + LANDING_DEPTH / 2, e.gapHalfWidth * 2, LANDING_DEPTH)
+  for (let i = 0; i < e.stepCount; i++) {
+    // Step i counts up from the plaza, exactly as `stairHeightAt` reads them.
+    slab(
+      steps,
+      0,
+      lobbyY((i + 1) * e.stepRise),
+      lobbyZ(e.stepFromZ - (i + 0.5) * e.stepRun),
+      e.gapHalfWidth * 2,
+      e.stepRun * 1.02
+    )
+  }
+
+  // --- the retaining walls flanking the stairs -----------------------------
+  // Run back to the mouth rather than stopping where the hub stops them: from
+  // this side the arena's own wall is what they have to meet.
+  const wallTo = lobbyZ(e.wallFromZ)
+  const wallDepth = wallTo - APPROACH_EDGE_Z
+  const wallZ = APPROACH_EDGE_Z + wallDepth / 2
+  const wallX = e.gapHalfWidth + e.wallWidth / 2
+  for (const side of [-1, 1]) {
+    slab(wall, side * wallX, lobbyY(e.wallHeight), wallZ, e.wallWidth, wallDepth)
+    wallTop.push({
+      position: [side * wallX, lobbyY(e.wallHeight) + 0.3, wallZ],
+      scale: [e.wallWidth * 1.02, 0.6, wallDepth],
+    })
+  }
+
+  // --- the raised tier carrying the back row of podiums --------------------
+  const tierDepth = lobbyZ(LEFT_TIER.maxZ) - lobbyZ(LEFT_TIER.minZ)
+  slab(
+    wall,
+    (LEFT_TIER.minX + LEFT_TIER.maxX) / 2,
+    lobbyY(LEFT_TIER.height),
+    lobbyZ(LEFT_TIER.minZ) + tierDepth / 2,
+    LEFT_TIER.maxX - LEFT_TIER.minX,
+    tierDepth
+  )
+
+  // --- the gallery and the training row ------------------------------------
+  for (const p of PODIUMS) {
+    const z = lobbyZ(p.position[2])
+    if (z > APPROACH_FAR_Z) continue
+    podium.push({
+      position: [p.position[0], lobbyY(p.position[1]) + 0.7, z],
+      scale: [2.4, 1.4, 2.4],
+    })
+  }
+  for (const position of TRAINING_POSITIONS) {
+    const z = lobbyZ(position[2])
+    if (z > APPROACH_FAR_Z) continue
+    pad.push({ position: [position[0], lobbyY(0) + 0.09, z], scale: [3.8, 0.18, 3.8] })
+  }
+
+  return { paving, steps, walkway, grass, wall, wallTop, podium, pad }
 }
 
 /**
@@ -310,8 +529,14 @@ export function buildCliffDetails(blocks, seed = 0) {
     const [bx, , bz] = block.position
     const [sx, , sz] = block.size
 
-    // The direction pointing from this block back into the arena.
-    const inward = block.face === 'side' ? [-Math.sign(bx) || 1, 0] : [0, 1]
+    // The direction pointing from this block back into the arena. The mouth
+    // wall faces the other way down Z from the back wall it mirrors.
+    const inward =
+      block.face === 'side'
+        ? [-Math.sign(bx) || 1, 0]
+        : block.face === 'front'
+          ? [0, -1]
+          : [0, 1]
 
     // Chunks embedded in the face, half sunk into the wall.
     if (rand() < 0.62) {
@@ -365,8 +590,57 @@ export function chamberOrigin(stageIndex) {
   return -stageIndex * CHAMBER_SPAN
 }
 
+/**
+ * How many levels stay built either side of the one you are in.
+ *
+ * Three each way, which is as far as the fog reaches. Everything that belongs
+ * to a chamber is mounted for all of them - the ground, the walls, and the
+ * gateways - because a corridor of chambers with a gateway in only one of them
+ * reads as a corridor that stops being a level the moment you look down it.
+ */
+export const CHAMBERS_BEHIND = 3
+export const CHAMBERS_AHEAD = 3
+
+/** The levels currently standing, nearest the player first is not required. */
+export function chamberWindow(stageIndex, maxStages = Infinity) {
+  const out = []
+  for (let k = stageIndex - CHAMBERS_BEHIND; k <= stageIndex + CHAMBERS_AHEAD; k++) {
+    if (k >= 0 && k < maxStages) out.push(k)
+  }
+  return out
+}
+
 /** Half-width of the passage through the back wall between two chambers. */
 export const PASSAGE_HALF_WIDTH = ARENA.gapHalfWidth - 0.8
+
+/**
+ * Where one chamber's stretch of corridor ends and the next one's begins.
+ *
+ * The plane sits in the gap cut through a chamber's back wall, so the level
+ * you are credited with is simply the level you are standing in: walk through
+ * the gap and you are in the next one, walk back through it and you are in the
+ * one you came from.
+ *
+ * One plane answering it in both directions is what lets the corridor be
+ * walked in reverse. The gates used to decide it instead, and each fired in
+ * one fixed direction - so stepping back through an open exit ran the
+ * *forward* gate again and shoved you straight back where you came from.
+ */
+export const BOUNDARY_LOCAL_Z = ARENA.backZ - 1.5
+
+/**
+ * Dead band either side of a boundary.
+ *
+ * Standing exactly on the plane would otherwise flip the level back and forth
+ * every frame, and crossing forward has consequences - it is the plane the
+ * damage check hangs off.
+ */
+export const BOUNDARY_MARGIN = 0.4
+
+/** World Z of the boundary between `stageIndex` and the level after it. */
+export function stageBoundaryZ(stageIndex) {
+  return chamberOrigin(stageIndex) + BOUNDARY_LOCAL_Z
+}
 
 /* ------------------------------------------------------- walkable playfield */
 
@@ -392,6 +666,44 @@ export const PASSAGE_LENGTH =
   CHAMBER_SPAN - (ARENA_BOUNDS.maxZ - ARENA_BOUNDS.minZ)
 
 /**
+ * How much room there is either side of the centre line at a given Z.
+ *
+ * The corridor repeats: a chamber, then sixteen units of wall with a doorway
+ * cut through it, then the next chamber. This is that profile as a *continuous*
+ * function, and the continuity is the point. Read as a step - wide, then
+ * abruptly the width of a doorway - it threw the camera eight metres sideways
+ * the instant a boundary was crossed, which is exactly where a boundary is
+ * crossed: walking a level forward or back.
+ */
+const WALL_ENTERS = -ARENA.backZ
+const WALL_LEAVES = -ARENA.backZ + MOUTH_DEPTH
+/**
+ * How far ahead of a wall it starts closing in.
+ *
+ * The taper runs *up to* the wall's face and is fully closed the moment the
+ * band begins - never the other way round. Blending across the first few units
+ * of the wall itself would leave the camera nine metres wide of centre while
+ * already inside it, which is the exact failure the clamp exists to prevent:
+ * the boxes are single-sided, so from in there the wall stops being drawn and
+ * the trees on top of it hang in an empty sky.
+ */
+const WALL_BLEND = 5
+
+export function corridorHalfWidthAt(z, margin = 1.4) {
+  const wide = ARENA.halfWidth - margin
+  // The camera is allowed right up to a wall; it just may not go inside one.
+  const narrow = Math.max(0.5, PASSAGE_HALF_WIDTH - margin * 0.5)
+
+  // Where this point falls in the repeating pattern.
+  const u = ((-z % CHAMBER_SPAN) + CHAMBER_SPAN) % CHAMBER_SPAN
+  const into = Math.min(u - (WALL_ENTERS - WALL_BLEND), WALL_LEAVES + WALL_BLEND - u)
+
+  if (into <= 0) return wide
+  if (into >= WALL_BLEND) return narrow
+  return wide + (narrow - wide) * (into / WALL_BLEND)
+}
+
+/**
  * Pushes a point into the corridor's open space.
  *
  * The camera needs this as much as the dino does. A chamber is a slot between
@@ -402,34 +714,36 @@ export const PASSAGE_LENGTH =
  *
  * Mutates and returns the vector.
  */
-export function clampToCorridor(point, playerZ = null, margin = 1.4) {
-  // Which chamber's stretch of corridor this point is in.
-  const stage = Math.round(-point.z / CHAMBER_SPAN)
-  const localZ = point.z - chamberOrigin(stage)
+/** Closest the barrier limit may push the camera to the dino. */
+const MIN_GATE_GAP = 4.5
 
-  // The hollow itself, not the player's inset bounds - the camera is allowed
-  // right up to the wall, it just may not go inside it.
-  const inChamber = localZ >= ARENA.backZ && localZ <= ARENA.frontZ
-  // Inside a chamber you have the full hollow; between them, only the gap cut
-  // through the back wall.
-  const halfWidth = inChamber
-    ? ARENA.halfWidth - margin
-    : Math.max(0.5, PASSAGE_HALF_WIDTH - margin * 0.5)
+export function clampToCorridor(point, player = null, sealedZ = null, margin = 1.4) {
+  const squeeze = () => {
+    const halfWidth = corridorHalfWidthAt(point.z, margin)
+    if (point.x > halfWidth) point.x = halfWidth
+    else if (point.x < -halfWidth) point.x = -halfWidth
+  }
 
-  if (point.x > halfWidth) point.x = halfWidth
-  else if (point.x < -halfWidth) point.x = -halfWidth
+  squeeze()
 
   /*
-   * While the player is still inside the hollow, the camera stays on their
-   * side of the back wall. Swinging it round to face the dino would otherwise
-   * push it through the sealed gate, and the barrier is translucent from
-   * behind - the whole screen washes out.
+   * A sealed gate is the one thing the camera may not go behind: the barrier
+   * is translucent from that side and washes the whole screen out.
+   *
+   * `sealedZ` is null the moment the chamber is clear, which is what keeps
+   * this out of the way while a boundary is being crossed - the old version
+   * asked whether the *player* was inside the hollow, and switched off the
+   * instant they stepped into the passage, teleporting the camera ten metres.
+   * An open gate needs no limit anyway: the width profile above already keeps
+   * the camera out of the wall it is cut through.
    */
-  if (playerZ !== null) {
-    const playerLocalZ = playerZ - chamberOrigin(Math.round(-playerZ / CHAMBER_SPAN))
-    if (playerLocalZ >= ARENA.backZ && playerLocalZ <= ARENA.frontZ) {
-      const back = chamberOrigin(Math.round(-playerZ / CHAMBER_SPAN)) + ARENA.backZ + 1.5
-      if (point.z < back) point.z = back
+  if (sealedZ !== null) {
+    // Never inside the dino either. Pressed up against the gate there is no
+    // room on that side at all, and glimpsing the barrier is the lesser evil.
+    const limit = player ? Math.min(sealedZ, player.z - MIN_GATE_GAP) : sealedZ
+    if (point.z < limit) {
+      point.z = limit
+      squeeze()
     }
   }
 
@@ -521,10 +835,36 @@ export function enemyFormation(stageIndex, boss) {
  * you to the next level - and what runs the damage check.
  */
 export const ENTRY_GATE = { position: [0, 0, ARENA.frontZ - 1.5], radius: 3 }
-export const EXIT_GATE = { position: [0, 0, ARENA.backZ + 1.2], radius: 3.2 }
 
-/** How close you must be to the exit for it to trigger. */
-export const GATE_TRIGGER_RADIUS = 2.6
+/**
+ * The gateway's structure sits in the *middle* of the wall it is cut through,
+ * not against its near face.
+ *
+ * Standing at the face the pillars read as two towers parked in front of a
+ * wall with a hole in it. Set into the sixteen units of the wall itself they
+ * read as what they are: a gateway through it, framed by the rock on both
+ * sides.
+ */
+export const EXIT_GATE = {
+  position: [0, 0, ARENA.backZ - MOUTH_DEPTH / 2],
+  radius: 3.2,
+}
+
+/**
+ * The barrier hangs between the towers, not at the chamber's edge.
+ *
+ * It is the gate: a sheet of light strung across the gateway itself reads as
+ * one thing with the pillars holding it, where a pane floating ten metres in
+ * front of them read as a second, unrelated wall.
+ */
+export const EXIT_BARRIER_Z = EXIT_GATE.position[2]
+
+/**
+ * The sign, though, stays at the chamber's own edge - it is addressed to
+ * somebody standing in the chamber, and set into the tunnel it would be hidden
+ * by the wall from everywhere but dead centre.
+ */
+export const EXIT_SIGN_Z = ARENA.backZ + 1.6
 
 /**
  * Return pads flanking the exit.
@@ -545,3 +885,36 @@ export const RETURN_PAD_RADIUS = 1.5
  * from Stage 1 it walks you out of the arena entirely.
  */
 export const ENTRY_TRIGGER = { z: ARENA_BOUNDS.maxZ, radius: 1.1 }
+
+/**
+ * Where a dino standing at (x, z) should be carried to, or null to stay put.
+ *
+ * The whole rule for moving along the corridor, as one pure function of where
+ * you are - which is what lets it be walked in both directions. The gates used
+ * to own a direction each and fire on proximity, so stepping back through an
+ * open exit ran the forward one again and pushed you into the level you were
+ * trying to leave.
+ *
+ * A return of -1 means out of the near end of Stage 1: the mouth of the arena.
+ */
+export function stageTravelTarget(stageIndex, x, z) {
+  // Forward, out through the gap in this chamber's back wall. Nothing here
+  // stops you doing it early - the sealed barrier does, by way of the
+  // player's own bounds, which end at the gate until the pack is down.
+  if (z < stageBoundaryZ(stageIndex) - BOUNDARY_MARGIN) return stageIndex + 1
+
+  // Back, over the very same plane the level behind uses as its front edge.
+  if (stageIndex > 0) {
+    return z > stageBoundaryZ(stageIndex - 1) + BOUNDARY_MARGIN ? stageIndex - 1 : null
+  }
+
+  /*
+   * Stage 1 has nothing behind it, so its near end is the way out and walking
+   * through banks the run. Narrow, and only at the mouth itself, so brushing
+   * along the front wall on the way to a Return pad never cashes you out.
+   */
+  const mouth = chamberOrigin(0) + ENTRY_TRIGGER.z - ENTRY_TRIGGER.radius
+  if (z >= mouth && Math.abs(x) <= ARENA.gapHalfWidth) return -1
+
+  return null
+}

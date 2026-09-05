@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { EVOLUTIONS } from '../../data/evolutions.js'
 import {
@@ -10,6 +10,7 @@ import {
   groundHeightAt,
 } from '../../data/lobby.js'
 import { useGameStore } from '../../store/useGameStore.js'
+import { createStepper } from '../../systems/footsteps.js'
 import { installInput } from '../../systems/input.js'
 import { stepPlayer } from '../../systems/playerMovement.js'
 import { playerFacing, playerMotion, playerPosition } from '../../systems/playerState.js'
@@ -47,17 +48,39 @@ export default function Player() {
   const tilt = useRef()
   const rig = useDinoRig()
   const anim = useRef({ stride: 0, speed: 0 })
+  const step = useMemo(() => createStepper({ scale: evolution.scale }), [evolution.scale])
 
   useEffect(() => installInput(), [])
 
-  // Returning from the arena drops you back on the gate pad; step clear of it
-  // so the walk-in trigger does not immediately fire again.
+  /*
+   * Arriving back from the arena, at the gate you left through.
+   *
+   * Nothing used to put the dino back when a run ended, and the arena's
+   * corridor runs thousands of units out along -Z - so a player who walked
+   * home, or died deep, stood in the void beside the hub with the camera out
+   * there with them, until they happened to press a key and the plaza's bounds
+   * snapped them back. Anything outside the plaza is put on the gate pad, and
+   * stepped clear of it so the walk-in trigger does not fire again.
+   */
   useEffect(() => {
+    const outside =
+      playerPosition.x < PLAYER_BOUNDS.minX ||
+      playerPosition.x > PLAYER_BOUNDS.maxX ||
+      playerPosition.z < PLAYER_BOUNDS.minZ ||
+      playerPosition.z > PLAYER_BOUNDS.maxZ
+
     const dx = playerPosition.x - ARENA_GATE.position[0]
     const dz = playerPosition.z - ARENA_GATE.position[2]
-    if (Math.hypot(dx, dz) < ARENA_GATE.radius + 0.5) {
-      playerPosition.z = ARENA_GATE.position[2] + ARENA_GATE.radius + 2.5
+
+    if (outside || Math.hypot(dx, dz) < ARENA_GATE.radius + 0.5) {
+      playerPosition.set(
+        ARENA_GATE.position[0],
+        groundHeightAt(ARENA_GATE.position[0], ARENA_GATE.position[2] + ARENA_GATE.radius + 2.5),
+        ARENA_GATE.position[2] + ARENA_GATE.radius + 2.5
+      )
       playerFacing.angle = Math.PI / 2
+      playerMotion.velocityY = 0
+      playerMotion.grounded = true
     }
   }, [])
 
@@ -71,6 +94,7 @@ export default function Player() {
     // pace with the ground rather than sliding across it.
     anim.current.stride += delta * (2.4 + anim.current.speed * 8)
     animateDinoRig(rig.current, anim.current.speed, anim.current.stride)
+    step(anim.current.stride, anim.current.speed, { grounded: playerMotion.grounded })
 
     if (root.current) {
       root.current.position.set(playerPosition.x, playerPosition.y, playerPosition.z)

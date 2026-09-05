@@ -254,8 +254,35 @@ export const RIDGE_STYLES = {
  * caps are drawn with their own colour, which is what puts snow on the ice
  * mountains and lava in the volcanoes.
  */
-export function buildRidge(stageIndex, mood, style, radius = 88, count = 26) {
+/**
+ * How far down the corridor you can see, and where the backdrop hangs.
+ *
+ * The arena is a line of chambers forty apart, and the whole reason for laying
+ * them end to end is that you can see the next few from wherever you are
+ * standing - so the fog has to reach past three of them in both directions.
+ *
+ * Everything that is *supposed* to be the horizon then has to move out past
+ * that fog. At the old eighty-eight a hill sat squarely in the middle of the
+ * corridor with a mountain cutting the chambers behind it in half; it only
+ * ever worked because the fog rubbed it out first.
+ */
+export const CORRIDOR_SIGHT = 150
+
+/** Where the skyline, the clouds and the sun hang - well past the fog. */
+export const HORIZON_DISTANCE = 240
+
+/**
+ * The radius the skyline was originally drawn and sized at.
+ *
+ * Moving it further out has to scale it up by the same factor or the hills
+ * shrink into pebbles: what matters is the angle it subtends from the player,
+ * not its distance, and that has to come out unchanged.
+ */
+const RIDGE_REFERENCE_RADIUS = 88
+
+export function buildRidge(stageIndex, mood, style, radius = HORIZON_DISTANCE, count = 26) {
   const spec = RIDGE_STYLES[style] ?? RIDGE_STYLES.hills
+  const scale = radius / RIDGE_REFERENCE_RADIUS
 
   let seed = ((stageIndex + 1) * 2654435761) % 4294967296
   const rand = () => {
@@ -273,7 +300,7 @@ export function buildRidge(stageIndex, mood, style, radius = 88, count = 26) {
     const z = Math.sin(angle) * distance
 
     const height =
-      (spec.height[0] + rand() * (spec.height[1] - spec.height[0])) * mood.ridge
+      (spec.height[0] + rand() * (spec.height[1] - spec.height[0])) * mood.ridge * scale
     const width = height * (spec.spread[0] + rand() * (spec.spread[1] - spec.spread[0]))
     const steps = spec.steps[0] + Math.floor(rand() * (spec.steps[1] - spec.steps[0] + 1))
     const spin = rand() * Math.PI

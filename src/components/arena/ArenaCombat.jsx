@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { ATTACK_RANGE } from '../../data/arena.js'
 import { useGameStore } from '../../store/useGameStore.js'
+import { playSwing } from '../../systems/audio.js'
 import { EVENTS, emit } from '../../systems/events.js'
 import { consumeAttack } from '../../systems/input.js'
 import { enemySlots, packState, setLastImpact } from '../../systems/arenaEnemies.js'
@@ -43,6 +44,10 @@ export default function ArenaCombat() {
 
     // Manual swings: a tap, a click, or the attack button.
     if (consumeAttack()) {
+      // The swing is heard whether or not it finds anything - a blow through
+      // empty air still swishes, and that thinner sound is the feedback that
+      // you are out of reach.
+      playSwing({ connects: inRange, heavy: state.evolutionIndex >= 6 })
       if (hasTarget && !inRange) {
         emit(EVENTS.DENIED, { reason: 'range' })
       } else {
@@ -55,6 +60,7 @@ export default function ArenaCombat() {
       autoTimer.current += delta
       while (autoTimer.current >= AUTO_ATTACK_INTERVAL) {
         autoTimer.current -= AUTO_ATTACK_INTERVAL
+        playSwing({ heavy: state.evolutionIndex >= 6 })
         swing()
       }
     } else {

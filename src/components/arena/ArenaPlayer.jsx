@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import {
   ARENA_BOUNDS,
@@ -13,6 +13,7 @@ import {
 import { EVOLUTIONS } from '../../data/evolutions.js'
 import { useGameStore } from '../../store/useGameStore.js'
 import { EVENTS, on } from '../../systems/events.js'
+import { createStepper } from '../../systems/footsteps.js'
 import { installInput } from '../../systems/input.js'
 import { stepPlayer, turnToward } from '../../systems/playerMovement.js'
 import { placePlayer, playerFacing, playerMotion, playerPosition } from '../../systems/playerState.js'
@@ -54,6 +55,9 @@ export default function ArenaPlayer() {
   const scaler = useRef()
   const rig = useDinoRig()
   const anim = useRef({ stride: 0, speed: 0, lunge: 0, glow: 0, death: 0 })
+  // Footfalls are sized by the dino you are wearing, so evolving is something
+  // you hear as well as see.
+  const step = useMemo(() => createStepper({ scale: evolution.scale }), [evolution.scale])
 
   useEffect(() => installInput(), [])
 
@@ -119,7 +123,17 @@ export default function ArenaPlayer() {
       stageCleared || beyondBack
         ? origin + ARENA_BOUNDS.minZ - PASSAGE_LENGTH
         : origin + ARENA_BOUNDS.minZ
-    bounds.maxZ = origin + ARENA_BOUNDS.maxZ + PASSAGE_LENGTH
+    /*
+     * Backwards there is always somewhere to go - every level behind you this
+     * run is cleared ground you are allowed to walk back over. Stage 1 is the
+     * exception: nothing stands behind it but the way out, so the corridor
+     * simply stops at its near wall and the mouth of the arena is a step, not
+     * a stretch of empty floor to wander into.
+     */
+    bounds.maxZ =
+      stageIndex > 0
+        ? origin + ARENA_BOUNDS.maxZ + PASSAGE_LENGTH
+        : origin + ARENA_BOUNDS.maxZ
 
     // A dying dino stops taking input.
     const { moving } = dead ? { moving: false } : stepPlayer(delta, CONFIG)
@@ -147,6 +161,7 @@ export default function ArenaPlayer() {
     a.speed += ((moving ? 1 : 0) - a.speed) * Math.min(1, delta * 12)
     a.stride += delta * (2.4 + a.speed * 8)
     animateDinoRig(rig.current, a.speed, a.stride)
+    if (!dead) step(a.stride, a.speed, { grounded: playerMotion.grounded })
 
     a.lunge = Math.max(0, a.lunge - scaled * 5.2)
     const lunge = a.lunge * a.lunge
