@@ -1,3 +1,5 @@
+import { TREE_HALF_WIDTH } from './foliage.js'
+
 /**
  * Battle arena level geometry.
  *
@@ -62,7 +64,10 @@ export function buildArenaBlocks() {
 
     // --- Side walls, running the length of the arena ---
     const sideSpan = ARENA.frontZ - (ARENA.backZ - tier.inset)
-    const sideCount = Math.max(1, Math.round(sideSpan / 6))
+    // Smaller blocks, more of them: a terrace should look assembled out of
+    // pieces rather than extruded as one slab. They are instanced, so twice as
+    // many costs nothing extra to draw.
+    const sideCount = Math.max(1, Math.round(sideSpan / 3.2))
     const sideStep = sideSpan / sideCount
 
     for (let i = 0; i < sideCount; i++) {
@@ -85,7 +90,7 @@ export function buildArenaBlocks() {
     // --- Back wall, split around the central opening ---
     const backZ = ARENA.backZ - tier.inset - tier.depth / 2
     const backSpan = offset + tier.depth
-    const backCount = Math.max(1, Math.round((backSpan * 2) / 6))
+    const backCount = Math.max(1, Math.round((backSpan * 2) / 3.2))
     const backStep = (backSpan * 2) / backCount
 
     for (let i = 0; i < backCount; i++) {
@@ -115,7 +120,7 @@ export function buildArenaBlocks() {
  * and left the canopy hanging over the drop, which reads as a floating tree
  * however well planted the trunk actually is.
  */
-const PROP_HALF_WIDTH = 1.45
+const PROP_HALF_WIDTH = TREE_HALF_WIDTH
 
 /**
  * Scatter of rim props standing on the terraces.
@@ -443,6 +448,15 @@ export function arenaGroundHeight() {
 
 /** Upper bound on pack size, used to size the shared slot arrays. */
 export const MAX_ENEMIES = 7
+
+/**
+ * Fewest blows a chamber can be cleared in, however over-geared you are.
+ *
+ * A pack of five already takes five - one per enemy - but a boss stands alone,
+ * and a boss that pops in a single click is not a boss. This is the floor that
+ * keeps every fight long enough to be a fight.
+ */
+export const MIN_HITS_TO_CLEAR = 4
 
 /**
  * How many dinos a level throws at you at once.

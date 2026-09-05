@@ -55,7 +55,9 @@ function StageButton({ index, current, bestStage, clickPower }) {
 export default function LevelSelect({ open, onClose }) {
   const stageIndex = useGameStore((s) => s.stageIndex)
   const bestStage = useGameStore((s) => s.bestStage)
-  const clickPower = useGameStore((s) => s.clickPower)
+  // Closed, this returns a constant and the sheet stops re-rendering on every
+  // click happening behind it.
+  const clickPower = useGameStore((s) => (open ? s.clickPower : 0))
   const currentRef = useRef(null)
 
   const groups = useMemo(

@@ -9,7 +9,9 @@ import DeathOverlay from './DeathOverlay.jsx'
 import AreaBanner from './AreaBanner.jsx'
 import EvolutionTrack from './EvolutionTrack.jsx'
 import FloatingTexts from './FloatingTexts.jsx'
+import BottomDetails from './BottomDetails.jsx'
 import HealthBar from './HealthBar.jsx'
+import InteractPrompt from './InteractPrompt.jsx'
 import PlayerHealthBar from './PlayerHealthBar.jsx'
 import Leaderboard from './Leaderboard.jsx'
 import LevelSelect from './LevelSelect.jsx'
@@ -36,8 +38,13 @@ function Chip({ label, value, color = 'arcade-slate', icon }) {
 function TopStats() {
   const wins = useGameStore((s) => s.wins)
   const rebirths = useGameStore((s) => s.rebirths)
-  const clickPower = useGameStore((s) => s.clickPower)
-  const idleDps = useGameStore((s) => s.idleDps)
+  /*
+   * Damage moves on every single click now, so these select the *formatted
+   * text* rather than the raw number: React then re-renders only when what is
+   * on screen actually changes, instead of once per tap forever.
+   */
+  const damage = useGameStore((s) => formatNumber(s.clickPower))
+  const idle = useGameStore((s) => (s.idleDps > 0 ? formatNumber(s.idleDps) : ''))
   const runWins = useGameStore((s) => s.runWins)
   const scene = useGameStore((s) => s.scene)
 
@@ -47,10 +54,8 @@ function TopStats() {
       {scene === 'arena' && (
         <Chip label="Carried" value={formatNumber(runWins)} color="arcade-pink" icon="🎒" />
       )}
-      <Chip label="Damage" value={formatNumber(clickPower)} color="arcade-red" icon="💪" />
-      {idleDps > 0 && (
-        <Chip label="Idle" value={`${formatNumber(idleDps)}/s`} color="arcade-blue" icon="🌀" />
-      )}
+      <Chip label="Damage" value={damage} color="arcade-red" icon="💪" />
+      {idle && <Chip label="Idle" value={`${idle}/s`} color="arcade-blue" icon="🌀" />}
       {rebirths > 0 && (
         <Chip
           label="Rebirth"
@@ -280,13 +285,19 @@ export default function UIOverlay() {
       </div>
 
       {inLobby ? (
-        <LobbyHUD />
+        <>
+          <LobbyHUD />
+          <InteractPrompt />
+        </>
       ) : (
         <>
           <StageProgress />
           <ArenaControls />
         </>
       )}
+
+      {/* Damage, tier and upgrades, in both scenes - clicking earns in both. */}
+      <BottomDetails />
 
       <ShopSheet
         open={shopOpen}

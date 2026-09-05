@@ -1,42 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { formatNumber } from '../data/progression.js'
-import { useGameStore } from '../store/useGameStore.js'
 import { EVENTS, on } from '../systems/events.js'
 import { queueInteract } from '../systems/input.js'
 import Joystick from './Joystick.jsx'
-
-/**
- * Live Damage readout.
- *
- * Training commits several times a second, so this reads the store from an
- * rAF loop and writes straight to the DOM rather than subscribing React to a
- * number that changes constantly.
- */
-function DamageMeter() {
-  const value = useRef(null)
-
-  useEffect(() => {
-    let raf = 0
-    let last = ''
-    const tick = () => {
-      const text = formatNumber(useGameStore.getState().clickPower)
-      if (value.current && text !== last) {
-        value.current.textContent = text
-        last = text
-      }
-      raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [])
-
-  return (
-    <div className="hud-panel px-4 py-1.5 text-center">
-      <div className="hud-label">Damage</div>
-      <div ref={value} className="text-2xl font-black leading-tight text-amber-300" />
-    </div>
-  )
-}
 
 /**
  * Hub controls: the movement stick, the contextual interact button, and the
@@ -46,11 +12,13 @@ function DamageMeter() {
  * proximity scans, so this only re-renders when the target actually changes.
  */
 export default function LobbyHUD() {
-  const [prompt, setPrompt] = useState(null)
   const [training, setTraining] = useState(null)
+  // The centred InteractPrompt owns the call to action; this is only here so
+  // the corner button knows whether there is anything to press.
+  const [prompt, setPrompt] = useState(null)
 
-  useEffect(() => on(EVENTS.PROMPT, setPrompt), [])
   useEffect(() => on(EVENTS.TRAINING, setTraining), [])
+  useEffect(() => on(EVENTS.PROMPT, setPrompt), [])
 
   return (
     <>
@@ -67,27 +35,9 @@ export default function LobbyHUD() {
           </div>
         )}
 
-        {prompt && (
-          <div className="hud-panel animate-slide-up px-4 py-2 text-center">
-            <div className="text-sm font-black uppercase tracking-wide text-white/90">
-              {prompt.title}
-            </div>
-            <div
-              className={`text-[11px] font-semibold ${
-                prompt.enabled ? 'text-emerald-300' : 'text-white/45'
-              }`}
-            >
-              {prompt.action}
-            </div>
-          </div>
-        )}
       </div>
 
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 safe-bottom">
-        <div className="mb-2 flex justify-center">
-          <DamageMeter />
-        </div>
-
         <div className="flex items-end justify-between px-4">
           <Joystick />
 

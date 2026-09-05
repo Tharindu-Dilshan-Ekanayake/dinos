@@ -17,12 +17,22 @@ import { damageRating, isBoss } from './stages.js'
 /** The player's health pool. Flat, so the bar always reads as a percentage. */
 export const MAX_PLAYER_HEALTH = 100
 
-/** How hard one bite lands, by how the stage rates against your click damage. */
+/**
+ * How hard one bite lands, by how the stage rates against your click damage.
+ *
+ * Per *enemy*, and the whole pack comes at you now - so five of them at the
+ * fair rate is what a single one used to do. These numbers were set back when
+ * only the one dino you were fighting closed in; left alone, the pack change
+ * turned every level in the game into a three-second death.
+ *
+ * Tuned so that clearing a level at exactly its gate costs roughly half your
+ * health, and a pack you are badly under-geared for still kills you quickly.
+ */
 const BITE_BY_RATING = {
-  easy: 4,
-  fair: 7,
-  risky: 12,
-  blocked: 18,
+  easy: 1.5,
+  fair: 2.5,
+  risky: 6,
+  blocked: 10,
 }
 
 /** A boss comes alone, so it has to hit for what a whole pack would. */
