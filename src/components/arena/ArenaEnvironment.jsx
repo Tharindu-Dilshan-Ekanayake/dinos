@@ -2,9 +2,14 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { AREA_TRANSITION_SECONDS, paletteForStage } from '../../data/areas.js'
-import { CHAMBER_SPAN, chamberOrigin } from '../../data/arena.js'
+import { APPROACH_EDGE_Z, chamberOrigin, chamberWindow } from '../../data/arena.js'
 import { MAX_STAGES } from '../../data/stages.js'
-import { buildRidge, skyMoodForStage, weatherForStage } from '../../data/weather.js'
+import {
+  HORIZON_DISTANCE,
+  buildRidge,
+  skyMoodForStage,
+  weatherForStage,
+} from '../../data/weather.js'
 import { useGameStore } from '../../store/useGameStore.js'
 import { playerPosition } from '../../systems/playerState.js'
 import Birds from '../Birds.jsx'
@@ -13,6 +18,7 @@ import InstancedBlocks from '../InstancedBlocks.jsx'
 import SkyBody from '../SkyBody.jsx'
 import VoxelClouds from '../VoxelClouds.jsx'
 import Chamber from './Chamber.jsx'
+import HubApproach from './HubApproach.jsx'
 import Weather from './Weather.jsx'
 
 const tmpColor = new THREE.Color()
@@ -43,8 +49,12 @@ function applyMood(color, warmth, darken) {
  * the chamber slabs, follows the player, and fills that horizon with the
  * current level's ground colour.
  */
-const BEDROCK_SIZE = 220
+/** Ground out to the skyline, and a hair below the chamber slabs. */
+const BEDROCK_SIZE = HORIZON_DISTANCE * 2.4
 const BEDROCK_DROP = 0.08
+
+/** The skydome has to contain the skyline, and the camera has to reach past it. */
+const SKY_RADIUS = HORIZON_DISTANCE * 1.35
 
 /**
  * The corridor of levels.
@@ -75,15 +85,21 @@ export default function ArenaEnvironment() {
     [stageIndex, mood]
   )
 
-  // Mount the neighbours too, so a boundary never pops into existence.
-  const window_ = useMemo(() => {
-    const out = []
-    for (let k = stageIndex - 1; k <= stageIndex + 1; k++) {
-      if (k < 0 || k >= MAX_STAGES) continue
-      out.push({ stage: k, origin: chamberOrigin(k), palette: paletteForStage(k) })
-    }
-    return out
-  }, [stageIndex])
+  /*
+   * Mount the neighbours too, so a boundary never pops into existence - and
+   * enough of them either side that the corridor reads as one continuous
+   * place: three levels ahead seen through the open gate, three behind through
+   * the doorway you came in by, each one framed inside the last.
+   */
+  const window_ = useMemo(
+    () =>
+      chamberWindow(stageIndex, MAX_STAGES).map((stage) => ({
+        stage,
+        origin: chamberOrigin(stage),
+        palette: paletteForStage(stage),
+      })),
+    [stageIndex]
+  )
 
   /**
    * Sky, fog and lights are global, so they blend toward whichever level the
@@ -170,6 +186,7 @@ export default function ArenaEnvironment() {
   }, [scene, fog])
 
   const skyRef = useRef()
+  const bedrockRef = useRef()
 
   useFrame((_, delta) => {
     const target = paletteForStage(stageIndex)
@@ -230,6 +247,21 @@ export default function ArenaEnvironment() {
     if (skyRef.current) {
       skyRef.current.position.set(playerPosition.x, 0, playerPosition.z)
     }
+
+    /*
+     * The bedrock rides with the player as well, but its leading edge stops at
+     * the arena's mouth. Past that the ground falls six metres to the hub, and
+     * a plane sitting at the arena's own floor level would bury the stairs,
+     * the plaza and everything on it under a sheet of flat green.
+     */
+    if (bedrockRef.current) {
+      const far = APPROACH_EDGE_Z - BEDROCK_SIZE / 2
+      bedrockRef.current.position.set(
+        playerPosition.x,
+        -BEDROCK_DROP,
+        Math.min(playerPosition.z, far)
+      )
+    }
   })
 
   return (
@@ -258,25 +290,30 @@ export default function ArenaEnvironment() {
       {/* Everything in here rides with the player, so the corridor can never
           walk out from under the sky or off the edge of the world. */}
       <group ref={skyRef}>
-        <GradientSky topColor={live.skyTop} bottomColor={live.skyBottom} radius={100} />
+        <GradientSky
+          topColor={live.skyTop}
+          bottomColor={live.skyBottom}
+          radius={SKY_RADIUS}
+        />
         {/* Cloud cover is part of the stage's weather report: a storm rolls in
             with three times the cloud of a clear afternoon. */}
         <VoxelClouds
           color={live.cloud}
           count={mood.clouds + (weather.cloudBoost ?? 0)}
+          radius={HORIZON_DISTANCE * 0.88}
           height={mood.cloudHeight}
           seed={8675309 + stageIndex * 977}
         />
         {/* Hung in the key light's own direction, so the shadows on the
             ground point away from it. */}
+        {/* Out past the skyline, and scaled with it so it hangs the same size
+            in the sky as it always did. */}
         <SkyBody
           color={mood.sun.color}
           elevation={mood.sun.elevation}
-          size={mood.sun.size}
+          size={mood.sun.size * (HORIZON_DISTANCE * 1.1) / 92}
+          distance={HORIZON_DISTANCE * 1.1}
         />
-        <mesh rotation-x={-Math.PI / 2} position-y={-BEDROCK_DROP} material={bedrockMaterial}>
-          <planeGeometry args={[BEDROCK_SIZE, BEDROCK_SIZE]} />
-        </mesh>
         {/* A different skyline every level, and a different *kind* of skyline
             every biome. */}
         <InstancedBlocks
@@ -291,9 +328,17 @@ export default function ArenaEnvironment() {
         />
       </group>
 
+      <mesh ref={bedrockRef} rotation-x={-Math.PI / 2} material={bedrockMaterial}>
+        <planeGeometry args={[BEDROCK_SIZE, BEDROCK_SIZE]} />
+      </mesh>
+
       <Weather weather={weather} />
       {/* Nothing flies in a downpour or a blizzard. */}
       <Birds hidden={(weather.darken ?? 0) > 0.12 || (weather.fogPull ?? 0) > 0.3} />
+
+      {/* The stairs down and the hub at the bottom, off the near end of the
+          first chamber - mounted only while that chamber is. */}
+      {window_.some((chamber) => chamber.stage === 0) && <HubApproach />}
 
       {window_.map((chamber) => (
         <Chamber

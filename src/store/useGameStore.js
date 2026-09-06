@@ -5,7 +5,7 @@ import {
   MAX_STAGES,
   canEnterStage,
   isBoss,
-  requiredDamage,
+  recommendedDamage,
   stageHealth,
   stageReward,
 } from '../data/stages.js'
@@ -49,6 +49,17 @@ function freshRun() {
     trainedPower: 0,
     /** Damage earned by fighting - every blow landed and every level cleared. */
     battlePower: 0,
+    /**
+     * What this run has already done to each chamber: remaining pack health
+     * keyed by level, and zero once that level is clear.
+     *
+     * A level used to be rebuilt from its curve every time you set foot in
+     * one, so walking back through ground you had already taken put the whole
+     * pack back on its feet and they came at you again. A run remembers
+     * instead - cleared stays cleared, and a fight you broke off is still
+     * half-fought when you come back to it.
+     */
+    chamberHealth: {},
     unlockedIndex: 0,
     equippedIndex: 0,
     evolutionIndex: 0,
@@ -61,6 +72,22 @@ function freshRun() {
  */
 function effectiveEvolution(unlockedIndex, equippedIndex) {
   return Math.max(0, Math.min(unlockedIndex, equippedIndex))
+}
+
+/** Remaining pack health for a level this run - full if never touched. */
+function chamberRemaining(chamberHealth, stageIndex) {
+  const max = stageHealth(stageIndex)
+  const saved = chamberHealth?.[stageIndex]
+  if (saved === undefined) return max
+  return Math.max(0, Math.min(max, saved))
+}
+
+/** Snapshot the level being left, so coming back to it finds it as it was. */
+function rememberChamber(state) {
+  return {
+    ...state.chamberHealth,
+    [state.stageIndex]: state.stageCleared ? 0 : Math.max(0, state.enemyHealth),
+  }
 }
 
 /** Rebuild derived fields from the raw persisted numbers. */
@@ -77,6 +104,12 @@ function derive(state) {
     evolutionIndex,
     strength,
     clickPower,
+    /*
+     * What one swing is *worth* - the number the podium advertises, and what a
+     * training pad multiplies. Distinct from `clickPower`, which is what a
+     * swing takes off an enemy.
+     */
+    perClick: evolution.power ?? 1,
     idleDps: clickPower * idleDpsFraction(state.upgradeLevels.idle),
     critChance: Math.min(0.85, CRIT_CHANCE + critBonus(state.upgradeLevels.crit)),
   }
@@ -94,7 +127,6 @@ const initial = (() => {
     scene: 'lobby',
     // Death is transient: you always come back at the hub.
     dead: false,
-    deathReason: null,
     /** Your own health in the arena. Transient - a run always starts whole. */
     playerHealth: MAX_PLAYER_HEALTH,
     // Transient, never persisted.
@@ -137,6 +169,24 @@ const initial = (() => {
         : saved > 0 && saved <= max
           ? saved
           : max
+      /*
+       * A reloaded run resumes mid-corridor, so it needs the whole map back or
+       * every level it had already walked back through would be restocked. The
+       * level being resumed on is written last, since its health is the one
+       * number the save has always carried and is the more trustworthy of the
+       * two if they ever disagree.
+       */
+      base.chamberHealth = {}
+      if (save.chamberHealth && typeof save.chamberHealth === 'object') {
+        for (const [key, value] of Object.entries(save.chamberHealth)) {
+          const index = Number(key)
+          const health = Number(value)
+          if (Number.isInteger(index) && index >= 0 && index < MAX_STAGES && health >= 0) {
+            base.chamberHealth[index] = Math.min(health, stageHealth(index))
+          }
+        }
+      }
+      base.chamberHealth[base.stageIndex] = base.enemyHealth
     }
     base.hydrated = true
   }
@@ -213,7 +263,24 @@ export const useGameStore = create((set, get) => ({
      */
     const max = stageHealth(s.stageIndex)
     const slots = Math.max(1, enemyCountForStage(s.stageIndex, isBoss(s.stageIndex)))
-    const applied = Math.min(damage, max / Math.max(slots, MIN_HITS_TO_CLEAR))
+
+    /*
+     * Blows land in proportion to how ready you are for the level.
+     *
+     * The number on the gate has to mean something. Any gate can be walked
+     * through, so the level itself has to be the test - and it was not much of
+     * one while an under-geared dino hit for its full damage and merely needed
+     * longer. Squared, so the shortfall bites: at half the bar a blow lands a
+     * quarter, and against a pack biting at the rate a level you have no
+     * business in bites, the arithmetic runs out long before the pack does.
+     *
+     * Meeting the bar is full damage and there is no bonus above it - the raw
+     * click power already grows, so this only ever takes away.
+     */
+    const readiness = Math.min(1, s.clickPower / recommendedDamage(s.stageIndex))
+    const landed = damage * readiness * readiness
+
+    const applied = Math.min(landed, max / Math.max(slots, MIN_HITS_TO_CLEAR))
 
     const remaining = s.enemyHealth - applied
 
@@ -260,6 +327,9 @@ export const useGameStore = create((set, get) => ({
       runWins: s.runWins + reward,
       enemyHealth: 0,
       stageCleared: true,
+      // Written down for the rest of the run: this chamber is done, and
+      // walking back through it later must not stand the pack up again.
+      chamberHealth: { ...s.chamberHealth, [clearedIndex]: 0 },
       bestStage: atEnd ? s.bestStage : Math.max(s.bestStage, clearedIndex + 1),
       battlePower,
       // A clear patches you up, but never all the way: press on deep enough
@@ -294,9 +364,10 @@ export const useGameStore = create((set, get) => ({
       stageIndex: 0,
       enemyHealth: stageHealth(0),
       stageCleared: false,
+      // A new trip is a new corridor: every chamber is stocked again.
+      chamberHealth: {},
       runWins: 0,
       dead: false,
-      deathReason: null,
       playerHealth: MAX_PLAYER_HEALTH,
       areaIndex: 0,
     })
@@ -338,6 +409,7 @@ export const useGameStore = create((set, get) => ({
       stageIndex: 0,
       enemyHealth: stageHealth(0),
       stageCleared: false,
+      chamberHealth: {},
       // Walking out of the arena patches the dino up for the next run.
       playerHealth: MAX_PLAYER_HEALTH,
       areaIndex: 0,
@@ -358,70 +430,65 @@ export const useGameStore = create((set, get) => ({
   },
 
   /**
-   * Walk back out of the near end of a chamber.
+   * Step from the level you are in into the one next door.
    *
-   * One level at a time, all the way to Stage 1 - stepping out there banks the
-   * run and returns you to the hub. There is no shortcut home.
+   * The corridor is one continuous strip of ground and this is the only thing
+   * that moves you along it, in either direction. Which way you are going is
+   * the whole difference between the two halves of the arena:
+   *
+   * - Forward is the gamble. The level ahead states a damage requirement and
+   *   walking in under it kills the dino; the sign over the gate says so in
+   *   red before you step through.
+   * - Back is always safe, and always allowed - even out of a fight you are
+   *   losing. The chamber behind you is found exactly as you left it, so a
+   *   level you already cleared stays cleared for the whole run and its pack
+   *   does not stand back up behind you.
+   *
+   * `nextIndex` below zero means walking out of the near end of Stage 1,
+   * which is the way out of the arena.
    */
-  retreatStage() {
+  travelToStage(nextIndex) {
     const s = get()
-    if (s.dead) return false
+    if (s.dead || s.scene !== 'arena') return false
+    if (nextIndex === s.stageIndex) return true
 
-    if (s.stageIndex <= 0) {
+    if (nextIndex < 0) {
       get().claimRunWins()
       return true
     }
-
-    const previous = s.stageIndex - 1
-    const nextArea = areaIndexForStage(previous)
-    set({
-      stageIndex: previous,
-      // A level you already beat this run stays beaten on the way back.
-      enemyHealth: 0,
-      stageCleared: true,
-      areaIndex: nextArea,
-    })
-    emit(EVENTS.STAGE_ENTER, { stageIndex: previous, retreat: true })
-    if (nextArea !== s.areaIndex) {
-      emit(EVENTS.AREA_CHANGE, { from: s.areaIndex, to: nextArea })
-    }
-    return true
-  },
-
-  /**
-   * Walk through the open exit into the next level.
-   *
-   * This is the risky path. The level list refuses an entry you cannot
-   * survive; the gate lets you walk in and kills you for it, because that is
-   * the consequence the arena is built around. The sign over the gate states
-   * the requirement in red before you step through.
-   */
-  enterNextStage() {
-    const s = get()
-    if (!s.stageCleared || s.dead) return false
-
-    const nextIndex = s.stageIndex + 1
     if (nextIndex >= MAX_STAGES) {
       emit(EVENTS.DENIED, { reason: 'complete' })
       return false
     }
 
-    const required = requiredDamage(nextIndex)
-    if (s.clickPower < required) {
-      get()._killPlayer({ stageIndex: nextIndex, required, damage: s.clickPower })
-      return false
-    }
+    const forward = nextIndex > s.stageIndex
+    const chamberHealth = rememberChamber(s)
 
+    /*
+     * Any gate can be walked through.
+     *
+     * Stepping into a level you were underpowered for used to kill the dino on
+     * the spot, before it had swung once - which made the requirement a wall
+     * with a trap behind it rather than something to test yourself against.
+     * The pack is the wall now: bite damage already scales with how the level
+     * rates against your click power, so a chamber you have no business in
+     * chews through you in seconds. Lose that fight and you wake up in the hub,
+     * the same as any other death - and until you do, you can always turn round
+     * and walk back out the way you came.
+     */
+    const remaining = chamberRemaining(chamberHealth, nextIndex)
     const nextArea = areaIndexForStage(nextIndex)
+
     set({
+      chamberHealth,
       stageIndex: nextIndex,
-      enemyHealth: stageHealth(nextIndex),
-      stageCleared: false,
+      enemyHealth: remaining,
+      stageCleared: remaining <= 0,
       areaIndex: nextArea,
       bestStage: Math.max(s.bestStage, nextIndex),
     })
 
-    emit(EVENTS.STAGE_ENTER, { stageIndex: nextIndex })
+    emit(EVENTS.STAGE_ENTER, { stageIndex: nextIndex, retreat: !forward })
     if (nextArea !== s.areaIndex) {
       emit(EVENTS.AREA_CHANGE, { from: s.areaIndex, to: nextArea })
     }
@@ -459,20 +526,24 @@ export const useGameStore = create((set, get) => ({
   },
 
   /**
-   * Your dino fell - either it walked into a level it had no business
-   * entering, or the pack in the one it was in wore it down.
+   * Your dino fell.
+   *
+   * There is only one way now: the pack in the level you were standing in wore
+   * you down. Walking through a gate underpowered used to be the other, and
+   * killed you before you had swung - the level itself is the test instead.
    */
   _killPlayer(reason) {
     const s = get()
     if (s.dead) return
     // Everything carried this run is lost. That is the whole reason the
     // Return pads are worth stepping on.
-    set({
-      dead: true,
-      deathReason: { cause: 'underpowered', ...reason, lostWins: s.runWins },
-      runWins: 0,
-      playerHealth: 0,
-    })
+    /*
+     * Nothing reads a stored reason any more. There was a panel that spelled
+     * out what had happened and what it cost; the fall says the first and the
+     * DEATH event below carries the second to the floating numbers, which is
+     * where every other number in this game is read.
+     */
+    set({ dead: true, runWins: 0, playerHealth: 0 })
     emit(EVENTS.DEATH, { ...reason, lostWins: s.runWins })
   },
 
@@ -480,11 +551,11 @@ export const useGameStore = create((set, get) => ({
   respawn() {
     set({
       dead: false,
-      deathReason: null,
       scene: 'lobby',
       stageIndex: 0,
       enemyHealth: stageHealth(0),
       stageCleared: false,
+      chamberHealth: {},
       runWins: 0,
       playerHealth: MAX_PLAYER_HEALTH,
       areaIndex: 0,
@@ -511,8 +582,8 @@ export const useGameStore = create((set, get) => ({
       stageIndex,
       enemyHealth: stageHealth(stageIndex),
       stageCleared: false,
+      chamberHealth: {},
       dead: false,
-      deathReason: null,
       areaIndex: nextArea,
       scene: 'arena',
     })

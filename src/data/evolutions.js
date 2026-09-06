@@ -19,10 +19,20 @@
  *   crest       raised sail along the spine
  *   legs        2 for a biped, 4 for a quadruped stance
  *   glow        emissive strength for the late, magical stages
+ *   pattern     how its markings are laid on - see DinoModel's torso builder
+ *   mark        the colour those markings are drawn in
+ *
+ * A dino in one flat body colour reads as a toy. The stripe down a tiger or
+ * the blotches on a gecko are most of what makes an animal look like a species
+ * rather than a shape, so every tier carries a pattern and a second colour to
+ * draw it in - which is also what stops thirteen tiers of the same silhouette
+ * blurring into one another down the gallery.
  */
 export const EVOLUTIONS = [
   {
     id: 'hatchling',
+    pattern: 'spots',
+    mark: '#ffae2b',
     name: 'Hatchling',
     unlockAtWins: 0,
     power: 1,
@@ -42,6 +52,8 @@ export const EVOLUTIONS = [
   },
   {
     id: 'raptor',
+    pattern: 'stripes',
+    mark: '#c85a12',
     name: 'Raptor',
     unlockAtWins: 20,
     power: 2.4,
@@ -61,6 +73,8 @@ export const EVOLUTIONS = [
   },
   {
     id: 'stego',
+    pattern: 'spots',
+    mark: '#1f6fb8',
     name: 'Stegosaur',
     unlockAtWins: 55,
     power: 6,
@@ -80,6 +94,8 @@ export const EVOLUTIONS = [
   },
   {
     id: 'tricera',
+    pattern: 'ridge',
+    mark: '#c73f18',
     name: 'Triceratops',
     unlockAtWins: 120,
     power: 15,
@@ -99,6 +115,8 @@ export const EVOLUTIONS = [
   },
   {
     id: 'anky',
+    pattern: 'plated',
+    mark: '#1d8a72',
     name: 'Ankylosaur',
     unlockAtWins: 260,
     power: 38,
@@ -118,6 +136,8 @@ export const EVOLUTIONS = [
   },
   {
     id: 'spino',
+    pattern: 'stripes',
+    mark: '#1a5f97',
     name: 'Spinosaur',
     unlockAtWins: 550,
     power: 95,
@@ -137,6 +157,8 @@ export const EVOLUTIONS = [
   },
   {
     id: 'rex',
+    pattern: 'stripes',
+    mark: '#a8231d',
     name: 'Tyrant Rex',
     unlockAtWins: 1200,
     power: 240,
@@ -156,6 +178,8 @@ export const EVOLUTIONS = [
   },
   {
     id: 'magma',
+    pattern: 'ridge',
+    mark: '#ff6a1a',
     name: 'Magma Tyrant',
     unlockAtWins: 2600,
     power: 650,
@@ -175,6 +199,8 @@ export const EVOLUTIONS = [
   },
   {
     id: 'frost',
+    pattern: 'plated',
+    mark: '#4aa8de',
     name: 'Frost Sovereign',
     unlockAtWins: 5500,
     power: 1800,
@@ -194,6 +220,8 @@ export const EVOLUTIONS = [
   },
   {
     id: 'storm',
+    pattern: 'stripes',
+    mark: '#4436c9',
     name: 'Storm Wyrm',
     unlockAtWins: 12000,
     power: 5200,
@@ -213,6 +241,8 @@ export const EVOLUTIONS = [
   },
   {
     id: 'venom',
+    pattern: 'spots',
+    mark: '#8fe02b',
     name: 'Venom Stalker',
     unlockAtWins: 26000,
     power: 15000,
@@ -232,6 +262,10 @@ export const EVOLUTIONS = [
   },
   {
     id: 'obsidian',
+    pattern: 'plated',
+    // Lighter than the body, not darker: obsidian is near black, so the only
+    // marking that reads on it is one that glows off it.
+    mark: '#c41d4c',
     name: 'Obsidian Colossus',
     unlockAtWins: 56000,
     power: 45000,
@@ -251,6 +285,8 @@ export const EVOLUTIONS = [
   },
   {
     id: 'cosmic',
+    pattern: 'ridge',
+    mark: '#8f6bff',
     name: 'Cosmic Apex',
     unlockAtWins: 120000,
     power: 140000,

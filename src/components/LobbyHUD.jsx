@@ -23,10 +23,10 @@ export default function LobbyHUD() {
   return (
     <>
       {/* Training banner sits above the controls, out of the thumbs' way. */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-40 z-20 flex flex-col items-center gap-2 px-4">
+      <div className="absolute inset-x-0 z-20 flex flex-col items-center gap-2 px-4 pointer-events-none bottom-40">
         {training && (
-          <div className="hud-panel animate-pop-in border-emerald-300/50 px-5 py-2 text-center">
-            <div className="text-lg font-black uppercase tracking-wide text-emerald-300">
+          <div className="px-5 py-2 text-center hud-panel animate-pop-in border-emerald-300/50">
+            <div className="text-lg font-black tracking-wide uppercase text-emerald-300">
               Training x{training.pad.multiplier}
             </div>
             <div className="text-xs font-semibold text-white/70">
@@ -37,14 +37,12 @@ export default function LobbyHUD() {
 
       </div>
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 safe-bottom">
+      <div className="absolute inset-x-0 bottom-0 z-20 pointer-events-none safe-bottom">
         <div className="flex items-end justify-between px-4">
           <Joystick />
 
           <div className="flex flex-col items-end gap-2">
-            <div className="hud-panel hidden px-3 py-1.5 text-[11px] text-white/55 sm:block">
-              WASD to walk - drag to look - scroll to zoom - E to interact
-            </div>
+            
             <button
               type="button"
               onPointerDown={(e) => {
@@ -52,7 +50,7 @@ export default function LobbyHUD() {
                 queueInteract()
               }}
               disabled={!prompt?.enabled}
-              className="hud-button pointer-events-auto h-20 w-20 rounded-full text-sm font-black uppercase tracking-wide"
+              className="w-20 h-20 text-sm font-black tracking-wide uppercase rounded-full pointer-events-auto hud-button"
             >
               {prompt?.enabled ? prompt.action : 'Interact'}
             </button>

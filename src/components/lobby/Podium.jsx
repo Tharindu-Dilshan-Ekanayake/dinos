@@ -4,7 +4,11 @@ import { Billboard, Text } from '@react-three/drei'
 import * as THREE from 'three'
 import { EVOLUTIONS } from '../../data/evolutions.js'
 import { formatNumber } from '../../data/progression.js'
-import { INTERACT_RADIUS } from '../../data/lobby.js'
+import {
+  INTERACT_RADIUS,
+  DINO_CENTRE_OFFSET,
+  PODIUM_DINO_SCALE,
+} from '../../data/lobby.js'
 import { useGameStore } from '../../store/useGameStore.js'
 import { playerPosition } from '../../systems/playerState.js'
 import { voxelMaterial } from '../../systems/voxelTexture.js'
@@ -29,23 +33,15 @@ export default function Podium({ podium }) {
   const equip = useGameStore((s) => s.equipEvolution)
 
   /*
-   * A locked tier shows the same silhouette in stone grey rather than its real
-   * colours - you can see what you are working toward without it being
-   * mistaken for something you already own.
+   * A locked tier is shown in its own colours.
+   *
+   * It used to be repainted stone grey, which made the far half of the gallery
+   * a row of identical silhouettes - exactly the thing you are meant to be
+   * working toward, rendered as the one thing that tells you nothing. What is
+   * locked is said by the sign under it and by the dark, unlit pad it stands
+   * on; the animal itself is the advertisement.
    */
-  const display = useMemo(
-    () =>
-      unlocked
-        ? evolution
-        : {
-            ...evolution,
-            body: '#39414f',
-            belly: '#4b5563',
-            spike: '#5b6472',
-          },
-    [unlocked, evolution]
-  )
-  const materials = useDinoMaterials(display)
+  const materials = useDinoMaterials(evolution)
 
   const spinner = useRef()
   const rig = useDinoRig()
@@ -53,10 +49,14 @@ export default function Podium({ podium }) {
   const glowRef = useRef()
   const anim = useRef({ near: 0, phase: Math.random() * 6 })
 
+  /*
+   * The pad is what carries the lock instead: lit in the tier's own aura when
+   * it is yours, and a dark unlit slab when it is not.
+   */
   const padMaterial = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: unlocked ? evolution.aura : '#4b5563',
+        color: unlocked ? evolution.aura : '#3a4152',
         roughness: 0.55,
         flatShading: true,
       }),
@@ -102,7 +102,12 @@ export default function Podium({ podium }) {
     a.near += ((inRange ? 1 : 0) - a.near) * Math.min(1, delta * 9)
 
     if (spinner.current) {
-      spinner.current.rotation.y += delta * (0.55 + a.near * 1.4)
+      /*
+       * It no longer turns. A gallery is a row of animals facing the path you
+       * walk down - turning them meant every one was showing you its flank or
+       * its tail half the time, and the circle a spinning dino needs is what
+       * kept them small enough to fit between their neighbours.
+       */
       spinner.current.position.y = 1.1 + Math.sin(a.phase * 1.5) * 0.09 + a.near * 0.18
     }
 
@@ -153,9 +158,17 @@ export default function Podium({ podium }) {
         />
       </mesh>
 
-      {/* The tier's dino, turning on the spot */}
-      <group ref={spinner} position={[0, 1.1, 0]} scale={evolution.scale * 0.62}>
-        <DinoModel evolution={display} materials={materials} rig={rig} />
+      {/* The tier's dino, facing the walkway */}
+      <group ref={spinner} position={[0, 1.1, 0]} scale={evolution.scale * PODIUM_DINO_SCALE}>
+        {/*
+          Offset so the axis runs through the animal's middle rather than its
+          hip. The tail is nearly three times as long as the snout, so turned
+          about the hip the dino orbited its pedestal instead of standing on
+          it - and needed a third more room to do it.
+        */}
+        <group position={[DINO_CENTRE_OFFSET, 0, 0]}>
+          <DinoModel evolution={evolution} materials={materials} rig={rig} />
+        </group>
       </group>
 
       {/* Sign */}

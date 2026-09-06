@@ -5,7 +5,7 @@ import { MAX_STAGES } from '../data/stages.js'
 import { useGameStore } from '../store/useGameStore.js'
 import { EVENTS, on } from '../systems/events.js'
 import ArenaControls from './ArenaControls.jsx'
-import DeathOverlay from './DeathOverlay.jsx'
+import DeathReturn from './DeathReturn.jsx'
 import AreaBanner from './AreaBanner.jsx'
 import EvolutionTrack from './EvolutionTrack.jsx'
 import FloatingTexts from './FloatingTexts.jsx'
@@ -285,16 +285,17 @@ export default function UIOverlay() {
       </div>
 
       {inLobby ? (
-        <>
-          <LobbyHUD />
-          <InteractPrompt />
-        </>
+        <LobbyHUD />
       ) : (
         <>
           <StageProgress />
           <ArenaControls />
         </>
       )}
+
+      {/* Both scenes now ask for a keypress: the hub for a podium, the arena
+          for the Return pad that ends a run. Same panel, same key. */}
+      <InteractPrompt />
 
       {/* Damage, tier and upgrades, in both scenes - clicking earns in both. */}
       <BottomDetails />
@@ -307,7 +308,7 @@ export default function UIOverlay() {
 
       <LevelSelect open={levelsOpen} onClose={() => setLevelsOpen(false)} />
 
-      <DeathOverlay />
+      <DeathReturn />
 
       <RebirthModal open={rebirthOpen} onClose={() => setRebirthOpen(false)} />
     </>

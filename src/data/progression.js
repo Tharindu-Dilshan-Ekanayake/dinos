@@ -56,6 +56,23 @@ export function formatNumber(value) {
     scaled /= 1000
     unit++
   }
-  const rounded = scaled < 10 ? scaled.toFixed(2) : scaled < 100 ? scaled.toFixed(1) : Math.floor(scaled)
-  return `${String(rounded).replace(/\.?0+$/, '')}${units[unit]}`
+  const rounded =
+    scaled < 10
+      ? scaled.toFixed(2)
+      : scaled < 100
+        ? scaled.toFixed(1)
+        : String(Math.floor(scaled))
+
+  /*
+   * Trim the fractional tail only - "1.50" to "1.5", "2.00" to "2".
+   *
+   * This used to run over whole numbers as well, and a trailing-zero strip
+   * cannot tell a padded decimal from a real digit: 120,380 came out as "12K"
+   * and 100,000 as "1K". It showed up on the death screen, which told a player
+   * that Stage 8 "demands at least 12K" while refusing them at 85.4K - but it
+   * was wrong everywhere at once, on every number in the game that happened to
+   * land on a round hundred.
+   */
+  const trimmed = rounded.includes('.') ? rounded.replace(/\.?0+$/, '') : rounded
+  return `${trimmed}${units[unit]}`
 }
