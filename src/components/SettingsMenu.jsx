@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useGameStore } from '../store/useGameStore.js'
 import { clearSave, persistenceAvailable } from '../systems/persistence.js'
+import { QUALITY_LEVELS, detectQuality } from '../systems/quality.js'
 import { formatNumber } from '../data/progression.js'
 
 /**
- * Corner settings menu: mute, name, and a guarded save wipe.
+ * Corner settings menu: graphics, mute, name, and a guarded save wipe.
  */
 export default function SettingsMenu({ open, onToggle }) {
   const muted = useGameStore((s) => s.muted)
@@ -15,6 +16,8 @@ export default function SettingsMenu({ open, onToggle }) {
   const rebirths = useGameStore((s) => s.rebirths)
   const lifetimeWins = useGameStore((s) => s.lifetimeWins)
   const bestStage = useGameStore((s) => s.bestStage)
+  const quality = useGameStore((s) => s.quality)
+  const setQuality = useGameStore((s) => s.setQuality)
 
   const [confirmingReset, setConfirmingReset] = useState(false)
 
@@ -71,6 +74,35 @@ export default function SettingsMenu({ open, onToggle }) {
               className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/80 px-2 py-1.5 text-sm text-white outline-none focus:border-emerald-400/60"
             />
           </label>
+
+          {/*
+            Graphics. The guess is only a guess - the browser will not say what
+            GPU it is driving - so the point of this control is that a player
+            whose machine was read wrong, either way, can say so.
+          */}
+          <div className="mt-3">
+            <span className="text-[11px] text-white/60">Graphics</span>
+            <div className="mt-1 flex gap-1">
+              {[{ id: 'auto', name: 'Auto' }, ...QUALITY_LEVELS].map((level) => (
+                <button
+                  key={level.id}
+                  type="button"
+                  onClick={() => setQuality(level.id)}
+                  aria-pressed={quality === level.id}
+                  className={`hud-button h-8 flex-1 text-[11px] ${
+                    quality === level.id ? 'border-emerald-300/70 bg-emerald-500/25 text-white' : ''
+                  }`}
+                >
+                  {level.name}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1 text-[10px] leading-snug text-white/45">
+              {quality === 'auto'
+                ? `Auto picked ${detectQuality()} for this device.`
+                : QUALITY_LEVELS.find((l) => l.id === quality)?.blurb}
+            </p>
+          </div>
 
           <div className="mt-3 space-y-1 rounded-lg border border-white/10 bg-slate-900/50 p-2 text-[11px] text-white/60">
             <div className="flex justify-between">

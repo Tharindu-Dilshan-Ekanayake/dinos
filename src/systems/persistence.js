@@ -45,6 +45,7 @@ function serialise(state) {
     rebirths: state.rebirths,
     muted: state.muted,
     autoFight: state.autoFight,
+    quality: state.quality,
     upgradeLevels: { ...state.upgradeLevels },
     trainedPower: state.trainedPower,
     battlePower: state.battlePower,

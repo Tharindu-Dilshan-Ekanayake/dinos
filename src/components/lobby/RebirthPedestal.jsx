@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Billboard, Text } from '@react-three/drei'
+import { Billboard } from '@react-three/drei'
+import Text from '../SceneText.jsx'
 import * as THREE from 'three'
 import { REBIRTH_WINS_REQUIRED, formatNumber } from '../../data/progression.js'
 import { INTERACT_RADIUS } from '../../data/lobby.js'
@@ -64,6 +65,7 @@ export default function RebirthPedestal({ pedestal, position, onOpen }) {
 
   return (
     <group
+      name="RebirthPedestal"
       position={position}
       // onClick, not onPointerDown: a mouse drag that starts here is the
       // camera orbit, and must not also trigger the prop.

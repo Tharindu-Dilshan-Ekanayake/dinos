@@ -123,6 +123,14 @@ const initial = (() => {
     bestStage: 0,
     muted: false,
     autoFight: false,
+    /**
+     * Graphics preset: 'auto', or one of the ids in systems/quality.js.
+     *
+     * 'auto' is a guess made from the machine's core and memory counts, which
+     * is the most the browser will say - a player whose machine guesses wrong
+     * is one menu away from overriding it, and the override is what gets saved.
+     */
+    quality: 'auto',
     playerName: '',
     scene: 'lobby',
     // Death is transient: you always come back at the hub.
@@ -141,6 +149,7 @@ const initial = (() => {
     base.rebirths = Number(save.rebirths) || 0
     base.muted = Boolean(save.muted)
     base.autoFight = Boolean(save.autoFight)
+    if (typeof save.quality === 'string') base.quality = save.quality
     if (!save.migrated) {
       base.wins = Number(save.wins) || 0
       base.totalWins = Number(save.totalWins) || 0
@@ -694,6 +703,10 @@ export const useGameStore = create((set, get) => ({
     const muted = !get().muted
     set({ muted })
     return muted
+  },
+
+  setQuality(quality) {
+    set({ quality })
   },
 
   toggleAutoFight() {
