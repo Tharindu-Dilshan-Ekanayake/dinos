@@ -513,6 +513,338 @@ export function buildGroundScatter(seed = 0, clusters = 46, pebbleCount = 18) {
   return { tufts, pebbles, flowers }
 }
 
+/* ------------------------------------------------------------- ground water */
+
+/**
+ * Pools, and what lies in and around them.
+ *
+ * A chamber was grass, rocks and a wall. The thing that makes the reference
+ * arenas read as *places* is that the ground itself does something: a pond with
+ * a pale shallow shelf round its edge and lily pads on it, or a crust of rock
+ * with molten rock in the cracks. It is the same feature either way - a shaped
+ * hole in the floor with something floating in it - so it is built once here
+ * and coloured by the biome.
+ *
+ * The outline is a handful of overlapping rectangles rather than one, because
+ * a rectangular pond reads as a swimming pool. Everything comes back as
+ * instanced boxes: a whole waterway costs about six draw calls.
+ */
+/**
+ * Whether a piece of this size can stand here.
+ *
+ * `blockedGround` asks about a *point*, which is right for a blade of grass and
+ * wrong for a pond: the centre of a pool can be well clear of the fighting pad
+ * while its far lobe lies across it, and a five-metre log dropped near the edge
+ * hangs half of itself over the drop. Everything below is checked with its own
+ * reach, and anything that does not fit is simply not built.
+ */
+function fitsOnFloor(x, z, spread) {
+  // The fighting pad, and the doorway with its return pads either side.
+  if (Math.hypot(x, z) - spread < ARENA.padRadius + 0.2) return false
+  if (z - spread < ARENA.backZ + 5 && Math.abs(x) - spread < ARENA.gapHalfWidth + 4.6) return false
+  // And inside the walls it is standing between.
+  if (Math.abs(x) + spread > ARENA.halfWidth - 0.5) return false
+  if (z + spread > ARENA.frontZ - 0.5 || z - spread < ARENA.backZ + 0.5) return false
+  return true
+}
+
+/** How many places to try before giving up on a piece of scenery. */
+const PLACEMENT_TRIES = 14
+
+/**
+ * Pools, and what lies in, on and across them.
+ *
+ * A chamber was grass, rocks and a wall. The thing that makes the reference
+ * arenas read as *places* is that the ground itself does something: a pond with
+ * a pale shallow shelf round its edge and lily pads on it, or a crust of rock
+ * with molten rock in the cracks. It is the same feature either way - a shaped
+ * hole in the floor with something over it - so it is built once here and
+ * coloured by the biome.
+ *
+ * The outline is a handful of overlapping lobes rather than one rectangle,
+ * because a rectangular pond reads as a swimming pool. Everything comes back as
+ * instanced boxes: a whole waterway costs about seven draw calls.
+ *
+ * A place is *chosen* rather than tried once and abandoned - a level that asked
+ * for three pools and got none because the first guess landed on the fighting
+ * pad is a level that silently lost its scenery.
+ *
+ * `crust` turns the whole thing inside out for the molten biomes. Instead of a
+ * pool with a few things floating on it, the surface is tiled with slabs that
+ * very nearly touch, so what you read is a *rock floor with glowing cracks
+ * through it* rather than an orange puddle - which is what the reference
+ * volcano actually is.
+ */
+export function buildPools(seed = 0, count = 2, { crust = false, bridges = true } = {}) {
+  const rand = makeRandom(31337 + seed * 5471)
+  const basin = []
+  const shallow = []
+  const rim = []
+  const pads = []
+  const reeds = []
+  const planks = []
+  const posts = []
+
+  const spanZ = ARENA.frontZ - ARENA.backZ
+
+  for (let i = 0; i < count; i++) {
+    /*
+     * Kept modest on purpose. The floor is 26 across with a six-metre fighting
+     * pad in the middle of it and a nine-metre doorway across the back, so the
+     * room left for a pond is a band down each side - ask for a bigger one and
+     * it simply cannot be placed anywhere, and the level ends up with no water
+     * at all rather than with a smaller pond.
+     */
+    const reach = (crust ? 2.8 : 2.2) + rand() * 1.8
+
+    // Somewhere it actually fits. Pools sit off to the sides: the middle of the
+    // floor is where the fight happens, and a pond under the pack hides it.
+    let cx = 0
+    let cz = 0
+    let placed = false
+    for (let attempt = 0; attempt < PLACEMENT_TRIES; attempt++) {
+      const side = rand() < 0.5 ? -1 : 1
+      cx = side * (ARENA.padRadius + 1.5 + rand() * (ARENA.halfWidth - ARENA.padRadius - 4.5))
+      cz = ARENA.backZ + 3 + rand() * (spanZ - 6)
+      if (fitsOnFloor(cx, cz, reach * 0.8)) {
+        placed = true
+        break
+      }
+    }
+    if (!placed) continue
+
+    const lobes = 3 + Math.floor(rand() * 3)
+    for (let l = 0; l < lobes; l++) {
+      const angle = (l / lobes) * Math.PI * 2 + rand() * 0.7
+      const drift = l === 0 ? 0 : reach * (0.3 + rand() * 0.5)
+      const x = cx + Math.cos(angle) * drift
+      const z = cz + Math.sin(angle) * drift
+      const w = reach * (0.7 + rand() * 0.7)
+      const d = reach * (0.7 + rand() * 0.7)
+
+      // The pale shelf is the widest part, so it is what has to fit.
+      if (!fitsOnFloor(x, z, Math.max(w, d) / 2 + 0.45)) continue
+
+      /*
+       * Two flat plates: a narrow pale shelf, and the deep water sitting a
+       * hair proud of it. The shelf started three times this wide and swamped
+       * the pool - what you want to read is water with a rim, not a rim with a
+       * puddle in the middle of it.
+       */
+      /*
+       * Under a crust the shelf is not a beach - it is the hotter melt showing
+       * at the edge of the slabs, so it is a thin bright line rather than a
+       * wide pale apron. At the full width it read as a sheet of yellow paper
+       * laid on the floor.
+       */
+      const apron = crust ? 0.3 : 0.8
+      shallow.push({ position: [x, 0.035, z], scale: [w + apron, 0.07, d + apron] })
+      basin.push({ position: [x, 0.06, z], scale: [w, 0.07, d] })
+    }
+
+    // A broken kerb round the edge, which is what stops the pool looking like
+    // a decal printed on the grass.
+    const stones = 7 + Math.floor(rand() * 6)
+    for (let s = 0; s < stones; s++) {
+      const angle = (s / stones) * Math.PI * 2 + rand() * 0.4
+      const out = reach * (1.15 + rand() * 0.35)
+      const height = 0.16 + rand() * 0.24
+      const width = 0.5 + rand() * 0.7
+      const x = cx + Math.cos(angle) * out
+      const z = cz + Math.sin(angle) * out
+      if (!fitsOnFloor(x, z, width / 2)) continue
+      rim.push({
+        position: [x, height / 2, z],
+        scale: [width, height, 0.5 + rand() * 0.7],
+        rotation: rand() * Math.PI,
+      })
+    }
+
+    if (crust) {
+      /*
+       * A cracked crust rather than a pool with things floating on it.
+       *
+       * Slabs are laid on a jittered grid and cut a little short of their own
+       * cell, so what is left between them is a network of thin glowing lines.
+       * Standing proud of the surface rather than flush with it is what makes
+       * them read as *plates over* the lava instead of islands in it.
+       */
+      const cell = 1.75
+      const across = Math.ceil((reach * 2.1) / cell)
+      for (let gx = -across; gx <= across; gx++) {
+        for (let gz = -across; gz <= across; gz++) {
+          const jitterX = (rand() - 0.5) * 0.3
+          const jitterZ = (rand() - 0.5) * 0.3
+          const x = cx + gx * cell + jitterX
+          const z = cz + gz * cell + jitterZ
+          // Only inside the pool's own rough outline.
+          if (Math.hypot(x - cx, z - cz) > reach * 1.05) continue
+          const gap = 0.26 + rand() * 0.28
+          const w = cell - gap
+          const d = cell - gap
+          if (!fitsOnFloor(x, z, Math.max(w, d) / 2)) continue
+          pads.push({
+            position: [x, 0.17, z],
+            scale: [w, 0.26, d],
+            rotation: (rand() - 0.5) * 0.14,
+          })
+        }
+      }
+    } else {
+      // Floating on it: lily pads, flat on the surface.
+      const floating = 3 + Math.floor(rand() * 4)
+      for (let p = 0; p < floating; p++) {
+        const angle = rand() * Math.PI * 2
+        const out = reach * rand() * 0.75
+        const size = 0.9 + rand() * 1.1
+        const x = cx + Math.cos(angle) * out
+        const z = cz + Math.sin(angle) * out
+        if (!fitsOnFloor(x, z, size / 2)) continue
+        pads.push({
+          position: [x, 0.11, z],
+          scale: [size, 0.08, 0.9 + rand() * 1.1],
+          rotation: rand() * Math.PI,
+        })
+      }
+
+      // And standing in the shallows at the edge.
+      const stalks = 5 + Math.floor(rand() * 6)
+      for (let r = 0; r < stalks; r++) {
+        const angle = rand() * Math.PI * 2
+        const out = reach * (0.85 + rand() * 0.3)
+        const height = 0.8 + rand() * 1.1
+        const x = cx + Math.cos(angle) * out
+        const z = cz + Math.sin(angle) * out
+        if (!fitsOnFloor(x, z, 0.4)) continue
+        reeds.push({
+          position: [x, height / 2, z],
+          scale: [0.5 + rand() * 0.3, height, 0.5 + rand() * 0.3],
+          rotation: rand() * Math.PI,
+          tilt: (rand() - 0.5) * 0.45,
+        })
+      }
+    }
+
+    /*
+     * A plank walk across it.
+     *
+     * Two thirds of pools get one. It is the one piece of scenery in the
+     * chamber that somebody *built*, which is what makes the level read as a
+     * place people pass through rather than a landscape - and it gives the
+     * water a reason to be crossed rather than waded.
+     */
+    if (bridges && rand() < 0.66) {
+      const dir = rand() * Math.PI
+      const span = reach * 2.2
+      const cos = Math.cos(dir)
+      const sin = Math.sin(dir)
+      const count_ = Math.max(4, Math.round(span / 0.62))
+      const width = 2 + rand() * 0.7
+
+      /*
+       * A bridge is a line, not a disc. Asking whether a circle the length of
+       * the whole span fits is the wrong question - it never does, and the
+       * first version silently built no bridges anywhere. Each plank is
+       * checked where it actually lies, and the walkway is only laid if nearly
+       * all of it has somewhere to be: half a bridge is worse than none.
+       */
+      const wanted = []
+      for (let b = 0; b < count_; b++) {
+        const t = -0.5 + b / (count_ - 1)
+        const px = cx + cos * t * span
+        const pz = cz + sin * t * span
+        if (!fitsOnFloor(px, pz, width / 2)) continue
+        wanted.push({
+          position: [px, 0.42, pz],
+          scale: [0.46, 0.14, width],
+          rotation: -dir,
+          // A plank or two sitting askew is what stops it reading as a ruler.
+          tilt: (rand() - 0.5) * 0.06,
+        })
+      }
+
+      if (wanted.length >= count_ * 0.8) {
+        planks.push(...wanted)
+
+        // Posts under both ends, so the walkway stands on something.
+        for (const end of [-0.5, 0.5]) {
+          for (const side of [-1, 1]) {
+            const qx = cx + cos * end * span - sin * side * (width / 2 - 0.2)
+            const qz = cz + sin * end * span + cos * side * (width / 2 - 0.2)
+            if (!fitsOnFloor(qx, qz, 0.2)) continue
+            posts.push({
+              position: [qx, 0.2, qz],
+              scale: [0.28, 0.42, 0.28],
+              rotation: -dir,
+            })
+          }
+        }
+      }
+    }
+  }
+
+  return { basin, shallow, rim, pads, reeds, planks, posts }
+}
+
+/**
+ * Fallen timber.
+ *
+ * One long block lying across the floor does more to make a clearing feel
+ * lived-in than a dozen more pebbles: it is the only thing out there with a
+ * direction to it, and it breaks the grid the rest of the scatter sits on.
+ */
+export function buildLogs(seed = 0, count = 3) {
+  const rand = makeRandom(70707 + seed * 3313)
+  const trunks = []
+  const stubs = []
+
+  const spanZ = ARENA.frontZ - ARENA.backZ
+
+  for (let i = 0; i < count; i++) {
+    const length = 4 + rand() * 4
+    const thickness = 0.5 + rand() * 0.35
+    const rotation = rand() * Math.PI
+
+    // A log is long, so where its *ends* land is the question, not its middle.
+    let x = 0
+    let z = 0
+    let placed = false
+    for (let attempt = 0; attempt < PLACEMENT_TRIES; attempt++) {
+      x = (rand() - 0.5) * 2 * (ARENA.halfWidth - 3)
+      z = ARENA.backZ + 2 + rand() * (spanZ - 4)
+      if (fitsOnFloor(x, z, length / 2)) {
+        placed = true
+        break
+      }
+    }
+    if (!placed) continue
+
+    trunks.push({
+      position: [x, thickness / 2, z],
+      scale: [length, thickness, thickness],
+      rotation,
+    })
+
+    // A snapped branch or two, so it reads as fallen rather than delivered.
+    const branches = 1 + Math.floor(rand() * 2)
+    for (let b = 0; b < branches; b++) {
+      const along = (rand() - 0.5) * length * 0.7
+      const out = (rand() < 0.5 ? -1 : 1) * (0.4 + rand() * 0.5)
+      const bx = x + Math.cos(rotation) * along - Math.sin(rotation) * out
+      const bz = z + Math.sin(rotation) * along + Math.cos(rotation) * out
+      if (!fitsOnFloor(bx, bz, 0.9)) continue
+      stubs.push({
+        position: [bx, thickness * (0.5 + rand() * 0.5), bz],
+        scale: [0.9 + rand() * 0.8, thickness * 0.55, thickness * 0.55],
+        rotation: rotation + (rand() - 0.5) * 1.4,
+        tilt: (rand() - 0.5) * 0.5,
+      })
+    }
+  }
+
+  return { trunks, stubs }
+}
+
 /**
  * Chunks breaking up the cliff faces.
  *

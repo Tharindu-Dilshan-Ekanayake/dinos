@@ -19,6 +19,7 @@ import ArenaGate from './ArenaGate.jsx'
 import FightCatcher from './FightCatcher.jsx'
 import LobbyCamera from './LobbyCamera.jsx'
 import LobbyEnvironment from './LobbyEnvironment.jsx'
+import HubBoard from './HubBoard.jsx'
 import LobbyGround from './LobbyGround.jsx'
 import Player from './Player.jsx'
 import Podium from './Podium.jsx'
@@ -131,6 +132,7 @@ export default function LobbyScene() {
       ))}
 
       <ArenaGate />
+      <HubBoard />
       <Player />
       <TrainingSystem />
       <Interactions />

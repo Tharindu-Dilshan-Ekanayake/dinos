@@ -5,3 +5,4 @@ dist
 
 # Written and removed by scripts/smoke.mjs; only lingers after a crash.
 smoke-probe.html
+shots/

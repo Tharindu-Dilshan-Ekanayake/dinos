@@ -11,6 +11,8 @@ import {
   buildGlowVeins,
   buildGroundPatches,
   buildGroundScatter,
+  buildLogs,
+  buildPools,
 } from '../../data/arena.js'
 import { shadeColor } from '../../data/areas.js'
 import { voxelMaterial } from '../../systems/voxelTexture.js'
@@ -93,6 +95,29 @@ export default function Chamber({ palette, origin, stage = 0 }) {
   const scatter = useMemo(
     () => buildGroundScatter(stage, detailCount(46, detail), detailCount(18, detail)),
     [stage, detail]
+  )
+
+  /*
+   * What the floor itself does: a pond with a pale shelf and lily pads, or a
+   * crust with molten rock in the cracks. It is the biggest single thing that
+   * turns a chamber from a floor into a place, and it is the same feature in
+   * every biome - only the colours and what floats on it change.
+   */
+  /*
+   * Named `feature`, not `ground`: the material set below already has a local
+   * `ground` (the floor slab's texture), and the first version of this called
+   * both the same thing. The shadowed name silently handed every pool colour
+   * `undefined`, so the water came out white - which looks like a lighting bug
+   * and is not one.
+   */
+  const feature = palette.ground
+  const pools = useMemo(
+    () => buildPools(stage, detailCount(feature?.pools ?? 0, detail), { crust: feature?.crust }),
+    [stage, feature, detail]
+  )
+  const logs = useMemo(
+    () => buildLogs(stage, detailCount(feature?.logs ?? 0, detail)),
+    [stage, feature, detail]
   )
 
   // Terraces split by tier so the walls read as depth rather than one mass.
@@ -202,6 +227,61 @@ export default function Chamber({ palette, origin, stage = 0 }) {
             emissiveIntensity: 0.15,
           })
         : null,
+      /*
+       * The pool. Lava is lit from inside itself - it is the light source in
+       * that biome, not something the sun is falling on - so it is emissive
+       * and unaffected by tone mapping, while water is just a dark surface.
+       */
+      pool: new THREE.MeshStandardMaterial({
+        color: feature.pool,
+        /*
+         * Rough and unmetallic on purpose. A polished, slightly metallic
+         * surface is what real water is, and with no environment map to
+         * reflect it renders as a black hole in the floor - which is exactly
+         * what the first pass looked like. In a world of flat colours, water
+         * is a flat colour that happens to be brighter than the ground.
+         */
+        roughness: 0.62,
+        metalness: 0,
+        flatShading: true,
+        emissive: new THREE.Color(feature.pool),
+        emissiveIntensity: feature.kind === 'lava' ? feature.glow : 0.22,
+        toneMapped: feature.glow < 1,
+      }),
+      // The pale shelf round the edge. Half of what makes a pond read as
+      // shallow at its rim and deep in its middle.
+      shallow: new THREE.MeshStandardMaterial({
+        color: feature.shallow,
+        roughness: 0.7,
+        metalness: 0,
+        flatShading: true,
+        emissive: new THREE.Color(feature.shallow),
+        emissiveIntensity: feature.kind === 'lava' ? feature.glow * 0.5 : 0.16,
+      }),
+      poolRim: new THREE.MeshStandardMaterial({
+        color: feature.rim,
+        roughness: 1,
+        flatShading: true,
+      }),
+      // Lily pads on water; cooled slabs to cross on, over lava.
+      pad: new THREE.MeshStandardMaterial({
+        color: feature.pad,
+        roughness: 0.75,
+        flatShading: true,
+      }),
+      reed: new THREE.MeshStandardMaterial({
+        color: feature.reed,
+        roughness: 0.85,
+        flatShading: true,
+      }),
+      bark: voxelMaterial(palette.propAccent, {
+        pattern: 'cells',
+        cells: 4,
+        variance: 0.14,
+        fleck: 0.3,
+        fleckDepth: 0.22,
+        seed: 211,
+      }),
       glow: new THREE.MeshBasicMaterial({
         color: palette.glow,
         transparent: true,
@@ -282,6 +362,64 @@ export default function Chamber({ palette, origin, stage = 0 }) {
         geometry={geometries.block}
         material={materials.patchDark}
         receiveShadow
+      />
+
+      {/*
+        Water, or lava. Three flat plates - shelf, surface, kerb - and whatever
+        is floating on it. All instanced: a whole waterway is six draws.
+      */}
+      <InstancedBlocks
+        items={pools.shallow}
+        geometry={geometries.block}
+        material={materials.shallow}
+        receiveShadow
+      />
+      <InstancedBlocks items={pools.basin} geometry={geometries.block} material={materials.pool} />
+      <InstancedBlocks
+        items={pools.rim}
+        geometry={geometries.block}
+        material={materials.poolRim}
+        castShadow
+        receiveShadow
+      />
+      <InstancedBlocks
+        items={pools.pads}
+        geometry={geometries.block}
+        material={materials.pad}
+        receiveShadow
+      />
+      <InstancedBlocks items={pools.reeds} geometry={geometries.blade} material={materials.reed} />
+
+      {/* The plank walk across it - the one thing in the chamber somebody
+          built, which is what makes the level read as a place people pass
+          through rather than a landscape. */}
+      <InstancedBlocks
+        items={pools.posts}
+        geometry={geometries.block}
+        material={materials.bark}
+        castShadow
+      />
+      <InstancedBlocks
+        items={pools.planks}
+        geometry={geometries.block}
+        material={materials.bark}
+        castShadow
+        receiveShadow
+      />
+
+      {/* Fallen timber: the only thing on the floor with a direction to it. */}
+      <InstancedBlocks
+        items={logs.trunks}
+        geometry={geometries.block}
+        material={materials.bark}
+        castShadow
+        receiveShadow
+      />
+      <InstancedBlocks
+        items={logs.stubs}
+        geometry={geometries.block}
+        material={materials.bark}
+        castShadow
       />
 
       {palette.glowStrength > 0 &&

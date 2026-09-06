@@ -12,6 +12,7 @@
  * resets you to Hatchling - that reset is what the permanent multiplier buys.
  *
  * Shape flags drive the placeholder geometry:
+ *   build       which animal it is shaped like - see data/builds.js
  *   plates      number of back plates
  *   frill       neck shield, triceratops style
  *   horns       0-3 head horns
@@ -22,6 +23,12 @@
  *   pattern     how its markings are laid on - see DinoModel's torso builder
  *   mark        the colour those markings are drawn in
  *
+ * `build` is what stops a "Stegosaur" from being a Rex with plates glued on.
+ * The flags above dress a shape; the build *is* the shape - torso length, neck
+ * carriage, head size, jaw, tail, leg length and stance - so a Triceratops is
+ * front-heavy and low, a Raptor is long and quick, and a Hatchling is mostly
+ * head. Thirteen silhouettes out of one mesh definition.
+ *
  * A dino in one flat body colour reads as a toy. The stripe down a tiger or
  * the blotches on a gecko are most of what makes an animal look like a species
  * rather than a shape, so every tier carries a pattern and a second colour to
@@ -31,6 +38,7 @@
 export const EVOLUTIONS = [
   {
     id: 'hatchling',
+    build: 'hatchling',
     pattern: 'spots',
     mark: '#ffae2b',
     name: 'Hatchling',
@@ -52,6 +60,7 @@ export const EVOLUTIONS = [
   },
   {
     id: 'raptor',
+    build: 'raptor',
     pattern: 'stripes',
     mark: '#c85a12',
     name: 'Raptor',
@@ -73,6 +82,7 @@ export const EVOLUTIONS = [
   },
   {
     id: 'stego',
+    build: 'stego',
     pattern: 'spots',
     mark: '#1f6fb8',
     name: 'Stegosaur',
@@ -94,6 +104,7 @@ export const EVOLUTIONS = [
   },
   {
     id: 'tricera',
+    build: 'trike',
     pattern: 'ridge',
     mark: '#c73f18',
     name: 'Triceratops',
@@ -115,6 +126,7 @@ export const EVOLUTIONS = [
   },
   {
     id: 'anky',
+    build: 'anky',
     pattern: 'plated',
     mark: '#1d8a72',
     name: 'Ankylosaur',
@@ -136,6 +148,7 @@ export const EVOLUTIONS = [
   },
   {
     id: 'spino',
+    build: 'sail',
     pattern: 'stripes',
     mark: '#1a5f97',
     name: 'Spinosaur',
@@ -157,6 +170,7 @@ export const EVOLUTIONS = [
   },
   {
     id: 'rex',
+    build: 'rex',
     pattern: 'stripes',
     mark: '#a8231d',
     name: 'Tyrant Rex',
@@ -178,6 +192,7 @@ export const EVOLUTIONS = [
   },
   {
     id: 'magma',
+    build: 'rex',
     pattern: 'ridge',
     mark: '#ff6a1a',
     name: 'Magma Tyrant',
@@ -199,6 +214,7 @@ export const EVOLUTIONS = [
   },
   {
     id: 'frost',
+    build: 'rex',
     pattern: 'plated',
     mark: '#4aa8de',
     name: 'Frost Sovereign',
@@ -220,6 +236,7 @@ export const EVOLUTIONS = [
   },
   {
     id: 'storm',
+    build: 'wyrm',
     pattern: 'stripes',
     mark: '#4436c9',
     name: 'Storm Wyrm',
@@ -241,6 +258,7 @@ export const EVOLUTIONS = [
   },
   {
     id: 'venom',
+    build: 'raptor',
     pattern: 'spots',
     mark: '#8fe02b',
     name: 'Venom Stalker',
@@ -262,6 +280,7 @@ export const EVOLUTIONS = [
   },
   {
     id: 'obsidian',
+    build: 'colossus',
     pattern: 'plated',
     // Lighter than the body, not darker: obsidian is near black, so the only
     // marking that reads on it is one that glows off it.
@@ -285,6 +304,7 @@ export const EVOLUTIONS = [
   },
   {
     id: 'cosmic',
+    build: 'rex',
     pattern: 'ridge',
     mark: '#8f6bff',
     name: 'Cosmic Apex',

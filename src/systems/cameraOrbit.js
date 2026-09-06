@@ -23,9 +23,33 @@ const PITCH_SENSITIVITY = 0.004
 /** Keep the camera above the ground and below straight-down. */
 const MIN_PITCH = 0.14
 const MAX_PITCH = 1.05
-const MIN_DISTANCE = 10
-const MAX_DISTANCE = 38
-const ZOOM_SENSITIVITY = 0.02
+export const MIN_DISTANCE = 10
+/**
+ * How far back the wheel will let you sit.
+ *
+ * It stopped at 38, which is close enough that the hub's podium row runs off
+ * both sides of the screen and an arena chamber never quite fits in frame.
+ *
+ * What stops this going further is the fog, not the far plane. Fog is measured
+ * from the camera, so a camera further from the player than the biome's fog
+ * near plane starts hazing over the player's own dino - which reads as a broken
+ * renderer rather than as distance. The marsh's fog starts closest, at 42, and
+ * 52 leaves the dino about a tenth hazed there and clear everywhere else. The
+ * alternative was pushing the marsh's fog back, and a marsh that is not murky
+ * near you is not a marsh.
+ */
+export const MAX_DISTANCE = 52
+
+/**
+ * Zoom is proportional, not additive.
+ *
+ * A flat 2 units per notch is a nudge when you are up close and a crawl when
+ * you are far out - the same scroll that used to cover a fifth of the range now
+ * has three times the range to cover. Scaling the distance instead means one
+ * notch is always the same *fraction* of where you already are, so close-in
+ * framing stays fine and the far end is a dozen notches away rather than fifty.
+ */
+export const ZOOM_RATE = 0.0011
 
 /** Pixels of movement before a press counts as a drag rather than a click. */
 const DRAG_THRESHOLD = 4
@@ -80,9 +104,15 @@ export function installCameraOrbit(canvas) {
 
   const onWheel = (e) => {
     e.preventDefault()
+    /*
+     * `deltaMode` 1 is lines rather than pixels - a Firefox default, where one
+     * notch arrives as 3 instead of 100. Left unscaled the wheel there moved
+     * the camera by a thirtieth of what it moves everywhere else.
+     */
+    const delta = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY
     orbit.distance = Math.min(
       MAX_DISTANCE,
-      Math.max(MIN_DISTANCE, orbit.distance + e.deltaY * ZOOM_SENSITIVITY)
+      Math.max(MIN_DISTANCE, orbit.distance * Math.exp(delta * ZOOM_RATE))
     )
   }
 

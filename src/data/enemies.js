@@ -14,18 +14,19 @@ import { shadeColor } from './areas.js'
  * Kept deliberately varied so a pack of five never looks like a row of clones.
  */
 export const ENEMY_ARCHETYPES = [
-  { id: 'runner', plates: 2, frill: false, horns: 0, tailSpikes: false, crest: false, legs: 2, scale: 0.62, attack: 'bite', pattern: 'stripes' },
-  { id: 'charger', plates: 4, frill: false, horns: 2, tailSpikes: false, crest: false, legs: 4, scale: 0.7, attack: 'charge', pattern: 'ridge' },
-  { id: 'spiked', plates: 6, frill: false, horns: 1, tailSpikes: true, crest: false, legs: 4, scale: 0.66, attack: 'tail', pattern: 'plated' },
-  { id: 'sailback', plates: 4, frill: false, horns: 1, tailSpikes: false, crest: true, legs: 2, scale: 0.72, attack: 'fire', pattern: 'spots' },
-  { id: 'shielded', plates: 3, frill: true, horns: 3, tailSpikes: false, crest: false, legs: 4, scale: 0.68, attack: 'slam', pattern: 'plated' },
-  { id: 'raptor', plates: 1, frill: false, horns: 0, tailSpikes: true, crest: false, legs: 2, scale: 0.58, attack: 'claw', pattern: 'stripes' },
-  { id: 'spitter', plates: 3, frill: true, horns: 0, tailSpikes: false, crest: true, legs: 2, scale: 0.64, attack: 'spit', pattern: 'spots' },
+  { id: 'runner', build: 'raptor', plates: 2, frill: false, horns: 0, tailSpikes: false, crest: false, legs: 2, scale: 0.62, attack: 'bite', pattern: 'stripes' },
+  { id: 'charger', build: 'trike', plates: 4, frill: false, horns: 2, tailSpikes: false, crest: false, legs: 4, scale: 0.7, attack: 'charge', pattern: 'ridge' },
+  { id: 'spiked', build: 'stego', plates: 6, frill: false, horns: 1, tailSpikes: true, crest: false, legs: 4, scale: 0.66, attack: 'tail', pattern: 'plated' },
+  { id: 'sailback', build: 'sail', plates: 4, frill: false, horns: 1, tailSpikes: false, crest: true, legs: 2, scale: 0.72, attack: 'fire', pattern: 'spots' },
+  { id: 'shielded', build: 'anky', plates: 3, frill: true, horns: 3, tailSpikes: false, crest: false, legs: 4, scale: 0.68, attack: 'slam', pattern: 'plated' },
+  { id: 'raptor', build: 'raptor', plates: 1, frill: false, horns: 0, tailSpikes: true, crest: false, legs: 2, scale: 0.58, attack: 'claw', pattern: 'stripes' },
+  { id: 'spitter', build: 'wyrm', plates: 3, frill: true, horns: 0, tailSpikes: false, crest: true, legs: 2, scale: 0.64, attack: 'spit', pattern: 'spots' },
 ]
 
 /** Bosses are one big, maxed-out silhouette - and they breathe fire. */
 export const BOSS_ARCHETYPE = {
   id: 'boss',
+  build: 'colossus',
   plates: 8,
   frill: true,
   horns: 3,
