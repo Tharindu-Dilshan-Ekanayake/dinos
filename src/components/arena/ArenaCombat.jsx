@@ -1,5 +1,6 @@
-import { useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useMemo, useRef } from 'react'
+import { useFrame, useThree } from '@react-three/fiber'
+import * as THREE from 'three'
 import { ATTACK_RANGE } from '../../data/arena.js'
 import { useGameStore } from '../../store/useGameStore.js'
 import { playSwing } from '../../systems/audio.js'
@@ -26,6 +27,31 @@ export default function ArenaCombat() {
   const lastPrompt = useRef(null)
   const lastRemaining = useRef(-1)
 
+  /*
+   * Where the blow lands, in screen pixels.
+   *
+   * The floating numbers fall back to the middle of the screen when nothing
+   * tells them better, which in the arena meant every hit and every `+n 💪`
+   * piled up in the same spot regardless of which enemy you were fighting or
+   * where it was standing. Projected through the camera they sit over the dino
+   * being hit, so the damage you deal and the damage you gain both read as
+   * coming out of the fight.
+   */
+  const camera = useThree((s) => s.camera)
+  const size = useThree((s) => s.size)
+  const projected = useMemo(() => new THREE.Vector3(), [])
+
+  const toScreen = (x, y, z) => {
+    projected.set(x, y, z).project(camera)
+    // Behind the camera the projection turns inside out; better to say nothing
+    // and let the number take its default place than to throw it off-screen.
+    if (projected.z > 1) return null
+    return [
+      (projected.x * 0.5 + 0.5) * size.width,
+      (-projected.y * 0.5 + 0.5) * size.height,
+    ]
+  }
+
   useFrame((_, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05)
     const state = useGameStore.getState()
@@ -38,7 +64,7 @@ export default function ArenaCombat() {
       if (!inRange) return false
       const target = enemySlots[targetSlot]
       setLastImpact(target.x, 1.2, target.z)
-      state.attack([target.x, 1.2, target.z])
+      state.attack([target.x, 1.2, target.z], toScreen(target.x, 1.6, target.z))
       return true
     }
 

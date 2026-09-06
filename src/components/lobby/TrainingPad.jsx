@@ -19,6 +19,9 @@ import InstancedBlocks from '../InstancedBlocks.jsx'
  */
 export default function TrainingPad({ pad, position }) {
   const rebirths = useGameStore((s) => s.rebirths)
+  // What the sign promises is what the pad pays: your own damage per click,
+  // times this machine's multiplier.
+  const perClick = useGameStore((s) => s.perClick)
   const unlocked = padUnlocked(pad, rebirths)
 
   const padRef = useRef()
@@ -35,7 +38,15 @@ export default function TrainingPad({ pad, position }) {
      * set every pad in the row running at once. Cloning shares the image and
      * costs only its own offset.
      */
-    const belt = voxelTexture(unlocked ? pad.color : '#4b5563', {
+    /*
+     * A locked pad wears its own colour too.
+     *
+     * The whole row used to grey out until you had the rebirths for it, so the
+     * ladder you are meant to be climbing showed you eight identical slabs.
+     * The rung is said by the sign and by whether the machine is *lit* - a
+     * locked one is simply switched off.
+     */
+    const belt = voxelTexture(pad.color, {
       pattern: 'studs',
       cells: 4,
       variance: 0.05,
@@ -49,23 +60,25 @@ export default function TrainingPad({ pad, position }) {
       map: belt,
       roughness: 0.55,
       flatShading: true,
-      emissive: new THREE.Color(unlocked ? pad.accent : '#111827'),
+      emissive: new THREE.Color(pad.accent),
       emissiveIntensity: unlocked ? 0.25 : 0,
     })
     const frame = new THREE.MeshStandardMaterial({
-      color: unlocked ? pad.accent : '#374151',
+      color: pad.accent,
       roughness: 0.6,
       flatShading: true,
     })
     // Chunkier, darker blocks under the belt - the machine it runs on.
     const base = new THREE.MeshStandardMaterial({
-      color: unlocked ? '#4a5468' : '#2f3644',
+      color: '#4a5468',
       roughness: 0.85,
       flatShading: true,
     })
     const lamp = new THREE.MeshStandardMaterial({
-      color: unlocked ? pad.accent : '#3f4654',
-      emissive: new THREE.Color(unlocked ? pad.accent : '#000000'),
+      color: pad.accent,
+      emissive: new THREE.Color(pad.accent),
+      // Switched off rather than repainted: an unlit lamp is what "locked"
+      // looks like on a machine.
       emissiveIntensity: unlocked ? 0.9 : 0,
       roughness: 0.4,
       flatShading: true,
@@ -76,13 +89,13 @@ export default function TrainingPad({ pad, position }) {
      * and the ones that glow.
      */
     const decorDull = new THREE.MeshStandardMaterial({
-      color: unlocked ? '#3c4457' : '#2f3644',
+      color: '#3c4457',
       roughness: 0.9,
       flatShading: true,
     })
     const decorLit = new THREE.MeshStandardMaterial({
-      color: unlocked ? pad.color : '#4b5563',
-      emissive: new THREE.Color(unlocked ? pad.accent : '#000000'),
+      color: pad.color,
+      emissive: new THREE.Color(pad.accent),
       emissiveIntensity: unlocked ? 0.55 : 0,
       roughness: 0.5,
       flatShading: true,
@@ -132,10 +145,16 @@ export default function TrainingPad({ pad, position }) {
     }
   })
 
-  const rate = padRate(pad)
+  const rate = padRate(pad, perClick)
 
   return (
-    <group position={position}>
+    /*
+     * Turned a quarter turn so the belt runs across the row toward the
+     * walkway, which is the way you face while you are on it. Laid along the
+     * row the machines read as nine planks end to end rather than as a rank of
+     * treadmills - and the dino ran sideways down its own belt.
+     */
+    <group position={position} rotation-y={-Math.PI / 2}>
       {/* A stepped machine: dark plinth, bright frame, belt on top. */}
       <mesh material={materials.base} position={[0, 0.09, 0]} receiveShadow castShadow>
         <boxGeometry args={[4.5, 0.18, 4.5]} />
@@ -153,6 +172,33 @@ export default function TrainingPad({ pad, position }) {
           <boxGeometry args={[3.7, 0.3, 0.34]} />
         </mesh>
       ))}
+
+      {/*
+        Handrails down both sides and a console across the front - the three
+        things that make a machine read as a treadmill rather than as a lit
+        slab. Shared by every pad, so a rung's own dressing is free to be
+        whatever that rung is about.
+      */}
+      {[-1, 1].map((side) => (
+        <group key={side} position={[side * 1.95, 0, 0]}>
+          {[-1.3, 1.3].map((z) => (
+            <mesh key={z} material={materials.base} position={[0, 0.62, z]} castShadow>
+              <boxGeometry args={[0.2, 1.24, 0.2]} />
+            </mesh>
+          ))}
+          <mesh material={materials.frame} position={[0, 1.28, 0]} castShadow>
+            <boxGeometry args={[0.24, 0.24, 3]} />
+          </mesh>
+        </group>
+      ))}
+
+      {/* The console you would hold on to, at the head of the belt. */}
+      <mesh material={materials.base} position={[0, 0.85, -1.95]} castShadow>
+        <boxGeometry args={[3.5, 0.34, 0.3]} />
+      </mesh>
+      <mesh material={materials.lamp} position={[0, 1.16, -1.99]} rotation-x={-0.42}>
+        <boxGeometry args={[2.1, 0.62, 0.12]} />
+      </mesh>
 
       {/* Corner bollards with lit caps - it looks powered now. */}
       {[-1, 1].map((sx) =>
@@ -190,7 +236,7 @@ export default function TrainingPad({ pad, position }) {
       <mesh ref={glowRef} position={[0, 0.51, 0]} rotation-x={-Math.PI / 2}>
         <ringGeometry args={[1.2, 1.7, 6]} />
         <meshBasicMaterial
-          color={unlocked ? pad.accent : '#6b7280'}
+          color={pad.accent}
           transparent
           opacity={0.25}
           side={THREE.DoubleSide}
@@ -227,7 +273,7 @@ export default function TrainingPad({ pad, position }) {
         <Text
           position={[0, 0.31, 0]}
           fontSize={0.31}
-          color={unlocked ? pad.color : '#94a3b8'}
+          color={pad.color}
           anchorX="center"
           anchorY="middle"
           outlineWidth={0.026}

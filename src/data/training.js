@@ -9,8 +9,19 @@
  * All the tuning lives here.
  */
 
-/** Damage per second earned on a x1 pad. */
-export const TRAIN_BASE_RATE = 0.8
+/**
+ * What a pad is worth, per second, against the dino standing on it.
+ *
+ * A pad multiplies *your own* damage per click - the `+6 Damage / click` on a
+ * Stegosaur's podium - so a x2 machine turns that into 12 a second. It used to
+ * pay a flat 0.8 a second times the multiplier, which meant the whole row was
+ * worth a rounding error the moment you had any dino at all: the first pad
+ * literally advertised "+0/sec".
+ *
+ * Tying it to the equipped tier is also what makes the row keep mattering. The
+ * same x40 machine is worth forty a second to a Hatchling and half a million to
+ * a Cosmic Apex, so training never stops being the thing that feeds the climb.
+ */
 
 /** How often training is committed to the store, in seconds. */
 export const TRAIN_FLUSH_INTERVAL = 0.25
@@ -27,7 +38,7 @@ export const PAD_RADIUS = 2.1
  * the last.
  */
 export const TRAINING_PADS = [
-  { id: 'pad1', multiplier: 1, requiresRebirths: 0, color: '#e2e8f0', accent: '#94a3b8', deco: 'plain' },
+  { id: 'pad1', multiplier: 1, requiresRebirths: 0, color: '#e2e8f0', accent: '#94a3b8', deco: 'plates' },
   { id: 'pad2', multiplier: 2, requiresRebirths: 1, color: '#fde68a', accent: '#f59e0b', deco: 'ingots' },
   { id: 'pad3', multiplier: 3, requiresRebirths: 3, color: '#c4b5fd', accent: '#8b5cf6', deco: 'crystals' },
   { id: 'pad5', multiplier: 5, requiresRebirths: 6, color: '#a7f3d0', accent: '#10b981', deco: 'grove' },
@@ -59,14 +70,17 @@ const CORNERS = [
 ]
 
 /**
- * How far along the row one pad's dressing may reach, and how deep a single
+ * How far along the row one pad's dressing may reach, and how thick a single
  * piece of it may be.
  *
- * The row runs down Z with the pads under six metres apart, so a dressing has
+ * The row runs down world Z with the pads a few metres apart, so a dressing has
  * well under three metres either side before it is standing on its neighbour -
  * while *across* the row it has the whole lawn. Two very different budgets on
  * the two axes, which is why the layouts below are written without regard for
  * either and squeezed to fit afterwards.
+ *
+ * The pad itself is turned a quarter turn so the belt runs toward the walkway,
+ * which puts its local **X** along the row. That is the axis squeezed here.
  */
 const ROW_HALF = 2.6
 const MAX_DEPTH = 0.55
@@ -74,21 +88,22 @@ const MAX_DEPTH = 0.55
 /**
  * Squeeze a dressing into the space one pad owns.
  *
- * Along Z only: the depth of each piece is capped and then slid inside the
- * band between the standing circle and the pad's own edge. Anything wide
- * across the row is left alone, because there is room there.
+ * Along the pad's local X only - the axis that runs down the row once the pad
+ * is turned. Each piece is thinned and then slid inside the band between the
+ * standing circle and the pad's own edge; anything long *across* the row is
+ * left alone, because there is room there.
  */
 function fitToRow(items) {
   for (const item of items) {
-    item.scale[2] = Math.min(item.scale[2], MAX_DEPTH)
-    const limit = ROW_HALF - item.scale[2] / 2
-    if (Math.abs(item.position[2]) > limit) {
-      item.position[2] = Math.sign(item.position[2]) * limit
+    item.scale[0] = Math.min(item.scale[0], MAX_DEPTH)
+    const limit = ROW_HALF - item.scale[0] / 2
+    if (Math.abs(item.position[0]) > limit) {
+      item.position[0] = Math.sign(item.position[0]) * limit
     }
-    // A piece pushed onto the row's axis must not also be wide, or its corner
+    // A piece pushed onto the row's axis must not also be long, or its corner
     // reaches back over the belt.
-    if (Math.abs(item.position[0]) < PAD_HALF) {
-      item.scale[0] = Math.min(item.scale[0], 1)
+    if (Math.abs(item.position[2]) < PAD_HALF) {
+      item.scale[2] = Math.min(item.scale[2], 1)
     }
   }
   return items
@@ -111,6 +126,27 @@ export function buildPadDecor(kind, seed = 0) {
     into.push({ position: [x, height / 2, z], scale: [width, height, width], rotation: spin, tilt })
 
   switch (kind) {
+    case 'plates':
+      /*
+       * Weight discs stacked at the corners. The first pad is the one every
+       * player stands on and the only one open at nought rebirths, so it
+       * cannot be the bare one - with nothing on it the whole row read as
+       * eight locked machines and a slab.
+       */
+      for (const [sx, sz] of CORNERS) {
+        const x = sx * PAD_HALF
+        const z = sz * PAD_HALF
+        post(dull, x, z, 0.28, 0.5)
+        for (let i = 0; i < 2; i++) {
+          lit.push({
+            position: [x, 0.6 + i * 0.24, z],
+            scale: [0.86 - i * 0.2, 0.2, 0.86 - i * 0.2],
+            rotation: rand() * 0.5,
+          })
+        }
+      }
+      break
+
     case 'ingots':
       // Stacked bullion at each corner.
       for (const [sx, sz] of CORNERS) {
@@ -246,9 +282,15 @@ export function buildPadDecor(kind, seed = 0) {
   return { dull: fitToRow(dull), lit: fitToRow(lit) }
 }
 
-/** Damage per second earned on a pad. */
-export function padRate(pad) {
-  return TRAIN_BASE_RATE * pad.multiplier
+/**
+ * Damage per second earned on a pad by a dino that hits for `perClick`.
+ *
+ * `perClick` is the equipped evolution's `power` - the number its podium
+ * advertises - so what the sign over a pad promises and what the pad pays are
+ * the same arithmetic.
+ */
+export function padRate(pad, perClick) {
+  return pad.multiplier * Math.max(0, perClick ?? 0)
 }
 
 /** Whether the player's rebirth count opens this pad. */

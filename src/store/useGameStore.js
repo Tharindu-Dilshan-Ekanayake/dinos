@@ -5,6 +5,7 @@ import {
   MAX_STAGES,
   canEnterStage,
   isBoss,
+  recommendedDamage,
   stageHealth,
   stageReward,
 } from '../data/stages.js'
@@ -103,6 +104,12 @@ function derive(state) {
     evolutionIndex,
     strength,
     clickPower,
+    /*
+     * What one swing is *worth* - the number the podium advertises, and what a
+     * training pad multiplies. Distinct from `clickPower`, which is what a
+     * swing takes off an enemy.
+     */
+    perClick: evolution.power ?? 1,
     idleDps: clickPower * idleDpsFraction(state.upgradeLevels.idle),
     critChance: Math.min(0.85, CRIT_CHANCE + critBonus(state.upgradeLevels.crit)),
   }
@@ -120,7 +127,6 @@ const initial = (() => {
     scene: 'lobby',
     // Death is transient: you always come back at the hub.
     dead: false,
-    deathReason: null,
     /** Your own health in the arena. Transient - a run always starts whole. */
     playerHealth: MAX_PLAYER_HEALTH,
     // Transient, never persisted.
@@ -257,7 +263,24 @@ export const useGameStore = create((set, get) => ({
      */
     const max = stageHealth(s.stageIndex)
     const slots = Math.max(1, enemyCountForStage(s.stageIndex, isBoss(s.stageIndex)))
-    const applied = Math.min(damage, max / Math.max(slots, MIN_HITS_TO_CLEAR))
+
+    /*
+     * Blows land in proportion to how ready you are for the level.
+     *
+     * The number on the gate has to mean something. Any gate can be walked
+     * through, so the level itself has to be the test - and it was not much of
+     * one while an under-geared dino hit for its full damage and merely needed
+     * longer. Squared, so the shortfall bites: at half the bar a blow lands a
+     * quarter, and against a pack biting at the rate a level you have no
+     * business in bites, the arithmetic runs out long before the pack does.
+     *
+     * Meeting the bar is full damage and there is no bonus above it - the raw
+     * click power already grows, so this only ever takes away.
+     */
+    const readiness = Math.min(1, s.clickPower / recommendedDamage(s.stageIndex))
+    const landed = damage * readiness * readiness
+
+    const applied = Math.min(landed, max / Math.max(slots, MIN_HITS_TO_CLEAR))
 
     const remaining = s.enemyHealth - applied
 
@@ -345,7 +368,6 @@ export const useGameStore = create((set, get) => ({
       chamberHealth: {},
       runWins: 0,
       dead: false,
-      deathReason: null,
       playerHealth: MAX_PLAYER_HEALTH,
       areaIndex: 0,
     })
@@ -515,12 +537,13 @@ export const useGameStore = create((set, get) => ({
     if (s.dead) return
     // Everything carried this run is lost. That is the whole reason the
     // Return pads are worth stepping on.
-    set({
-      dead: true,
-      deathReason: { cause: 'slain', ...reason, lostWins: s.runWins },
-      runWins: 0,
-      playerHealth: 0,
-    })
+    /*
+     * Nothing reads a stored reason any more. There was a panel that spelled
+     * out what had happened and what it cost; the fall says the first and the
+     * DEATH event below carries the second to the floating numbers, which is
+     * where every other number in this game is read.
+     */
+    set({ dead: true, runWins: 0, playerHealth: 0 })
     emit(EVENTS.DEATH, { ...reason, lostWins: s.runWins })
   },
 
@@ -528,7 +551,6 @@ export const useGameStore = create((set, get) => ({
   respawn() {
     set({
       dead: false,
-      deathReason: null,
       scene: 'lobby',
       stageIndex: 0,
       enemyHealth: stageHealth(0),
@@ -562,7 +584,6 @@ export const useGameStore = create((set, get) => ({
       stageCleared: false,
       chamberHealth: {},
       dead: false,
-      deathReason: null,
       areaIndex: nextArea,
       scene: 'arena',
     })

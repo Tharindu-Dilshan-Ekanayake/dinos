@@ -40,6 +40,7 @@ export const EVENTS = {
   RESPAWN: 'respawn',
   DEATH: 'death',
   PLAYER_HURT: 'playerHurt',
+  ENEMY_WINDUP: 'enemyWindup',
   ENEMY_ATTACK: 'enemyAttack',
   DAMAGE_GAIN: 'damageGain',
   STAGE_ENTER: 'stageEnter',
@@ -48,4 +49,5 @@ export const EVENTS = {
   PROMPT: 'prompt',
   OPEN_REBIRTH: 'openRebirth',
   TRAINING: 'training',
+  TRAIN_GAIN: 'trainGain',
 }

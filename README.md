@@ -42,8 +42,13 @@ not a checkpoint - what you keep is the Wins you carry out.
 
 - Clearing a level adds its reward to the Wins you are **carrying**, shown as
   the `Carried` chip. Carried Wins are not spendable yet.
-- Two **Return pads** appear at the end of a cleared level. Stepping on one
-  banks everything you are carrying and walks you back to the hub.
+- Two **Return pads** appear at the end of a cleared level. Stand on one and
+  **press E** to bank everything you are carrying and walk back to the hub.
+  Stepping on a pad used to be enough by itself, which put the most
+  consequential move in a run - ending it - one wrong square away on the walk to
+  the next gate. It raises the same "Press E" panel the hub uses for its
+  podiums, tappable cap and all, so a phone has the same control a keyboard
+  does.
 - Walking back out through the **near end** of a chamber retreats one level at a
   time; doing it in Stage 1 leaves the arena and banks the run. There is no menu
   shortcut home - the way out is the way you came.
@@ -52,7 +57,24 @@ not a checkpoint - what you keep is the Wins you carry out.
   when you return. The run remembers the corridor in `chamberHealth`, which is
   persisted with the rest of the save so a reload does not restock it.
 - **Dying loses everything you were carrying.** That is what makes the Return
-  pads a real decision: cash out now, or push one more gate.
+  pads a real decision: cash out now, or push one more gate. It sends you
+  **straight back to the hub** - there used to be a panel with a skull, a
+  paragraph and a button to acknowledge it, which made the cheapest moment in
+  the game the one that asked most of you. What the run cost is thrown up as a
+  floating number like every other number here; the only wait is the second your
+  dino takes to go down, because cutting away mid-fall would leave you in the
+  hub with no idea what happened.
+
+  **Going down is three beats, not one lerp.** A death used to be a single
+  rotation to 86 degrees over nine tenths of a second, which read as a model
+  being turned rather than an animal being killed. Now the blow rocks it back
+  onto its heels with its head thrown up (`DEATH_STAGGER`), it goes over
+  sideways *accelerating* the way a falling thing does (`DEATH_TOPPLE`), and
+  then it lands - a rebound, a squash, the legs splaying out from under it and
+  the tail flopping after the head. The landing is the beat that sells it,
+  because it is the only one with any weight in it. The clock runs off the
+  store's own `dead` rather than an event, so a respawn puts the dino back on
+  its feet by simply not being dead any more.
 
 The **Levels** panel is therefore a read-only progress board and damage
 reference, not fast travel - jumping straight to Stage 40 would undercut the
@@ -74,9 +96,6 @@ walkable in reverse - the gates used to own a direction each and fire on
 proximity, so stepping back through an open exit ran the *forward* one again
 and pushed you into the level you were trying to leave. The gates are now a
 door and a sign; they travel nobody.
-
-Only three chambers are mounted at a time - behind, current, ahead - so the cost
-stays flat however deep a run goes.
 
 The wall standing in front of chamber `k` is chamber `k-1`'s **back wall** - the
 same wall, seen from the other side, and the doorway you look back through into
@@ -116,17 +135,28 @@ visibly not the same room, and because the chamber ahead is already mounted you
 see its colours through the open gate before you walk into them.
 
 The exit gate is **sealed until the chamber is clear** - the barrier is
-literally the edge of the world until the last enemy falls. The sign over it
-states what the level ahead demands *before* you step through, and turns red
-when your damage is under that bar.
+literally the edge of the world until the last enemy falls. It never leaves,
+though: it turns from red to blue and thins out, and carries the stage ahead
+and its recommended damage lettered on both faces.
 
 **Any gate can be walked through.** Stepping into a level you were underpowered
 for used to kill the dino on the spot, before it had swung once - which made
 the requirement a wall with a trap behind it rather than something to test
-yourself against. The pack is the wall now: `enemyBite` already scales with how
-the level rates against your click power, so a chamber you have no business in
-chews through you in seconds. Lose that fight and you wake in the hub, the same
-as any other death.
+yourself against. The level itself is the test now, and the number on the gate
+is what it tests you against:
+
+- **Blows land in proportion to how ready you are.** `_applyDamage` scales by
+  `min(1, clickPower / recommendedDamage)` *squared*, so at half the bar a hit
+  lands a quarter. Meeting the bar is full damage and there is no bonus above
+  it - raw click power already grows, so this only ever takes away.
+- **`enemyBite` already scales the other way**, biting hardest on a level you
+  have no business in.
+
+Together they make the bar real: `gearing.test.mjs` runs the actual damage
+pipeline against the actual bite rates and finds that at 25%, 50% and 75% of a
+stage's bar **the pack wins every time**, in two to five seconds - while at the
+bar you win in about five and a half with roughly half your health left. Lose
+and you wake in the hub, the same as any other death.
 
 And until you do, **breaking off is always available.** Walk back out through
 the gate you came in by: the level behind is still cleared, everything you are
@@ -139,8 +169,41 @@ Pack size cycles 3-7 per level so the rhythm of a run varies, and a boss stage
 fields one large dino alone. Rather than give each enemy its own health value,
 the pack divides the stage's single health pool into bands - so rewards, gating,
 saves and the damage pipeline all stay untouched, and the pack visibly thins as
-the pool drains. The enemy being fought closes in on you; the rest hold their
-formation posts.
+the pool drains.
+
+**No two levels field the same pack.** The line-up used to be
+`slot % archetypes`, so slot 0 was a runner in Stage 1 and a runner in Stage 25
+with the same attack on the same cooldown - the twentieth pack you fought was
+the first pack in different colours. `enemyArchetype(stage, slot)` rotates the
+roster by the level and strides through it; the roster is seven shapes and seven
+is prime, so every stride walks the whole list before repeating. No pack fields
+the same shape twice, and 25 levels produce 25 different line-ups.
+
+**The whole pack fights you at once.** Each enemy takes a post on a ring around
+the player and bites on its own cooldown, and the health numbers in `combat.js`
+are tuned for exactly that. The formation did not agree: every enemy that was
+not the one you were hitting stood 4.1-5.0 units out, while a bite carries 3.06
+and a slam 2.89 - so most of the pack stood just outside the range at which it
+was allowed to do anything, and the fight arrived one dino at a time. A post is
+now measured against **that enemy's own reach** (`POST_WITHIN_REACH`), so a
+shape that has to be on top of you comes and stands on top of you, and a
+fire-breather still hangs back and breathes across the gap because it can. The
+one you are fighting still pushes in closest, which keeps the target readable in
+a scrum.
+
+**And you can see which of them is hitting you.** The pack used to attack by
+emitting particles: a cloud of fire appeared in front of a sailback that had not
+moved a muscle, so a flurry from five of them read as weather rather than as
+five animals. Every blow now has a wind-up and a pose. `ATTACK_WINDUP_SECONDS`
+before the damage lands, the same cooldown emits `ENEMY_WINDUP`, and the enemy
+gathers *backwards* into it - so anticipation and follow-through come off one
+clock and the animation can never land on a different frame from the hit. Each
+tell moves a different part of the animal: a lunge throws the whole body behind
+the head, a claw rolls the shoulder and brings the head across, a tail sweep
+turns the body away to bring the tail through, a slam rears up and comes down,
+and a breath rears back and holds its ground while the fire does the travelling.
+The pose is laid over the walk cycle rather than replacing it, so a dino still
+closing on you can swing without stopping to play an animation first.
 
 ## Levels and damage gating
 
@@ -148,9 +211,13 @@ Stages open in order, and each one also states the click damage it is tuned for.
 
 - `recommendedDamage(stage)` = the stage's health / `TARGET_CLICKS_TO_CLEAR`, so
   the advice can never drift from the actual health curve.
-- `requiredDamage(stage)` is `MIN_DAMAGE_FRACTION` of that. Walk through a gate
-  below it and your dino dies, so the floor is what sends a player back to
-  training rather than letting them chip at a wall for an hour.
+- `requiredDamage(stage)` is the entry bar a gate reads out. Nothing stops you
+  walking through under it - the level itself is the refusal. Blows land at
+  `readiness²`, where readiness is your click damage over the stage's
+  recommendation, so at half the bar you do a quarter of your damage while the
+  pack bites at its risky rate. The gearing suite fights it out and finds 25%,
+  50% and 75% all unwinnable, and the bar itself a fight you win with about half
+  your health left.
 - `damageRating()` turns the ratio into Easy / Fair / Grindy / Too strong, which
   colours both the stage panel and the **Levels** board.
 
@@ -269,11 +336,102 @@ All balance lives in `src/data/` — no numbers are hardcoded in components.
   waist-high signpost still stood squarely in front of the level it named. The
   way back needs no label - the level you came from is visible down the
   corridor, which is the whole point.
+- **Arena numbers land on the enemy you hit.** The floating text falls back to
+  the middle of the screen when nothing tells it better, which in the arena
+  meant every `-damage` and every `+n 💪` piled up in the same spot no matter
+  which of the pack you were fighting or where it stood. `ArenaCombat` projects
+  the target through the camera and hands the pixel to `attack()`, so both
+  numbers come out of the animal they belong to. Behind the camera the
+  projection turns inside out, so that case says nothing and lets the number
+  take its default place rather than throwing it off-screen.
 - **Audio is synthesised** at runtime via Web Audio — no audio files ship.
   Footfalls are driven from the same `stride` phase that swings the legs
   (`systems/footsteps.js`), so a step is heard on the frame the foot is down;
   the whole pack shares one rate limit and fades with distance, because seven
   dinos running at you is otherwise white noise rather than footsteps.
+- **The hub shows three levels up its staircase**, each with its own palette
+  and its own gateway, so the climb leads to a run rather than to one room. Its
+  sky dome had to grow with the view: at radius 100 it was smaller than the
+  thing it contained, cutting Stage 1's far wall off at 110 units. Dome, clouds
+  and sun all move out by one `SKY_SCALE` so the horizon still agrees with
+  itself.
+- **A podium dino is sized by the circle it sweeps, not by its pad.** They turn
+  on the spot, and the model reaches 4.26 units behind its origin against 1.6 in
+  front - so turned about its *hip*, as it was, the animal orbited its pedestal
+  instead of standing on it. At 0.62 that meant a 4.5-unit radius on a row
+  spaced 6.2: neighbours overlapping by nearly three units, dinos hanging off
+  the tier and sweeping their tails through the retaining wall.
+  `DINO_CENTRE_OFFSET` puts the axis through the animal's middle, which costs
+  nothing and cuts the circle by a third - and that is what pays for
+  `PODIUM_DINO_SCALE` being 0.58 rather than the 0.4 the hip pivot could
+  afford. The hub was widened to 28 and both rows moved further left to make
+  room for it.
+- **The gallery outgrew the plaza.** Its last front-row podium stood inside the
+  arena entrance's left retaining wall - a Tyrannosaur buried to the shoulder in
+  coursed stone - because the row had grown down the plaza until it ran out of
+  plaza. The entrance moved back fourteen units (`PLAZA.to`, `wallFromZ`,
+  `stepFromZ` and the gate with it; `ARENA_STAIR_TOP_Z` and `LOBBY_Z_OFFSET`
+  are derived, so the hub-arena seam followed on its own), which is what buys
+  the room for both a wider `PODIUM_SPACING` and the gallery sitting further
+  back. The layout test holds every podium against the tier wall, the tier
+  edge, the entrance walls and the next podium along.
+- **The treadmills are turned a quarter turn**, so the belt runs across the row
+  toward the walkway rather than along it - laid end to end they read as nine
+  planks rather than a rank of machines, and the dino ran sideways down its own
+  belt. That swaps which axis has to fit between neighbours, so `fitToRow`
+  squeezes each pad's local **X**. Every pad also carries handrails and a
+  console, which are the three things that make a machine read as a treadmill
+  rather than as a lit slab, and the row moved out to `x: 19` by the fence -
+  the middle of the hub belongs to the path between the gallery and the arena.
+- **Locked is a state, not a repaint.** Locked tiers and locked pads used to be
+  painted stone grey, which made the half of the hub you are working *toward*
+  the half that told you nothing - six identical silhouettes and eight
+  identical slabs. Everything now shows its own colours; what locking changes
+  is whether it is **lit**. An unlit lamp is what "locked" looks like on a
+  machine, and a dark unlit pad is what it looks like under a dino.
+- **Every dino carries markings** - `pattern` (`stripes`, `spots`, `ridge`,
+  `plated`) drawn in its own `mark` colour, as a sixth material group the
+  merger picks up for free. One flat body colour reads as a toy; the stripe
+  down a tiger is most of what makes a shape look like a species. Enemies get
+  them too, in a deepened cut of the biome's body colour - *not* the accent,
+  which is already their belly and their spikes. The looks test checks every
+  marking actually reads against the body it is drawn on, which caught
+  obsidian: a near-black dino wearing a near-black stripe.
+- **Podium dinos stand still, facing the walkway**, the way the gallery they
+  are modelled on displays them. Turning meant every one was showing you its
+  flank or its tail half the time, and the circle a spinning dino needs is what
+  kept them small: standing, what has to fit between podiums is its *width*
+  rather than its length, which is what pays for `PODIUM_DINO_SCALE` being
+  0.78. At that size a turning dino would sweep 11.4 units across a row spaced
+  7.2.
+- **The entrance is solid now.** Its stone walls are ten units thick and were
+  collided with circles of radius three, covering only the inner six - you
+  could walk into the outer half and stand inside coursed stone. The radius is
+  the wall's own half-width, so a circle spans exactly the block it stands for.
+  The grass ledges either side had no surface at all; `groundHeightAt` knows
+  about them now, and `shoulderHeight` dropped to 1.8 because a standing jump
+  reaches 2.06 - a ledge you cannot get onto is just a wall. The treadmill row
+  used to run to z=-35.6 with that ledge beginning at -35, so its deepest
+  machine was buried in a bank of grass; the row is shorter and stops clear.
+- **A pad is worth the dino standing on it.** `padRate(pad, perClick)` is the
+  dino's own damage per click times the pad's multiplier - a Stegosaur at +6 on
+  the x2 pad earns 12/sec. It used to be a flat 0.8/sec times the multiplier,
+  which made the first pad advertise `+0/sec` and made the whole row worth less
+  the stronger your dino got, which is backwards for the thing you train on.
+- **Training throws numbers too.** The HUD counter climbing on its own is easy
+  to miss while you are watching your dino run, so training shouts `+n 💪` once
+  a second, sized by the pad's multiplier - a second's *whole* earnings, not a
+  per-frame crumb rounding to `+0`, and the same arm the click feedback uses
+  because it is the same damage.
+- **Standing on a training pad runs the dino.** The legs are driven by *effort*
+  rather than travel (`playerActivity.training`), because a treadmill is the
+  one place the dino works without going anywhere - it used to hold its idle
+  pose while the belt scrolled under its feet and the damage counter climbed,
+  with nothing connecting the two. It also **throws a blow on the beat** while
+  it runs (`TRAIN_SWING_INTERVAL`), the same motion an attack makes in the
+  arena, because damage on a pad is earned by attacking - a dino jogging
+  politely while a number rises on its own says nothing about where the number
+  comes from.
 - **Each training pad is dressed differently** (`buildPadDecor`). Nine pads
   that differed only in colour read as one pad printed nine times; the row is
   meant to be a ladder you can see yourself climbing. The layouts are written

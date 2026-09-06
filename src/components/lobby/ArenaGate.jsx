@@ -8,7 +8,12 @@ import {
   ARENA_STAIR_TOP_Z,
   LOBBY_PALETTE,
 } from '../../data/lobby.js'
-import { APPROACH_DROP, APPROACH_EDGE_Z, LOBBY_Z_OFFSET } from '../../data/arena.js'
+import {
+  APPROACH_DROP,
+  APPROACH_EDGE_Z,
+  LOBBY_Z_OFFSET,
+  chamberOrigin,
+} from '../../data/arena.js'
 import { paletteForStage } from '../../data/areas.js'
 import { formatNumber } from '../../data/progression.js'
 import { MAX_STAGES, damageRating, recommendedDamage } from '../../data/stages.js'
@@ -18,12 +23,21 @@ import { playerPosition } from '../../systems/playerState.js'
 import { voxelMaterial } from '../../systems/voxelTexture.js'
 import InstancedBlocks from '../InstancedBlocks.jsx'
 import Chamber from '../arena/Chamber.jsx'
+import EntryGate from '../arena/EntryGate.jsx'
+import ExitGate from '../arena/ExitGate.jsx'
 import HeadlineText from '../HeadlineText.jsx'
 
 const E = ARENA_ENTRANCE
 
-/** Stage 1's own colours, so the view up the stairs is the level, not a guess. */
-const STAGE_ONE_PALETTE = paletteForStage(0)
+/**
+ * How much of the corridor the hub can see up its own staircase.
+ *
+ * Three levels, each with its own palette and its own gateway, which is as far
+ * as the hub's fog carries: the third is mostly haze and exists so the run does
+ * not visibly stop at the second. Showing only Stage 1 made the climb look like
+ * it led to a single room.
+ */
+const STAGES_IN_VIEW = [0, 1, 2]
 
 /** Matches the arena's own gate headline, so one colour means one thing. */
 const RATING_COLOR = {
@@ -437,7 +451,23 @@ export default function ArenaGate() {
         these stairs. Walk up and you arrive in the place you were looking at.
       */}
       <group position={[0, APPROACH_DROP, -LOBBY_Z_OFFSET]}>
-        <Chamber stage={0} palette={STAGE_ONE_PALETTE} origin={0} />
+        {STAGES_IN_VIEW.map((stage) => (
+          <group key={stage}>
+            <Chamber
+              stage={stage}
+              palette={paletteForStage(stage)}
+              origin={chamberOrigin(stage)}
+            />
+            {/*
+              The gateways too, so the levels read as levels from down here
+              rather than as three empty rooms. `active` false: none of these
+              is the chamber you are standing in, and a gate in the hub has
+              nothing to tell the arena's HUD.
+            */}
+            <EntryGate stage={stage} />
+            <ExitGate stage={stage} active={false} sealed />
+          </group>
+        ))}
       </group>
 
       {/* The landing bridging the top step to the chamber's own floor. */}

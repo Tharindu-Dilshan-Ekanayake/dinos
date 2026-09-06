@@ -5,16 +5,24 @@ import * as THREE from 'three'
 import { RETURN_PADS, RETURN_PAD_RADIUS, chamberOrigin } from '../../data/arena.js'
 import { formatNumber } from '../../data/progression.js'
 import { useGameStore } from '../../store/useGameStore.js'
+import { EVENTS, emit } from '../../systems/events.js'
+import { consumeInteract } from '../../systems/input.js'
 import { playerPosition } from '../../systems/playerState.js'
 import { fadeText, signOpacity } from '../../systems/signage.js'
 
 /**
  * Cash-out pads at the end of a cleared level.
  *
- * Stepping on one banks every Win carried this run and walks you back to the
- * hub. They are the safe half of the decision the end of a chamber poses: take
- * what you have, or push through the gate and risk losing it all to a level
- * that is too strong.
+ * Standing on one and pressing E banks every Win carried this run and walks you
+ * back to the hub. They are the safe half of the decision the end of a chamber
+ * poses: take what you have, or push through the gate and risk losing it all to
+ * a level that is too strong.
+ *
+ * Stepping on a pad used to be enough on its own, which meant the single most
+ * consequential move in a run - ending it - was something you could do by
+ * walking across the wrong square on the way to the gate. It is a decision, so
+ * it asks for a decision: the same "Press E" panel the hub uses for its
+ * podiums, with the same key and the same tappable cap on a phone.
  */
 export default function ReturnPads() {
   const stageIndex = useGameStore((s) => s.stageIndex)
@@ -25,7 +33,7 @@ export default function ReturnPads() {
   const group = useRef()
   const padRefs = useRef([])
   const labelRefs = useRef([])
-  const armed = useRef(false)
+  const lastPrompt = useRef(null)
   const anim = useRef({ show: 0, phase: 0 })
 
   const materials = useMemo(
@@ -51,16 +59,29 @@ export default function ReturnPads() {
   )
   useEffect(() => () => Object.values(materials).forEach((m) => m.dispose()), [materials])
 
-  // Re-arm each time the pads appear, so arriving on top of one does not
-  // instantly bank the run.
-  useEffect(() => {
-    armed.current = false
-  }, [stageCleared, stageIndex])
+  /** Raise or drop the call to action, but only when it actually changes. */
+  const setPrompt = (prompt) => {
+    if (prompt?.id === lastPrompt.current) return
+    lastPrompt.current = prompt?.id ?? null
+    emit(EVENTS.PROMPT, prompt)
+  }
+
+  // Nothing to offer once the pads are gone - and a prompt left up would
+  // otherwise follow you through the gate into the next level.
+  useEffect(() => () => emit(EVENTS.PROMPT, null), [])
 
   useFrame((_, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05)
     const a = anim.current
     a.phase += delta
+
+    /*
+     * Drained every frame whether or not it is wanted. A press held in the
+     * queue from somewhere else in the level would otherwise bank the run the
+     * instant you first set foot on a pad, which is the surprise this whole
+     * change exists to remove.
+     */
+    const interacted = consumeInteract()
 
     const target = stageCleared && !dead ? 1 : 0
     a.show += (target - a.show) * Math.min(1, delta * 5)
@@ -73,7 +94,10 @@ export default function ReturnPads() {
       if (pad) pad.position.y = 0.26 + Math.sin(a.phase * 2.2 + i) * 0.05
     })
 
-    if (!stageCleared || dead) return
+    if (!stageCleared || dead) {
+      setPrompt(null)
+      return
+    }
 
     // Nearest pad wins; both do the same thing.
     const origin = chamberOrigin(stageIndex)
@@ -100,11 +124,18 @@ export default function ReturnPads() {
       fadeText(labelRefs.current[i * 2 + 1], shown)
     })
 
-    if (!inside) armed.current = true
-    if (inside && armed.current) {
-      armed.current = false
-      useGameStore.getState().claimRunWins()
-    }
+    setPrompt(
+      inside
+        ? {
+            id: `return:${stageIndex}:${runWins}`,
+            title: `Bank +${formatNumber(runWins)} Wins`,
+            action: 'return to the hub',
+            enabled: true,
+          }
+        : null
+    )
+
+    if (inside && interacted) useGameStore.getState().claimRunWins()
   })
 
   return (
@@ -165,7 +196,7 @@ export default function ReturnPads() {
               outlineWidth={0.04}
               outlineColor="#12100e"
             >
-              Return
+              Press E
             </Text>
           </Billboard>
         </group>

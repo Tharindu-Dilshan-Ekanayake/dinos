@@ -60,6 +60,19 @@ export function useDinoMaterials(evolution) {
       emissiveIntensity: 0.25,
     })
     const pupil = new THREE.MeshStandardMaterial({ color: '#141a26', roughness: 0.4 })
+    /*
+     * Markings. A dino in one flat body colour reads as a toy; the stripe down
+     * a tiger or the blotches on a gecko are most of what makes an animal look
+     * like a species rather than a shape. Falls back to a darkened body so a
+     * tier that names no marking colour still gets a coherent one.
+     */
+    const mark = new THREE.MeshStandardMaterial({
+      color: evolution.mark ?? evolution.spike,
+      roughness: 0.66,
+      flatShading: true,
+      emissive: new THREE.Color(evolution.mark ?? evolution.spike),
+      emissiveIntensity: glow * 0.5,
+    })
 
     // Late stages glow from the inside rather than just wearing bright colours.
     if (glow > 0) {
@@ -67,7 +80,7 @@ export function useDinoMaterials(evolution) {
       body.emissiveIntensity = glow * 0.26
     }
 
-    return { body, belly, spike, eye, pupil }
+    return { body, belly, spike, eye, pupil, mark }
   }, [evolution])
 
   useEffect(() => () => Object.values(materials).forEach((m) => m.dispose()), [materials])
@@ -212,6 +225,52 @@ function torsoBoxes(evolution) {
   // plate stuck on the side.
   for (const z of [-0.552, 0.552]) {
     out.push(box('belly', [-0.05, 1.0, z], [1.3, 0.42, 0.04]))
+  }
+
+  /*
+   * Markings.
+   *
+   * Each tier names a `pattern`, and the same three colours become a visibly
+   * different animal depending on how they are laid on: bars across the back,
+   * blotches down the flanks, or a single stripe from neck to hip. They sit a
+   * hair proud of the body so the flat shading still catches them.
+   */
+  const pattern = evolution.pattern ?? 'none'
+
+  if (pattern === 'stripes') {
+    for (let i = 0; i < 4; i++) {
+      const x = -0.72 + i * 0.44
+      out.push(box('mark', [x, 1.5, 0], [0.16, 0.3, 1.16]))
+      for (const z of [-0.58, 0.58]) {
+        out.push(box('mark', [x, 1.12, z], [0.16, 0.62, 0.03]))
+      }
+    }
+  } else if (pattern === 'spots') {
+    const spots = [
+      [-0.62, 1.42],
+      [-0.1, 1.6],
+      [0.36, 1.36],
+      [-0.34, 1.06],
+      [0.2, 0.98],
+    ]
+    for (const [x, y] of spots) {
+      for (const z of [-0.575, 0.575]) {
+        out.push(box('mark', [x, y, z], [0.3, 0.3, 0.02]))
+      }
+      out.push(box('mark', [x, 1.83, 0], [0.28, 0.02, 0.3]))
+    }
+  } else if (pattern === 'ridge') {
+    // One band running the length of the spine, and a collar at the throat.
+    out.push(box('mark', [-0.2, 1.83, 0], [2.1, 0.03, 0.4]))
+    out.push(box('mark', [0.62, 1.28, 0], [0.16, 1.06, 1.02]))
+  } else if (pattern === 'plated') {
+    // Armour panels down each flank, the way a beetle's shell is segmented.
+    for (let i = 0; i < 3; i++) {
+      const x = -0.68 + i * 0.62
+      for (const z of [-0.578, 0.578]) {
+        out.push(box('mark', [x, 1.24, z], [0.5, 0.86, 0.02]))
+      }
+    }
   }
 
   /** Back plates / sail, sized by the stage's plate count. */

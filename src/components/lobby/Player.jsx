@@ -12,9 +12,24 @@ import {
 import { useGameStore } from '../../store/useGameStore.js'
 import { createStepper } from '../../systems/footsteps.js'
 import { installInput } from '../../systems/input.js'
-import { stepPlayer } from '../../systems/playerMovement.js'
-import { playerFacing, playerMotion, playerPosition } from '../../systems/playerState.js'
+import { stepPlayer, turnToward } from '../../systems/playerMovement.js'
+import {
+  playerActivity,
+  playerFacing,
+  playerMotion,
+  playerPosition,
+} from '../../systems/playerState.js'
 import DinoModel, { animateDinoRig, useDinoMaterials, useDinoRig } from '../DinoModel.jsx'
+
+/**
+ * Seconds between swings while training.
+ *
+ * Damage on a pad is earned by *working* for it, so the dino throws a blow on
+ * a beat while it runs - the same motion an attack makes in the arena. Without
+ * it a treadmill was a dino jogging politely while a number went up on its
+ * own, which says nothing about where the number comes from.
+ */
+const TRAIN_SWING_INTERVAL = 0.55
 
 /**
  * The walkable dino you control in the hub.
@@ -47,7 +62,7 @@ export default function Player() {
   const root = useRef()
   const tilt = useRef()
   const rig = useDinoRig()
-  const anim = useRef({ stride: 0, speed: 0 })
+  const anim = useRef({ stride: 0, speed: 0, lunge: 0, sinceSwing: 0 })
   const step = useMemo(() => createStepper({ scale: evolution.scale }), [evolution.scale])
 
   useEffect(() => installInput(), [])
@@ -88,7 +103,34 @@ export default function Player() {
     const delta = Math.min(rawDelta, 0.05)
     const { moving } = stepPlayer(delta, CONFIG)
 
-    anim.current.speed += ((moving ? 1 : 0) - anim.current.speed) * Math.min(1, delta * 12)
+    /*
+     * A treadmill is the one place the dino works without going anywhere, so
+     * the legs are driven by *effort* rather than by travel. Standing still on
+     * a pad used to leave it in its idle pose while the belt scrolled under
+     * its feet and the damage counter climbed - nothing on screen connected
+     * the two.
+     */
+    const training = playerActivity.training
+    const working = moving || training
+
+    // Face down the belt, which now runs across the row toward the walkway -
+    // so training faces the dino into the hub rather than out at the fence.
+    // While you are not steering there is nothing to fight over.
+    if (training && !moving) turnToward(Math.PI, delta, 4)
+
+    anim.current.speed += ((working ? 1 : 0) - anim.current.speed) * Math.min(1, delta * 12)
+
+    // Swinging on the beat while it runs, and the blow decaying between.
+    if (training) {
+      anim.current.sinceSwing += delta
+      if (anim.current.sinceSwing >= TRAIN_SWING_INTERVAL) {
+        anim.current.sinceSwing -= TRAIN_SWING_INTERVAL
+        anim.current.lunge = 1
+      }
+    } else {
+      anim.current.sinceSwing = 0
+    }
+    anim.current.lunge = Math.max(0, anim.current.lunge - delta * 5.2)
 
     // Stride advances faster the harder the dino is moving, so the legs keep
     // pace with the ground rather than sliding across it.
@@ -96,17 +138,27 @@ export default function Player() {
     animateDinoRig(rig.current, anim.current.speed, anim.current.stride)
     step(anim.current.stride, anim.current.speed, { grounded: playerMotion.grounded })
 
+    // Squared, so a blow snaps out and eases back rather than sliding.
+    const lunge = anim.current.lunge * anim.current.lunge
+
     if (root.current) {
-      root.current.position.set(playerPosition.x, playerPosition.y, playerPosition.z)
+      // Step into the swing, along whatever way the dino is facing.
+      root.current.position.set(
+        playerPosition.x + Math.cos(playerFacing.angle) * lunge * 0.5,
+        playerPosition.y,
+        playerPosition.z - Math.sin(playerFacing.angle) * lunge * 0.5
+      )
       root.current.rotation.y = playerFacing.angle
     }
     if (tilt.current) {
-      // Lean into the direction of travel, and tip in the air so a jump reads
-      // as an arc rather than an elevator ride.
+      // Lean into the direction of travel, tip in the air so a jump reads as
+      // an arc rather than an elevator ride, and drop the shoulder into a
+      // swing the way the arena's dino does.
       tilt.current.rotation.x = anim.current.speed * 0.05
       tilt.current.rotation.z = playerMotion.grounded
-        ? 0
+        ? -lunge * 0.16
         : -playerMotion.velocityY * 0.012
+      tilt.current.scale.setScalar(evolution.scale * (1 - lunge * 0.05))
     }
   })
 

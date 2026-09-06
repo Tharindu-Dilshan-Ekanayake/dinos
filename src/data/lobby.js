@@ -20,9 +20,9 @@ import { TRAINING_PADS } from './training.js'
 
 export const PLAZA = {
   /** Walkable half-width and length of the paved area. */
-  halfWidth: 24,
+  halfWidth: 28,
   from: 26,
-  to: -34,
+  to: -48,
   /** Height of the raised path above the grass. */
   pathHeight: 0.25,
   /** Half-width of the central walkway stripe. */
@@ -70,11 +70,15 @@ export const LOBBY_PALETTE = {
  * The raised step carrying the back row of podiums, and the stairs up to it.
  * A single height lookup keeps the player's feet on whichever surface they are
  * standing on without needing terrain collision.
+ *
+ * It runs the length of the gallery it carries, so widening the spacing
+ * between podiums lengthens this too - a back-row dino turning at the end of
+ * the row must still have tier under it.
  */
 export const LEFT_TIER = {
-  minX: -21.5,
-  maxX: -12.6,
-  minZ: -22,
+  minX: -23,
+  maxX: -13.4,
+  minZ: -30,
   maxZ: 17,
   height: 2.4,
 }
@@ -93,6 +97,17 @@ export function groundHeightAt(x, z) {
   const stair = stairHeightAt(x, z)
   if (stair !== null) return stair
 
+  // The grass ledges either side of the entrance, one mirrored onto the other.
+  const shoulder = ENTRANCE_SHOULDERS
+  if (
+    Math.abs(x) >= shoulder.minX &&
+    Math.abs(x) <= shoulder.maxX &&
+    z >= shoulder.minZ &&
+    z <= shoulder.maxZ
+  ) {
+    return shoulder.height
+  }
+
   if (x >= LEFT_TIER.minX && x <= LEFT_TIER.maxX) {
     if (z >= LEFT_TIER.minZ && z <= LEFT_TIER.maxZ) return LEFT_TIER.height
     if (z > LEFT_STAIRS.fromZ && z <= LEFT_STAIRS.toZ) {
@@ -109,9 +124,60 @@ export function groundHeightAt(x, z) {
 /* ---------------------------------------------------------- stage podiums */
 
 /** Spacing between podiums down each row. */
-export const PODIUM_SPACING = 6.2
+export const PODIUM_SPACING = 7.2
+
+/**
+ * How far a dino reaches from its own origin - the tip of a spiked tail.
+ *
+ * A podium dino turns on the spot, so this is the radius it sweeps, and it is
+ * far larger than the pad under it: the model is nearly six units long against
+ * a pad of four and a half.
+ */
+export const DINO_SWEEP_REACH = 4.26
+
+/**
+ * How far it reaches the other way - the tip of its snout.
+ *
+ * A dino is not centred on its own hip, which is where the podium used to turn
+ * it: the tail is nearly three times as long as the head is deep, so the whole
+ * animal orbited the pedestal instead of turning on it. Rotate about the
+ * midpoint of the two and the circle it needs shrinks by a third.
+ */
+export const DINO_HEAD_REACH = 1.6
+
+/** Where the model has to sit so the podium turns it about its own middle. */
+export const DINO_CENTRE_OFFSET = (DINO_SWEEP_REACH - DINO_HEAD_REACH) / 2
+
+/**
+ * Half the animal's length, which is what it occupies once centred.
+ *
+ * It no longer turns - a podium dino stands facing the walkway, the way the
+ * gallery in the game this is modelled on displays them - so this is a static
+ * half-length along X rather than a swept radius. It is the same number either
+ * way, which is why centring the model was worth doing before the spin went.
+ */
+export const DINO_HALF_LENGTH = (DINO_SWEEP_REACH + DINO_HEAD_REACH) / 2
+
+/** And how wide it is across, which is all it needs between neighbours now. */
+export const DINO_HALF_WIDTH = 0.75
+
+/**
+ * How big a dino stands on its podium, against its own scale.
+ *
+ * It was 0.62 turning about the hip, which had the late tiers sweeping four and
+ * a half units on a row spaced six apart: they overlapped their neighbours by
+ * nearly three units, hung off the tier they stood on, and swung their tails
+ * through the retaining wall behind the front row. Dropping to 0.4 fixed that
+ * by making them small.
+ *
+ * Turning them about their own middle instead buys back a third of the circle,
+ * and that is what pays for this: 0.58 is nearly half again the size of 0.4 and
+ * still clears the wall, the tier edge and the next podium along - see the
+ * numbers in the layout test.
+ */
+export const PODIUM_DINO_SCALE = 0.78
 /** First podium sits this far down the plaza. */
-export const PODIUM_START_Z = 13
+export const PODIUM_START_Z = 12
 /** How close the player must stand to interact. */
 export const INTERACT_RADIUS = 3.2
 
@@ -121,8 +187,8 @@ export const INTERACT_RADIUS = 3.2
  * visible from the walkway at once.
  */
 export const PODIUM_ROWS = [
-  { x: -9.4, y: 0, count: 7 },
-  { x: -17, y: LEFT_TIER.height, count: 6 },
+  { x: -10.2, y: 0, count: 7 },
+  { x: -18, y: LEFT_TIER.height, count: 6 },
 ]
 
 /**
@@ -145,10 +211,19 @@ export const PODIUMS = EVOLUTIONS.map((evolution, index) => {
 
 export const TRAINING_PADS_LAYOUT = TRAINING_PADS
 
-/** Every training pad runs down the right-hand side of the plaza. */
+/**
+ * Every training pad runs down the right-hand side of the plaza, out by the
+ * fence rather than beside the walkway - the middle of the hub belongs to the
+ * path between the gallery and the arena.
+ */
 export const TRAINING_ROW = {
-  x: 11.5,
-  startZ: 14,
+  x: 19,
+  startZ: 16,
+  /*
+   * Short enough that the last machine stops well clear of the entrance's
+   * grass shoulder. The row used to run to z=-35.6 with the shoulder beginning
+   * at -35, so the deepest treadmill was buried in a bank of grass.
+   */
   spacing: -5.6,
 }
 
@@ -188,7 +263,7 @@ export const REBIRTH_POSITIONS = REBIRTH_PEDESTALS.map((_, i) => [
  * the climb between the walls actually reads before the scene changes.
  */
 export const ARENA_GATE = {
-  position: [0, 0, -31],
+  position: [0, 0, -45],
   radius: 1.6,
 }
 
@@ -202,22 +277,58 @@ export const ARENA_GATE = {
  * physically walks up them, and the walls are backed by a short row of
  * collision circles so you cannot stroll around the side of the gateway.
  */
+/*
+ * The entrance sits at the far end of a longer plaza than it used to.
+ *
+ * Its retaining walls are ten units thick and start at `wallFromZ`, and the
+ * gallery's last front-row podium was standing inside the left one - a
+ * Tyrannosaur buried to the shoulder in coursed stone. Moving the whole
+ * entrance back is what makes room for the gallery to move back with it, which
+ * is the other half of the same problem: the row had nowhere left to go.
+ */
 export const ARENA_ENTRANCE = {
   /** Half-width of the walkable corridor between the walls. */
   gapHalfWidth: 3.6,
   wallWidth: 10,
   wallHeight: 11,
   /** Walls run from the plaza end (near) to well past the stair top (far). */
-  wallFromZ: -24,
-  wallToZ: -38,
+  wallFromZ: -38,
+  wallToZ: -52,
   /** Staircase. */
   stepCount: 10,
   stepRise: 0.62,
   stepRun: 1.45,
-  stepFromZ: -26.5,
-  /** Grass shoulder either side of the walls. */
-  shoulderHeight: 2.2,
+  stepFromZ: -40.5,
+  /**
+   * Grass shoulder either side of the walls.
+   *
+   * Under the height a standing jump clears - `JUMP_SPEED` against `GRAVITY`
+   * reaches about 2.06 - so the ledge either side of the gateway is somewhere
+   * you can get up onto rather than a wall you bounce off.
+   */
+  shoulderHeight: 1.8,
 }
+
+/**
+ * The two grass ledges flanking the entrance, as a footprint.
+ *
+ * The mesh for these lives in the ArenaGate component, but the surface has to
+ * be known here: the player used to walk straight through them, standing at
+ * plaza level inside a block of raised grass.
+ */
+export const ENTRANCE_SHOULDERS = (() => {
+  const e = ARENA_ENTRANCE
+  const centre = e.gapHalfWidth + e.wallWidth / 2 + e.wallWidth / 2 + 6
+  const midZ = (e.wallFromZ + e.wallToZ) / 2
+  const depth = e.wallFromZ - e.wallToZ + 6
+  return {
+    minX: centre - 6,
+    maxX: centre + 6,
+    minZ: midZ - depth / 2,
+    maxZ: midZ + depth / 2,
+    height: e.shoulderHeight,
+  }
+})()
 
 /** Z of the top of the staircase. */
 export const ARENA_STAIR_TOP_Z =
@@ -249,12 +360,24 @@ export const PEDESTAL_RADIUS = 1.8
  * not fit the circle-push collision the hub uses, but a line of overlapping
  * circles along the face gives the same result for a fraction of the work.
  */
-const ENTRANCE_WALL_RADIUS = 3
+/*
+ * The radius has to be half the wall, not a third of it.
+ *
+ * At three it covered only the inner six units of a wall ten units thick, so
+ * you could walk into the outer half and stand inside coursed stone. Sized to
+ * the wall and centred on it, a circle spans exactly the block it stands for -
+ * pushing you out into the gateway on one side or onto the grass shoulder on
+ * the other, whichever you came from.
+ */
+const ENTRANCE_WALL_RADIUS = ARENA_ENTRANCE.wallWidth / 2
 const ENTRANCE_WALL_OBSTACLES = (() => {
   const out = []
   const e = ARENA_ENTRANCE
   const centre = e.gapHalfWidth + ENTRANCE_WALL_RADIUS
-  for (let z = e.wallFromZ; z >= PLAYER_BOUNDS.minZ - 3; z -= ENTRANCE_WALL_RADIUS) {
+  // Overlapping, so there is no gap between one circle and the next to slip
+  // through at the corners.
+  const step = ENTRANCE_WALL_RADIUS * 0.6
+  for (let z = e.wallFromZ; z >= PLAYER_BOUNDS.minZ - step; z -= step) {
     out.push({ x: -centre, z, radius: ENTRANCE_WALL_RADIUS })
     out.push({ x: centre, z, radius: ENTRANCE_WALL_RADIUS })
   }

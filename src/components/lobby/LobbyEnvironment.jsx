@@ -12,6 +12,15 @@ import VoxelClouds from '../VoxelClouds.jsx'
  * Bright daytime lighting for the hub. Fixed colours - unlike the arena, the
  * lobby never changes theme, so nothing here needs a per-frame lerp.
  */
+/**
+ * How much further out the sky sits than it used to, and where that puts it.
+ *
+ * One factor for the dome, the clouds and the sun together - move one without
+ * the others and the horizon stops agreeing with itself.
+ */
+const SKY_SCALE = 2.4
+const SKY_RADIUS = 100 * SKY_SCALE
+
 export default function LobbyEnvironment() {
   const scene = useThree((s) => s.scene)
   const skyRef = useRef()
@@ -80,12 +89,37 @@ export default function LobbyEnvironment() {
       <primitive object={lightTarget} position={[0, 0, centreZ]} />
       <directionalLight position={[-14, 10, -18]} intensity={0.45} color="#bcd9ff" />
 
+      {/*
+        The dome has to contain the corridor the staircase looks up.
+        
+        At a hundred it was smaller than the view itself: Stage 1's far wall
+        sits a hundred and ten units from the spawn, so the top of the level
+        the hub advertises was being cut off by the sky behind it. Everything
+        in here is pushed out by the same factor and scaled with it, so the
+        horizon comes out looking exactly as it did.
+      */}
       <group ref={skyRef}>
-        <GradientSky topColor={colors.top} bottomColor={colors.bottom} radius={100} offset={22} />
+        <GradientSky
+          topColor={colors.top}
+          bottomColor={colors.bottom}
+          radius={SKY_RADIUS}
+          offset={22 * SKY_SCALE}
+        />
         {/* Beyond the tree line but inside the dome, so the hub has a horizon
             to sit in rather than an empty gradient. */}
-        <VoxelClouds color="#f4fbff" radius={80} height={38} count={16} seed={4242} />
-        <SkyBody color="#fff4c9" elevation={0.62} size={7} />
+        <VoxelClouds
+          color="#f4fbff"
+          radius={80 * SKY_SCALE}
+          height={38}
+          count={16}
+          seed={4242}
+        />
+        <SkyBody
+          color="#fff4c9"
+          elevation={0.62}
+          size={7 * SKY_SCALE}
+          distance={92 * SKY_SCALE}
+        />
       </group>
 
       <Birds />

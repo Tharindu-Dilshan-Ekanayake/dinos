@@ -23,6 +23,16 @@ export const playerFacing = { angle: Math.PI / 2 }
  */
 export const playerMotion = { velocityY: 0, grounded: true }
 
+/**
+ * What the dino is busy doing, where that is not simply walking.
+ *
+ * `training` is set by the hub's pad scan and read by the controller in the
+ * same frame, which is the whole reason it lives out here rather than in the
+ * store: standing on a treadmill has to move the legs, and a flag that costs a
+ * re-render cannot be read sixty times a second.
+ */
+export const playerActivity = { training: false }
+
 /** Reset to the hub entrance, e.g. when returning from the arena. */
 export function resetPlayerPosition() {
   playerPosition.set(...PLAYER_SPAWN)

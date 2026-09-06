@@ -84,6 +84,25 @@ export default function FloatingTexts() {
         )
       }),
 
+      /*
+       * A treadmill, once a second, carrying that whole second.
+       *
+       * Same muscle and same green as a click's gain, because it is the same
+       * number going up by another route - and the point of a pad is that it
+       * is your click power being multiplied, not some separate currency.
+       */
+      on(EVENTS.TRAIN_GAIN, ({ gain, multiplier }) => {
+        const [cx, cy] = centre()
+        spawn(
+          `+${formatNumber(gain)} 💪`,
+          cx + (Math.random() - 0.5) * 90,
+          cy - 34 - Math.random() * 30,
+          'text-emerald-300',
+          // A faster pad throws a bigger number, and it should look bigger.
+          { fontSize: `${Math.round(20 + Math.min(multiplier, 40) * 0.4)}px` }
+        )
+      }),
+
       on(EVENTS.STAGE_CLEAR, ({ reward, boss }) => {
         const [cx, cy] = centre()
         spawn(
@@ -93,6 +112,24 @@ export default function FloatingTexts() {
           boss ? 'text-[38px] text-amber-300' : 'text-[28px] text-emerald-300'
         )
         if (boss) spawn('BOSS DOWN', cx, cy - 96, 'text-[22px] text-amber-200')
+      }),
+
+      /*
+       * Falling. There is no panel to read it off any more, so the one thing
+       * worth knowing - what the run cost you - is thrown up where every other
+       * number in this game appears.
+       */
+      on(EVENTS.DEATH, ({ lostWins }) => {
+        const [cx, cy] = centre()
+        spawn('YOU FELL', cx, cy - 60, 'text-[34px] text-rose-300')
+        if (lostWins > 0) {
+          spawn(
+            `-${formatNumber(lostWins)} WINS`,
+            cx,
+            cy - 8,
+            'text-[24px] text-rose-200'
+          )
+        }
       }),
 
       on(EVENTS.EVOLVE, ({ to }) => {

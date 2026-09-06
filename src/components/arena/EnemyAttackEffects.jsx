@@ -34,6 +34,10 @@ const TELLS = {
   sweep: { count: 9, life: 0.3, speed: 8, spread: 1.15, rise: 0.9, size: 0.32, grow: 0.8 },
   // Straight up off the ground, where the weight landed.
   stomp: { count: 10, life: 0.36, speed: 5, spread: 2.6, rise: 0.2, size: 0.38, grow: 0.9 },
+  // A claw arc - thrown across the swing rather than along it, and gone fast.
+  slash: { count: 8, life: 0.22, speed: 12, spread: 0.95, rise: 1.25, size: 0.27, grow: 1.3 },
+  // A glob, thrown. Tight, quick, and it keeps travelling.
+  spit: { count: 5, life: 0.46, speed: 14, spread: 0.12, rise: 1.15, size: 0.3, grow: 0.5 },
 }
 
 export default function EnemyAttackEffects() {

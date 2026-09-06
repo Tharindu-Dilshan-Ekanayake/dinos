@@ -8,7 +8,9 @@ import { queueInteract } from '../systems/input.js'
  * Parked in the middle of the screen rather than down with the controls,
  * because it is the one prompt a player has to notice: walking up to a podium
  * and not realising the dino is yours for a keypress is the difference between
- * the roster feeling like a shop and feeling like scenery.
+ * the roster feeling like a shop and feeling like scenery. The arena's Return
+ * pads speak through it too - banking a run is the same shape of decision, and
+ * it should not be a different control.
  *
  * It rides the same event the hub's proximity scan already emits, so it costs
  * a render only when the thing you are near actually changes. The key cap is
@@ -18,6 +20,9 @@ export default function InteractPrompt() {
   const [prompt, setPrompt] = useState(null)
 
   useEffect(() => on(EVENTS.PROMPT, setPrompt), [])
+  // Whatever you were standing next to, you are not standing next to it in the
+  // other half of the game.
+  useEffect(() => on(EVENTS.SCENE_CHANGE, () => setPrompt(null)), [])
 
   if (!prompt) return null
 
