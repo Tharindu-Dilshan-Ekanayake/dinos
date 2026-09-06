@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "server": "node server/leaderboard-server.js",
     "smoke": "node scripts/smoke.mjs",
-    "budget": "node scripts/budget.mjs"
+    "budget": "node scripts/budget.mjs",
+    "shot": "node scripts/shot.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^9.114.3",

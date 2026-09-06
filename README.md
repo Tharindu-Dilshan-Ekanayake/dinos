@@ -10,6 +10,7 @@ npm run dev          # http://localhost:5173
 npm run build
 npm run smoke        # boots the app in headless Chrome and fails on any error
 npm run budget       # draw calls and triangles, per scene, per graphics preset
+npm run shot         # render a PNG of the game into shots/ - see below
 npm run server       # optional leaderboard server, ws://localhost:8787
 ```
 
@@ -377,6 +378,62 @@ All balance lives in `src/data/` — no numbers are hardcoded in components.
   the room for both a wider `PODIUM_SPACING` and the gallery sitting further
   back. The layout test holds every podium against the tier wall, the tier
   edge, the entrance walls and the next podium along.
+- **The wheel pulls back to 52 units, and does it proportionally.** It stopped
+  at 38, close enough that the hub's podium row ran off both sides of the screen.
+  What limits it is the *fog*, not the far plane: fog is measured from the
+  camera, so a camera further from the player than the biome's fog near plane
+  starts hazing over the player's own dino, which reads as a broken renderer
+  rather than as distance. The marsh's fog starts closest at 42, and 52 leaves
+  the dino about a tenth hazed there and clear everywhere else - the alternative
+  was pushing the marsh's fog back, and a marsh that is not murky near you is
+  not a marsh. Zoom scales the distance rather than adding to it, so one notch
+  is always the same fraction of where you already are: a flat step is a nudge
+  up close and a crawl far out, and over a range this size it would have been
+  fifty notches end to end. It is nine.
+- **The hub has a sign that says what the game is** (`HubBoard`). A hub with
+  nothing in it naming the place is a field with props on it. A lit screen on
+  two posts carries the title and either the shared standings or - with no
+  server configured, which is most builds - your own records, because a
+  permanently empty top-five is worse than no board. It stands over the
+  treadmill row facing across it, since training is the longest anybody stands
+  still in this game and that is therefore the wall worth putting a sign on. The
+  bezel is split into ten segments in five arcade colours, each lit on its own
+  beat so the strip reads as running round the screen rather than flashing - the
+  same trick the machines below run down their rails. It only *listens* to the
+  leaderboard; the HUD's panel owns the connection.
+- **A treadmill is long, not square.** The pad used to be a 4.5m slab as wide as
+  it was long, with rails down two sides and the console behind the runner's
+  back - a dance floor with handrails. The deck now runs six metres along the
+  belt and three across, which is the shape that reads as a treadmill from any
+  angle and leaves a clear metre of grass between machines down the row. It has
+  the parts a machine has: side rails either side of the belt, rollers at both
+  ends, a motor housing, a console on uprights with an angled display and a row
+  of buttons, and handrails running back from it onto a rear post. Local +Z is
+  the way the dino faces while training, so the console is where a runner can
+  read it and the sign has moved behind. The console was first hung as a
+  two-metre slab at chest height, which from in front was a billboard with a
+  treadmill hiding behind it; it is now carried high and kept small, because the
+  belt is the thing you are meant to be looking at. Forty-odd boxes apiece
+  across ten machines, merged into three draws.
+- **Sparks run the rails** in each pad's own accent colour, drifting when the
+  row is idle and sprinting under a dino. A machine that only changes
+  *brightness* when you stand on it reads as a lamp; what says *running* is
+  something with a direction to it. One instanced mesh per pad, so the whole row
+  costs ten draws for the lot, and the row lights up as a ladder of colours
+  rather than ten of the same machine.
+- **Standing on a pad means standing on the belt.** The test was a circle of
+  radius 2.1 round the middle, from when the pad was a square slab: it counted
+  you while you stood on the *neighbouring* machine's edge and stopped counting
+  you two metres up a belt you were still on. It is now the machine's own
+  rectangle. That is also what freed the row - the machines sit 4.6 apart
+  instead of 5.6, which is where the tenth one came from.
+- **Two machines are free.** Everything past the second is gated on a rebirth,
+  and before your first one a row of nine locked machines and one usable reads
+  as a wall rather than as a gym.
+- **Dressing is kept off the belt.** Several rung dressings lay their pieces
+  round a *circle*, which was right for a square slab and put pieces on the
+  running surface of a six-metre belt. `fitToRow` now pushes anything that would
+  stand on the belt out into the band between it and the next machine.
 - **The treadmills are turned a quarter turn**, so the belt runs across the row
   toward the walkway rather than along it - laid end to end they read as nine
   planks rather than a rank of machines, and the dino ran sideways down its own
@@ -442,6 +499,28 @@ All balance lives in `src/data/` — no numbers are hardcoded in components.
   along the row.
 - **Saves are debounced** to localStorage through `systems/persistence.js`, the
   single place storage is touched, and flushed on tab hide.
+- **Each tier is its own animal** (`data/builds.js`). Every dino in the game
+  used to be one barrel-chested body with things bolted on: the same torso,
+  neck, head and tail whether it was called a Hatchling or a Triceratops, with
+  colour and markings doing the entire job of telling them apart. A "Stegosaur"
+  that is a Rex with plates glued on is not a stegosaur. A **build** is a set of
+  proportions - torso length and girth, neck carriage, head size, snout length,
+  jaw, tail, leg length, stance - written as multipliers on the shape the model
+  already described, so `1` everywhere is exactly the old dino. Boxes take
+  non-uniform scaling without complaint, so nine silhouettes cost the same as
+  one did: a Hatchling is mostly head, a Raptor is long and low on tall legs, an
+  Ankylosaur is the widest and lowest thing in the game, a Spinosaur has the
+  sail and the crocodile jaws, and a Rex is the one with the mouth.
+- **The lower jaw hangs on its own hinge**, so a dino can be caught mid-roar.
+  It used to be a slab welded under the skull, which meant every animal in the
+  game had its mouth shut - including the ones whose whole character is the size
+  of what they can open. Each build sets a resting angle; the hinge is in the
+  rig, so anything that wants to make one roar has a handle to pull.
+- **Back plates come in three arrangements** (`plateRow`). A single row of
+  blades was doing duty as a stegosaur's plates, a spinosaur's sail *and* a
+  colossus's armour, which is why none of the three read as itself: `double`
+  staggers two rows, `sail` joins the spines with a web so it reads as one fin,
+  `single` is the old row, `none` is a smooth back.
 - **Every dino stands on the floor rather than in it** (`data/stance.js`).
   `PrimitiveDino` claimed "feet on y = 0" in its own doc comment and had never
   been true: hips are hand-placed round numbers while a foot's reach below its
@@ -453,6 +532,76 @@ All balance lives in `src/data/` — no numbers are hardcoded in components.
   part where it was drawn relative to every other part, and a quadruped's
   shoulder is *derived* from the difference in leg length instead of chosen, so
   all four feet stay on one plane if a leg is ever retuned.
+
+## What the ground does
+
+A chamber used to be grass, rocks and a wall - a floor rather than a place. Each
+biome now says what its **ground** does (`data/areas.js`), and it is one feature
+either way: a shaped hole with something floating in it.
+
+- **Jungle, ice and marsh get water**: a pond with a pale shallow shelf round
+  its rim, lily pads on it, reeds standing in the edges and, two thirds of the
+  time, a **plank walk across it**. The bridge is the one piece of scenery in a
+  chamber that somebody *built*, which is what makes a level read as a place
+  people pass through rather than as a landscape.
+- **Volcano and the rift get lava, as a crust** (`crust`). The same shape read
+  inside out: instead of a pool with things floating on it, the surface is tiled
+  with slabs on a jittered grid, each cut a little short of its own cell and
+  standing proud of the melt. What is left between them is a network of thin
+  glowing lines - a rock floor with cracks through it, rather than an orange
+  puddle with stepping stones in it. The bright shelf shrinks to a thin edge
+  there too; at pond width it read as a sheet of yellow paper on the floor.
+
+The outline is a handful of overlapping lobes rather than one rectangle, because
+a rectangular pond reads as a swimming pool. **Fallen logs** lie across the floor
+too - one long block with a snapped branch does more for a clearing than a dozen
+more pebbles, because it is the only thing out there with a direction to it.
+
+All of it is instanced: a whole waterway with its bridge is about seven draw
+calls, and the arena went from 796 to 916 draw calls a frame for the lot.
+
+Leaves hanging in off the ledges were tried here too, and taken back out: they
+buried the terraces they were supposed to frame.
+
+Two things this had to get right, both of them checked by `ground.test.mjs`:
+
+- **Nothing is built where the game happens.** `blockedGround` asks about a
+  *point*, which is right for a blade of grass and wrong for a pond - the centre
+  of a pool can be well clear of the fighting pad while its far lobe lies across
+  it. `fitsOnFloor` checks each piece with its own reach, against the pad, the
+  doorway with its return pads, and the walls.
+- **A level that asks for three pools gets three pools.** Placement is *tried*
+  up to fourteen times rather than attempted once and abandoned, because the
+  first version silently dropped a level's scenery whenever the first guess
+  landed somewhere it could not go.
+- **A bridge is a line, not a disc.** The first version asked whether a circle
+  the length of the whole span would fit, which it never does, so no level in
+  the game had a bridge and nothing said so. Each plank is checked where it
+  actually lies, and the walkway is only laid if four fifths of it has somewhere
+  to be - half a bridge is worse than none.
+
+## Seeing it: `npm run shot`
+
+Arithmetic can tell you a dino's feet land on zero. It cannot tell you whether
+the dino looks like a dino. `npm run shot [name] [x y z] [targetX targetY targetZ]`
+boots the real app in headless Chrome, points the camera and writes a PNG into
+`shots/`. `SHOT_SCENE=arena` and `SHOT_STAGE=n` photograph a level instead of
+the hub.
+
+Two things make it work where `--screenshot` does not: headless Chrome never
+composites, so `requestAnimationFrame` never fires and r3f's loop never runs
+(frames are stepped by hand through `advance`), and the drawing buffer is not
+preserved, so the canvas is read with `toDataURL` in the same task as the render
+that filled it. Camera coordinates are chamber-local, because the corridor lays
+levels forty units apart and Stage 18 is six hundred and eighty units down the
+-Z axis.
+
+It has already earned itself: the first pass at pool water rendered as a black
+hole in the floor (a slightly metallic, low-roughness surface with no
+environment map to reflect), and the second rendered white (the material block
+declares its own local `ground` for the floor texture, which shadowed the biome
+feature and handed every pool colour `undefined`). Neither is visible in a test
+suite and both are obvious in a picture.
 
 ## Running on a weak machine
 
@@ -468,11 +617,18 @@ and triangles off `WebGLRenderer.info`. Per frame:
 | | draw calls | triangles |
 |---|---|---|
 | Hub, before any of this | 2,862 | 264K |
-| Hub, High | 2,488 | 264K |
-| Hub, Medium | 2,488 | 245K |
-| **Hub, Low** | **1,612** | **146K** |
-| Arena, High | 796 | 205K |
-| **Arena, Low** | **646** | **99K** |
+| Hub, High | 2,630 | 308K |
+| Hub, Medium | 2,626 | 279K |
+| **Hub, Low** | **1,720** | **165K** |
+| Arena, High | 916 | 260K |
+| **Arena, Low** | **742** | **121K** |
+
+Both scenes have since been given more to draw - each tier its own animal with a
+hinged jaw, and a floor with water, bridges, logs and overhanging leaves on it -
+so the triangle counts are higher than the merging work left them. Draw calls
+are what a weak machine runs out of first, and those are still below where they
+started: the hub was 2,862 with one setting and is 1,720 on Low with everything
+in it.
 
 **No preset makes anything disappear.** An earlier version of this dropped the
 podium dinos beyond a radius on Low and Medium, and walking the gallery meant

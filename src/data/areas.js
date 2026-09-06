@@ -25,6 +25,23 @@ export const AREA_TRANSITION_SECONDS = 1.4
 export const AREAS = [
   {
     id: 'jungle',
+    /*
+     * What the ground itself does. A chamber that is only grass and rock reads
+     * as a floor; a pond with a pale shelf round it and lily pads on it reads
+     * as a place. The same feature carries every biome - a shaped hole with
+     * something floating in it - so only the colours change.
+     */
+    ground: {
+      kind: 'water',
+      pool: '#2fa8c9',
+      shallow: '#7fe3e0',
+      rim: '#8c6a4f',
+      pad: '#57b843',
+      reed: '#4faa39',
+      glow: 0,
+      logs: 3,
+      pools: 3,
+    },
     name: 'Jungle Hollow',
     fromStage: 1,
     toStage: 15,
@@ -62,6 +79,22 @@ export const AREAS = [
   },
   {
     id: 'volcano',
+    // Crust with the molten rock showing through the cracks, and cooled slabs
+    // to cross it on. Same builder, read inside out.
+    ground: {
+      kind: 'lava',
+      // Slabs laid over the melt, so what you read is a rock floor with
+      // glowing cracks through it rather than an orange puddle.
+      crust: true,
+      pool: '#ff7a18',
+      shallow: '#ffcf5c',
+      rim: '#2e1f24',
+      pad: '#4a4a55',
+      reed: '#6b3a2a',
+      glow: 1.5,
+      logs: 2,
+      pools: 4,
+    },
     name: 'Ember Caldera',
     fromStage: 16,
     toStage: 30,
@@ -92,6 +125,18 @@ export const AREAS = [
   },
   {
     id: 'ice',
+    // Meltwater, frozen at the edges. The pale shelf is the ice shelf.
+    ground: {
+      kind: 'water',
+      pool: '#4aa8d8',
+      shallow: '#cfefff',
+      rim: '#9dc4d8',
+      pad: '#e8f7ff',
+      reed: '#8fc7dd',
+      glow: 0.15,
+      logs: 2,
+      pools: 2,
+    },
     name: 'Frost Hollow',
     fromStage: 31,
     toStage: 45,
@@ -122,6 +167,18 @@ export const AREAS = [
   },
   {
     id: 'marsh',
+    // Standing water, most of the floor. This is the one that is mostly bog.
+    ground: {
+      kind: 'water',
+      pool: '#3f6b4a',
+      shallow: '#7fae74',
+      rim: '#4a4230',
+      pad: '#6fae4a',
+      reed: '#8fae4f',
+      glow: 0,
+      logs: 4,
+      pools: 4,
+    },
     name: 'Toxic Marsh',
     fromStage: 46,
     toStage: 60,
@@ -152,6 +209,19 @@ export const AREAS = [
   },
   {
     id: 'cosmic',
+    // Not water at all - a hole with light coming up out of it.
+    ground: {
+      kind: 'lava',
+      crust: true,
+      pool: '#a56bff',
+      shallow: '#e0c6ff',
+      rim: '#2a2350',
+      pad: '#5b4a8f',
+      reed: '#8f7ae0',
+      glow: 1.8,
+      logs: 1,
+      pools: 3,
+    },
     name: 'Cosmic Rift',
     fromStage: 61,
     toStage: 75,

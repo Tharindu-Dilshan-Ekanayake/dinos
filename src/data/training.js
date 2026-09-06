@@ -27,7 +27,37 @@
 export const TRAIN_FLUSH_INTERVAL = 0.25
 
 /** How close to a pad's centre you must stand to be training on it. */
-export const PAD_RADIUS = 2.1
+/**
+ * The belt you have to be standing on for a machine to count you.
+ *
+ * This used to be a circle of radius 2.1 round the pad's centre, from when the
+ * pad was a 4.5m square slab. The machine is now long and narrow - a 1.9m belt
+ * running six metres - so a circle is the wrong shape twice over: it counted
+ * you while you stood on the *neighbouring* machine's edge, and it stopped
+ * counting you two metres up a belt you were still standing on.
+ *
+ * Measured in the pad's own frame, before its quarter turn: local X runs along
+ * the row, local Z down the belt.
+ */
+export const BELT = {
+  /** A little wider than the 1.86m belt, so the edge is forgiving. */
+  halfWidth: 1.35,
+  halfLength: 3.1,
+  centreZ: 0.1,
+}
+
+/**
+ * Is the player on this machine's belt?
+ *
+ * Takes the world-space offset from the pad. The pad is turned a quarter turn,
+ * which puts its local X along the row (world +Z) and its local Z down the belt
+ * (world -X).
+ */
+export function onBelt(dx, dz) {
+  return (
+    Math.abs(dz) <= BELT.halfWidth && Math.abs(-dx - BELT.centreZ) <= BELT.halfLength
+  )
+}
 
 /**
  * `deco` is the pad's own dressing - see `buildPadDecor` below.
@@ -39,13 +69,19 @@ export const PAD_RADIUS = 2.1
  */
 export const TRAINING_PADS = [
   { id: 'pad1', multiplier: 1, requiresRebirths: 0, color: '#e2e8f0', accent: '#94a3b8', deco: 'plates' },
+  /*
+   * A second free machine. Everything past this one is gated on a rebirth, so
+   * before your first one the whole row is nine locked machines and one you can
+   * actually use - which makes the row read as a wall rather than as a gym.
+   */
+  { id: 'pad1b', multiplier: 1, requiresRebirths: 0, color: '#bae6fd', accent: '#38bdf8', deco: 'orbs' },
   { id: 'pad2', multiplier: 2, requiresRebirths: 1, color: '#fde68a', accent: '#f59e0b', deco: 'ingots' },
   { id: 'pad3', multiplier: 3, requiresRebirths: 3, color: '#c4b5fd', accent: '#8b5cf6', deco: 'crystals' },
   { id: 'pad5', multiplier: 5, requiresRebirths: 6, color: '#a7f3d0', accent: '#10b981', deco: 'grove' },
   { id: 'pad8', multiplier: 8, requiresRebirths: 9, color: '#fca5a5', accent: '#ef4444', deco: 'lava' },
   { id: 'pad12', multiplier: 12, requiresRebirths: 12, color: '#93c5fd', accent: '#3b82f6', deco: 'ice' },
   { id: 'pad18', multiplier: 18, requiresRebirths: 15, color: '#f9a8d4', accent: '#ec4899', deco: 'hazard' },
-  { id: 'pad26', multiplier: 26, requiresRebirths: 20, color: '#5eead4', accent: '#14b8a6', deco: 'orbs' },
+  { id: 'pad26', multiplier: 26, requiresRebirths: 20, color: '#5eead4', accent: '#14b8a6', deco: 'coils' },
   { id: 'pad40', multiplier: 40, requiresRebirths: 26, color: '#fdba74', accent: '#f97316', deco: 'flames' },
 ]
 
@@ -82,7 +118,15 @@ const CORNERS = [
  * The pad itself is turned a quarter turn so the belt runs toward the walkway,
  * which puts its local **X** along the row. That is the axis squeezed here.
  */
-const ROW_HALF = 2.6
+/*
+ * Narrowed with the machine. The deck is three metres across the row now, not
+ * four and a half, so dressing pinned at 2.6 stood a clear metre off the side
+ * of the thing it was meant to belong to - and left no room to close the row up.
+ *
+ * It cannot go much below this: the machines are 4.6 apart, so 2.2 either side
+ * is all the room there is before one pad's dressing is standing on the next.
+ */
+const ROW_HALF = 2.2
 const MAX_DEPTH = 0.55
 
 /**
@@ -96,10 +140,27 @@ const MAX_DEPTH = 0.55
 function fitToRow(items) {
   for (const item of items) {
     item.scale[0] = Math.min(item.scale[0], MAX_DEPTH)
-    const limit = ROW_HALF - item.scale[0] / 2
-    if (Math.abs(item.position[0]) > limit) {
-      item.position[0] = Math.sign(item.position[0]) * limit
+    const outer = ROW_HALF - item.scale[0] / 2
+    /*
+     * The band a piece is allowed to stand in: clear of the belt on the inside,
+     * clear of the next machine on the outside.
+     *
+     * Several dressings lay their pieces round a *circle* - crust round a rim,
+     * spikes round a rim - which was right when the pad was a square slab and
+     * is wrong now that it is a six-metre belt. The pieces at the top and
+     * bottom of that circle were standing on the running surface.
+     */
+    const inner = BELT.halfWidth + item.scale[0] / 2
+    const onTheBelt =
+      Math.abs(item.position[0]) < inner &&
+      Math.abs(item.position[2] - BELT.centreZ) - item.scale[2] / 2 < BELT.halfLength
+
+    if (onTheBelt) {
+      item.position[0] = (Math.sign(item.position[0]) || 1) * Math.min(inner, outer)
+    } else if (Math.abs(item.position[0]) > outer) {
+      item.position[0] = Math.sign(item.position[0]) * outer
     }
+
     // A piece pushed onto the row's axis must not also be long, or its corner
     // reaches back over the belt.
     if (Math.abs(item.position[2]) < PAD_HALF) {
@@ -256,6 +317,23 @@ export function buildPadDecor(kind, seed = 0) {
           rotation: rand() * Math.PI,
           tilt: 0.5,
         })
+      }
+      break
+
+    case 'coils':
+      // Transformer coils: a squat drum with rings stacked up it, arcing.
+      for (const [sx, sz] of CORNERS) {
+        const x = sx * (PAD_HALF + 0.15)
+        const z = sz * (PAD_HALF + 0.15)
+        post(dull, x, z, 0.72, 0.5)
+        for (let i = 0; i < 4; i++) {
+          const into = i % 2 === 0 ? lit : dull
+          into.push({
+            position: [x, 0.82 + i * 0.3, z],
+            scale: [0.6 - i * 0.06, 0.18, 0.6 - i * 0.06],
+            rotation: rand() * Math.PI,
+          })
+        }
       }
       break
 

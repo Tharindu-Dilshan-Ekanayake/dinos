@@ -223,8 +223,12 @@ export const TRAINING_ROW = {
    * Short enough that the last machine stops well clear of the entrance's
    * grass shoulder. The row used to run to z=-35.6 with the shoulder beginning
    * at -35, so the deepest treadmill was buried in a bank of grass.
+   *
+   * Closed up from 5.6 when the machines were rebuilt long and narrow: a deck
+   * three metres across the row instead of four and a half leaves room for a
+   * tenth machine in less space than nine used to take.
    */
-  spacing: -5.6,
+  spacing: -4.6,
 }
 
 export const TRAINING_POSITIONS = TRAINING_PADS.map((_, i) => [
@@ -232,6 +236,24 @@ export const TRAINING_POSITIONS = TRAINING_PADS.map((_, i) => [
   0,
   TRAINING_ROW.startZ + i * TRAINING_ROW.spacing,
 ])
+
+/* --------------------------------------------------------------- hub board */
+
+/**
+ * Where the game's own sign stands.
+ *
+ * Over the treadmill row, against the fence, facing across it. Training is the
+ * longest anybody stands still in this game, so that is the wall worth putting
+ * a sign on - and from the walkway it closes off the right-hand side of the
+ * hub, which was open lawn behind the machines.
+ */
+export const HUB_BOARD = {
+  position: [TRAINING_ROW.x + 6.5, 0, TRAINING_ROW.startZ - 6],
+  /** Turned to face back across the treadmills, toward the walkway. */
+  rotationY: -Math.PI / 2,
+  /** Half the frame's width, for the walk-into guard. */
+  halfWidth: 8.4,
+}
 
 /* ------------------------------------------------------- rebirth pedestals */
 
@@ -385,6 +407,13 @@ const ENTRANCE_WALL_OBSTACLES = (() => {
 })()
 
 export const OBSTACLES = [
+  // The board's two legs. Turned a quarter turn, so they stand apart along Z.
+  // The screen itself is well overhead.
+  ...[-1, 1].map((side) => ({
+    x: HUB_BOARD.position[0],
+    z: HUB_BOARD.position[2] + side * 7.4,
+    radius: 1,
+  })),
   ...PODIUMS.map((p) => ({ x: p.position[0], z: p.position[2], radius: PODIUM_RADIUS })),
   ...REBIRTH_POSITIONS.map((p) => ({ x: p[0], z: p[2], radius: PEDESTAL_RADIUS })),
   ...ENTRANCE_WALL_OBSTACLES,

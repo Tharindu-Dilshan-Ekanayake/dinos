@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import {
-  PAD_RADIUS,
+  onBelt,
   TRAIN_FLUSH_INTERVAL,
   padRate,
   padUnlocked,
@@ -45,7 +45,7 @@ export default function TrainingSystem() {
       const position = TRAINING_POSITIONS[i]
       const dx = playerPosition.x - position[0]
       const dz = playerPosition.z - position[2]
-      if (dx * dx + dz * dz < PAD_RADIUS * PAD_RADIUS) {
+      if (onBelt(dx, dz)) {
         current = padUnlocked(pad, rebirths) ? pad : null
         break
       }
