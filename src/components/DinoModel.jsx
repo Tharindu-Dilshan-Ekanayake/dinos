@@ -3,6 +3,7 @@ import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import ModelFallback from './ModelFallback.jsx'
+import { HIPS, LEGS, groundOffset } from '../data/stance.js'
 
 /**
  * The dino, shared by every place one appears: the arena fighter, the player
@@ -426,8 +427,12 @@ export function PrimitiveDino({ evolution, materials, rig }) {
       tail: tailBoxes(evolution),
       // Front and back limbs differ in build; both sides of a pair share one
       // description, and therefore one merged geometry.
-      front: quad ? legBoxes(0.92, 0.82, true) : armBoxes(),
-      back: legBoxes(quad ? 1.05 : 1.2, quad ? 0.9 : 1, true),
+      front: quad
+        ? legBoxes(LEGS.quadFront.thickness, LEGS.quadFront.length, true)
+        : armBoxes(),
+      back: quad
+        ? legBoxes(LEGS.quadBack.thickness, LEGS.quadBack.length, true)
+        : legBoxes(LEGS.bipedBack.thickness, LEGS.bipedBack.length, true),
     }),
     [evolution, quad]
   )
@@ -444,10 +449,17 @@ export function PrimitiveDino({ evolution, materials, rig }) {
     if (rig) rig.current[key] = node
   }
 
-  const frontHip = quad ? [0.5, 1.0, 0.46] : [0.66, 1.2, 0.5]
+  const frontHip = quad ? HIPS.quadFront : HIPS.bipedArm
+  const backHip = quad ? HIPS.quadBack : HIPS.bipedBack
 
+  /*
+   * The hips are round numbers and the legs are not, so the feet landed a few
+   * hundredths off the floor - a biped's *under* it. Shifting the whole animal
+   * rather than its hips keeps the thighs socketed in the body exactly as
+   * drawn; see data/stance.js.
+   */
   return (
-    <group>
+    <group position-y={groundOffset(quad)}>
       <group ref={assign('body')}>
         <PartMeshes groups={torso} materials={materials} />
 
@@ -466,10 +478,10 @@ export function PrimitiveDino({ evolution, materials, rig }) {
           <PartMeshes groups={front} materials={materials} />
         </group>
 
-        <group ref={assign('legBackL')} position={[-0.5, 1.06, -0.46]}>
+        <group ref={assign('legBackL')} position={[backHip[0], backHip[1], -backHip[2]]}>
           <PartMeshes groups={back} materials={materials} />
         </group>
-        <group ref={assign('legBackR')} position={[-0.5, 1.06, 0.46]}>
+        <group ref={assign('legBackR')} position={backHip}>
           <PartMeshes groups={back} materials={materials} />
         </group>
       </group>

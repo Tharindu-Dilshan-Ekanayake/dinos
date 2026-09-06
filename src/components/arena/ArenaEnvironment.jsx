@@ -20,6 +20,7 @@ import VoxelClouds from '../VoxelClouds.jsx'
 import Chamber from './Chamber.jsx'
 import HubApproach from './HubApproach.jsx'
 import Weather from './Weather.jsx'
+import { useQuality } from '../../systems/useQuality.js'
 
 const tmpColor = new THREE.Color()
 const WHITE = new THREE.Color('#ffffff')
@@ -68,6 +69,11 @@ const SKY_RADIUS = HORIZON_DISTANCE * 1.35
  * the one ahead - so the cost stays flat however deep the run goes.
  */
 export default function ArenaEnvironment() {
+  // A 512 map is a quarter of the pixels to fill and a quarter of the memory
+  // to sample, which on a weak GPU is the difference between shadows being
+  // affordable and being switched off entirely.
+  const { shadowMapSize } = useQuality()
+
   const stageIndex = useGameStore((s) => s.stageIndex)
   const scene = useThree((s) => s.scene)
 
@@ -276,7 +282,7 @@ export default function ArenaEnvironment() {
         position={[6, 14, 8]}
         intensity={1.85}
         castShadow
-        shadow-mapSize={[1024, 1024]}
+        shadow-mapSize={[shadowMapSize, shadowMapSize]}
         shadow-camera-left={-20}
         shadow-camera-right={20}
         shadow-camera-top={20}

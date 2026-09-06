@@ -8,6 +8,8 @@ trademarks or UI chrome.
 npm install
 npm run dev          # http://localhost:5173
 npm run build
+npm run smoke        # boots the app in headless Chrome and fails on any error
+npm run budget       # draw calls and triangles, per scene, per graphics preset
 npm run server       # optional leaderboard server, ws://localhost:8787
 ```
 
@@ -440,6 +442,87 @@ All balance lives in `src/data/` — no numbers are hardcoded in components.
   along the row.
 - **Saves are debounced** to localStorage through `systems/persistence.js`, the
   single place storage is touched, and flushed on tab hide.
+- **Every dino stands on the floor rather than in it** (`data/stance.js`).
+  `PrimitiveDino` claimed "feet on y = 0" in its own doc comment and had never
+  been true: hips are hand-placed round numbers while a foot's reach below its
+  hip falls out of the leg's *length*, and the two arithmetics never met. A
+  biped's hind feet were 0.060 below the ground - most of a foot swallowed by
+  the floor once multiplied by a late tier's scale - while a quadruped hovered
+  0.042 over it and stood nose-up on its front claws, 0.022 higher again. The
+  whole animal is now offset so its lowest foot lands on zero, which keeps every
+  part where it was drawn relative to every other part, and a quadruped's
+  shoulder is *derived* from the difference in leg length instead of chosen, so
+  all four feet stay on one plane if a leg is ever retuned.
+
+## Running on a weak machine
+
+There are three graphics presets, picked automatically from the machine's core
+and memory counts and overridable in Settings. Nothing about the game changes
+between them - every level, prop and podium is where it always was - only how
+much work is done to show it.
+
+`npm run budget` is where the numbers come from: it boots the real app in
+headless Chrome, drives it into each scene at each preset, and reads draw calls
+and triangles off `WebGLRenderer.info`. Per frame:
+
+| | draw calls | triangles |
+|---|---|---|
+| Hub, before any of this | 2,862 | 264K |
+| Hub, High | 2,488 | 264K |
+| Hub, Medium | 2,488 | 245K |
+| **Hub, Low** | **1,612** | **146K** |
+| Arena, High | 796 | 205K |
+| **Arena, Low** | **646** | **99K** |
+
+**No preset makes anything disappear.** An earlier version of this dropped the
+podium dinos beyond a radius on Low and Medium, and walking the gallery meant
+watching the far half of it wink out. That is a worse game, not a faster one -
+the point of the row is to see what you are working toward. Every level, prop,
+podium and dino is drawn at every setting; what changes is how much work goes
+into drawing it. `perf.test.mjs` asserts no preset carries a hiding distance.
+
+The draw-call column is the one that matters. Integrated graphics run out of
+*submissions* long before they run out of triangles or pixels. So:
+
+- **Boxes that were always drawn together are merged** (`MergedBoxes`). A
+  treadmill's handrails, posts, console and bollards are sixteen meshes and
+  there are nine treadmills; a fence run is a draw call per post. Welded per
+  material they are a handful of buffers, and the picture is identical to the
+  pixel. This is the version of "cheaper" that costs the player nothing, so it
+  applies at **every** setting - it is most of why High got faster too. Shadow
+  casting is part of the merge key, so a console slab still casts while the
+  20cm rail beside it does not.
+- **Shadows are a whole second render pass**, and dropping them takes a third
+  of the hub's draw calls and nearly half its triangles with them. That is the
+  one real difference Low makes, and it is the biggest single saving available.
+  Medium keeps shadows at a 512 map - a quarter of the pixels to fill and to
+  sample.
+- **Scenery is built to a budget** (`detailCount`). Three chambers are mounted
+  at once, so the arena's dressing is a few hundred instanced pieces per level;
+  Low halves it, Medium takes a fifth off. It is all instanced, so this buys
+  triangles and memory rather than draw calls - which is why it comes third.
+- **Pixel ratio and antialiasing** come last, because a scene made of hard
+  edges loses least by giving them up.
+
+The hub's remaining cost is the gallery itself: twelve podium dinos at ~20
+draws each, because each is a rigged animal whose legs and tail move. Merging
+those would take the hub under a thousand calls, at the price of the podium
+dinos becoming still statues. That is a look-and-feel decision, not a
+performance one, so it has not been taken.
+
+Two things that helped everywhere, at every setting:
+
+- **The world no longer waits on a font.** drei's `<Text>` suspends while its
+  font loads, and with no `font` given troika fetches Roboto from
+  fonts.gstatic.com - every one of those sat inside the scene's single Suspense
+  boundary, so the *entire 3D world* waited on a third-party download before
+  drawing a triangle, and on a blocked or offline connection never rendered at
+  all. `SceneText` gives each label its own boundary, which turns that from
+  fatal to cosmetic: the world comes up at once, the writing arrives when it
+  can.
+- **Rails and bollards stopped casting shadows.** A shadow from a 20cm
+  handrail is not worth a draw call on the shadow pass at any setting.
+
 - **`npm run smoke` is what says the app works**, not `npm run build`. Vite only
   bundles - it resolves no names across modules, so a component referencing an
   import that was dropped builds perfectly and then throws the instant React

@@ -16,6 +16,7 @@ import { treeBoxes } from '../../data/foliage.js'
 import { mergeBoxesByMaterial } from '../../systems/mergeBoxes.js'
 import { voxelMaterial } from '../../systems/voxelTexture.js'
 import InstancedBlocks from '../InstancedBlocks.jsx'
+import MergedBoxes, { useMergedBoxes } from '../MergedBoxes.jsx'
 
 /**
  * The hub's terrain: a checkered stone concourse, bright grass lanes either
@@ -157,36 +158,44 @@ function useLobbyMaterials() {
 /** Half-width of the ground the arena entrance occupies: gap plus both walls. */
 const ENTRANCE_HALF_SPAN = ARENA_ENTRANCE.gapHalfWidth + ARENA_ENTRANCE.wallWidth
 
-/** Timber fence: posts with two rails, matching the hub's blocky look. */
+/**
+ * Timber fence: posts with two rails, matching the hub's blocky look.
+ *
+ * A run of ten posts was ten draw calls for a thing that never moves. The posts
+ * and the rails are welded into one mesh per timber colour - the same fence,
+ * submitted twice instead of a dozen times.
+ */
 function Fence({ materials, from, to, x, axis = 'z' }) {
-  const posts = useMemo(() => {
-    const out = []
+  const groups = useMergedBoxes(() => {
     const step = 6
     const start = Math.min(from, to)
     const end = Math.max(from, to)
-    for (let v = start; v <= end; v += step) out.push(v)
-    return out
-  }, [from, to])
+    const length = Math.abs(to - from)
+    const centre = (from + to) / 2
+    const boxes = []
 
-  const length = Math.abs(to - from)
-  const centre = (from + to) / 2
-
-  const postPos = (v) => (axis === 'z' ? [x, 2.2, v] : [v, 2.2, x])
-  const railSize = axis === 'z' ? [0.4, 0.55, length] : [length, 0.55, 0.4]
-  const railPos = (y) => (axis === 'z' ? [x, y, centre] : [centre, y, x])
+    for (let v = start; v <= end; v += step) {
+      boxes.push({
+        material: 'post',
+        position: axis === 'z' ? [x, 2.2, v] : [v, 2.2, x],
+        size: [0.7, 4.4, 0.7],
+        shadow: true,
+      })
+    }
+    for (const y of [1.5, 3.1]) {
+      boxes.push({
+        material: 'rail',
+        position: axis === 'z' ? [x, y, centre] : [centre, y, x],
+        size: axis === 'z' ? [0.4, 0.55, length] : [length, 0.55, 0.4],
+        shadow: true,
+      })
+    }
+    return boxes
+  }, [from, to, x, axis])
 
   return (
-    <group>
-      {posts.map((v) => (
-        <mesh key={v} material={materials.post} position={postPos(v)} castShadow receiveShadow>
-          <boxGeometry args={[0.7, 4.4, 0.7]} />
-        </mesh>
-      ))}
-      {[1.5, 3.1].map((y) => (
-        <mesh key={y} material={materials.rail} position={railPos(y)} castShadow receiveShadow>
-          <boxGeometry args={railSize} />
-        </mesh>
-      ))}
+    <group name="Fence">
+      <MergedBoxes groups={groups} materials={materials} />
     </group>
   )
 }

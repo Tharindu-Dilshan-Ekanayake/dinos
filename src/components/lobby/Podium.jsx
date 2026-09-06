@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Billboard, Text } from '@react-three/drei'
+import { Billboard } from '@react-three/drei'
+import Text from '../SceneText.jsx'
 import * as THREE from 'three'
 import { EVOLUTIONS } from '../../data/evolutions.js'
 import { formatNumber } from '../../data/progression.js'
@@ -128,6 +129,7 @@ export default function Podium({ podium }) {
 
   return (
     <group
+      name="Podium"
       position={podium.position}
       // onClick, not onPointerDown: a mouse drag that starts here is the
       // camera orbit, and must not also trigger the prop.
@@ -158,7 +160,9 @@ export default function Podium({ podium }) {
         />
       </mesh>
 
-      {/* The tier's dino, facing the walkway */}
+      {/* The tier's dino, facing the walkway. Always drawn: the gallery is the
+          reason to walk down this row, and a podium whose dino fades out as you
+          approach the far end of it is a worse game, not a faster one. */}
       <group ref={spinner} position={[0, 1.1, 0]} scale={evolution.scale * PODIUM_DINO_SCALE}>
         {/*
           Offset so the axis runs through the animal's middle rather than its

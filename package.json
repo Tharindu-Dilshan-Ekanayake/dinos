@@ -8,7 +8,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "server": "node server/leaderboard-server.js",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "budget": "node scripts/budget.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^9.114.3",

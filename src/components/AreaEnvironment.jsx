@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { AREAS, AREA_TRANSITION_SECONDS } from '../data/areas.js'
 import { useGameStore } from '../store/useGameStore.js'
+import { useQuality } from '../systems/useQuality.js'
 
 /**
  * Procedural gradient sky.
@@ -58,6 +59,11 @@ function useScatter(count) {
 }
 
 export default function AreaEnvironment() {
+  // A 512 map is a quarter of the pixels to fill and a quarter of the memory
+  // to sample, which on a weak GPU is the difference between shadows being
+  // affordable and being switched off entirely.
+  const { shadowMapSize } = useQuality()
+
   const areaIndex = useGameStore((s) => s.areaIndex)
   const scene = useThree((s) => s.scene)
 
@@ -159,7 +165,7 @@ export default function AreaEnvironment() {
         position={[5, 9, 6]}
         intensity={1.9}
         castShadow
-        shadow-mapSize={[1024, 1024]}
+        shadow-mapSize={[shadowMapSize, shadowMapSize]}
         shadow-camera-left={-12}
         shadow-camera-right={12}
         shadow-camera-top={12}

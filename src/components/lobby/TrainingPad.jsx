@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { Billboard, Text } from '@react-three/drei'
+import { Billboard } from '@react-three/drei'
+import Text from '../SceneText.jsx'
 import * as THREE from 'three'
 import { PAD_RADIUS, buildPadDecor, padRate, padUnlocked } from '../../data/training.js'
 import { formatNumber } from '../../data/progression.js'
@@ -8,6 +9,7 @@ import { useGameStore } from '../../store/useGameStore.js'
 import { playerPosition } from '../../systems/playerState.js'
 import { voxelTexture } from '../../systems/voxelTexture.js'
 import InstancedBlocks from '../InstancedBlocks.jsx'
+import MergedBoxes, { mergeBoxes } from '../MergedBoxes.jsx'
 
 /**
  * A training pad: stand on it and your dino trains, adding permanent Damage at
@@ -17,6 +19,45 @@ import InstancedBlocks from '../InstancedBlocks.jsx'
  * useFrame against the shared player position, so a row of nine pads costs no
  * React renders while you walk the hub.
  */
+/**
+ * The machine's fittings, as boxes rather than as JSX.
+ *
+ * Identical on every pad - only the colours differ - so this is merged once at
+ * module scope and the geometry is shared by all nine. See MergedBoxes.
+ */
+const FURNITURE = mergeBoxes([
+  ...[-1, 1].flatMap((side) => [
+    ...[-1.3, 1.3].map((z) => ({
+      material: 'base',
+      position: [side * 1.95, 0.62, z],
+      size: [0.2, 1.24, 0.2],
+    })),
+    {
+      material: 'frame',
+      position: [side * 1.95, 1.28, 0],
+      size: [0.24, 0.24, 3],
+      shadow: true,
+    },
+  ]),
+
+  // The console you would hold on to, at the head of the belt.
+  { material: 'base', position: [0, 0.85, -1.95], size: [3.5, 0.34, 0.3], shadow: true },
+  {
+    material: 'lamp',
+    position: [0, 1.16, -1.99],
+    size: [2.1, 0.62, 0.12],
+    rotation: [-0.42, 0, 0],
+  },
+
+  // Corner bollards with lit caps - it looks powered now.
+  ...[-1, 1].flatMap((sx) =>
+    [-1, 1].flatMap((sz) => [
+      { material: 'base', position: [sx * 2.05, 0.5, sz * 2.05], size: [0.42, 1, 0.42] },
+      { material: 'lamp', position: [sx * 2.05, 1.12, sz * 2.05], size: [0.32, 0.26, 0.32] },
+    ])
+  ),
+])
+
 export default function TrainingPad({ pad, position }) {
   const rebirths = useGameStore((s) => s.rebirths)
   // What the sign promises is what the pad pays: your own damage per click,
@@ -154,7 +195,7 @@ export default function TrainingPad({ pad, position }) {
      * row the machines read as nine planks end to end rather than as a rank of
      * treadmills - and the dino ran sideways down its own belt.
      */
-    <group position={position} rotation-y={-Math.PI / 2}>
+    <group name="TrainingPad" position={position} rotation-y={-Math.PI / 2}>
       {/* A stepped machine: dark plinth, bright frame, belt on top. */}
       <mesh material={materials.base} position={[0, 0.09, 0]} receiveShadow castShadow>
         <boxGeometry args={[4.5, 0.18, 4.5]} />
@@ -174,45 +215,14 @@ export default function TrainingPad({ pad, position }) {
       ))}
 
       {/*
-        Handrails down both sides and a console across the front - the three
-        things that make a machine read as a treadmill rather than as a lit
-        slab. Shared by every pad, so a rung's own dressing is free to be
-        whatever that rung is about.
+        Handrails down both sides, a console across the front and lit corner
+        bollards - the things that make a machine read as a treadmill rather
+        than as a lit slab. Sixteen boxes apiece across nine machines, merged
+        down to a handful of draws: the same boxes in the same places, just not
+        submitted one at a time. Posts and bollards do not cast, because a
+        shadow from a 20cm rail is not worth a pass over the shadow map.
       */}
-      {[-1, 1].map((side) => (
-        <group key={side} position={[side * 1.95, 0, 0]}>
-          {[-1.3, 1.3].map((z) => (
-            <mesh key={z} material={materials.base} position={[0, 0.62, z]} castShadow>
-              <boxGeometry args={[0.2, 1.24, 0.2]} />
-            </mesh>
-          ))}
-          <mesh material={materials.frame} position={[0, 1.28, 0]} castShadow>
-            <boxGeometry args={[0.24, 0.24, 3]} />
-          </mesh>
-        </group>
-      ))}
-
-      {/* The console you would hold on to, at the head of the belt. */}
-      <mesh material={materials.base} position={[0, 0.85, -1.95]} castShadow>
-        <boxGeometry args={[3.5, 0.34, 0.3]} />
-      </mesh>
-      <mesh material={materials.lamp} position={[0, 1.16, -1.99]} rotation-x={-0.42}>
-        <boxGeometry args={[2.1, 0.62, 0.12]} />
-      </mesh>
-
-      {/* Corner bollards with lit caps - it looks powered now. */}
-      {[-1, 1].map((sx) =>
-        [-1, 1].map((sz) => (
-          <group key={`${sx}-${sz}`} position={[sx * 2.05, 0, sz * 2.05]}>
-            <mesh material={materials.base} position={[0, 0.5, 0]} castShadow>
-              <boxGeometry args={[0.42, 1, 0.42]} />
-            </mesh>
-            <mesh material={materials.lamp} position={[0, 1.12, 0]}>
-              <boxGeometry args={[0.32, 0.26, 0.32]} />
-            </mesh>
-          </group>
-        ))
-      )}
+      <MergedBoxes groups={FURNITURE} materials={materials} />
 
       {/*
         The pad's own dressing - bullion, crystals, a lava crust, ice spikes,

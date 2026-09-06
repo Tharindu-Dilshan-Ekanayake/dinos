@@ -333,7 +333,7 @@ export default function ArenaGate() {
   })
 
   return (
-    <group>
+    <group name="ArenaGate">
       {/* Retaining walls either side of the gap */}
       {[-1, 1].map((side) => (
         <group key={side} position={[side * WALL_CENTRE_X, 0, WALL_MID_Z]}>

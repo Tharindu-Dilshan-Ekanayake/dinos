@@ -1,4 +1,4 @@
-import { Text } from '@react-three/drei'
+import Text from './SceneText.jsx'
 
 /**
  * A line of chunky cartoon lettering: a dark copy sunk behind a bright one.

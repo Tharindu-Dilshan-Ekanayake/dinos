@@ -16,6 +16,8 @@ import { shadeColor } from '../../data/areas.js'
 import { voxelMaterial } from '../../systems/voxelTexture.js'
 import InstancedBlocks from '../InstancedBlocks.jsx'
 import ArenaProps from './ArenaProps.jsx'
+import { detailCount } from '../../systems/quality.js'
+import { useQuality } from '../../systems/useQuality.js'
 
 /**
  * One level's chamber, drawn at its own place in the corridor.
@@ -67,17 +69,31 @@ export default function Chamber({ palette, origin, stage = 0 }) {
    */
   const slabDepth = isMouth ? APPROACH_EDGE_Z + CHAMBER_SPAN / 2 : CHAMBER_SPAN
   const slabZ = isMouth ? (APPROACH_EDGE_Z - CHAMBER_SPAN / 2) / 2 : 0
-  const props = useMemo(() => buildArenaProps(blocks, stage), [blocks, stage])
-  const veins = useMemo(() => buildGlowVeins(), [])
+  /*
+   * Dressing is built to a budget. Three chambers are mounted at once, so what
+   * looks like "a few rocks" is a few hundred pieces of geometry per level
+   * before anything of the fight is drawn. It is all instanced, so this buys
+   * triangles and memory rather than draw calls - which is what the weakest
+   * machines run out of first.
+   */
+  const { detail } = useQuality()
+  const props = useMemo(
+    () => buildArenaProps(blocks, stage, detailCount(44, detail)),
+    [blocks, stage, detail]
+  )
+  const veins = useMemo(() => buildGlowVeins(detailCount(26, detail)), [detail])
 
   // Per-level dressing: the walls repeat down the corridor, the scatter on
   // them does not.
   const details = useMemo(() => buildCliffDetails(blocks, stage), [blocks, stage])
   const patches = useMemo(() => {
-    const all = buildGroundPatches(stage)
+    const all = buildGroundPatches(stage, detailCount(18, detail))
     return { light: all.filter((p) => p.light), dark: all.filter((p) => !p.light) }
-  }, [stage])
-  const scatter = useMemo(() => buildGroundScatter(stage), [stage])
+  }, [stage, detail])
+  const scatter = useMemo(
+    () => buildGroundScatter(stage, detailCount(46, detail), detailCount(18, detail)),
+    [stage, detail]
+  )
 
   // Terraces split by tier so the walls read as depth rather than one mass.
   const tiers = useMemo(
