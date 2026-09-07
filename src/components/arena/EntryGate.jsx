@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import { ARENA, ENTRY_TRIGGER, chamberOrigin } from '../../data/arena.js'
 import { paletteForStage } from '../../data/areas.js'
 import { voxelMaterial } from '../../systems/voxelTexture.js'
+import { DECAL } from '../../systems/decal.js'
 
 const WIDTH = ARENA.gapHalfWidth * 2
 
@@ -94,6 +95,7 @@ export default function EntryGate({ stage }) {
           opacity={0.18}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
+          {...DECAL}
           fog={false}
         />
       </mesh>

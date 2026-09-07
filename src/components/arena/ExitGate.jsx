@@ -14,6 +14,7 @@ import { useGameStore } from '../../store/useGameStore.js'
 import { EVENTS, emit } from '../../systems/events.js'
 import { voxelMaterial } from '../../systems/voxelTexture.js'
 import HeadlineText from '../HeadlineText.jsx'
+import { DECAL } from '../../systems/decal.js'
 
 const WIDTH = ARENA.gapHalfWidth * 2
 /** Tall and slim, so the gateway reads from the far end of the chamber. */
@@ -180,6 +181,7 @@ export default function ExitGate({ stage, active = true, sealed }) {
             opacity={SHUT_OPACITY}
             side={THREE.DoubleSide}
             depthWrite={false}
+          {...DECAL}
             fog={false}
           />
         </mesh>
@@ -223,6 +225,7 @@ export default function ExitGate({ stage, active = true, sealed }) {
             opacity={0}
             blending={THREE.AdditiveBlending}
             depthWrite={false}
+          {...DECAL}
             fog={false}
           />
         </mesh>

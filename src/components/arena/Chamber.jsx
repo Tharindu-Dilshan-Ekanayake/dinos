@@ -20,6 +20,7 @@ import InstancedBlocks from '../InstancedBlocks.jsx'
 import ArenaProps from './ArenaProps.jsx'
 import { detailCount } from '../../systems/quality.js'
 import { useQuality } from '../../systems/useQuality.js'
+import { DECAL, DECAL_ABOVE } from '../../systems/decal.js'
 
 /**
  * One level's chamber, drawn at its own place in the corridor.
@@ -233,6 +234,9 @@ export default function Chamber({ palette, origin, stage = 0 }) {
        * and unaffected by tone mapping, while water is just a dark surface.
        */
       pool: new THREE.MeshStandardMaterial({
+        // Two plates a couple of centimetres apart across a whole pond: the
+        // shelf is painted on the floor and the water is painted on the shelf.
+        ...DECAL_ABOVE,
         color: feature.pool,
         /*
          * Rough and unmetallic on purpose. A polished, slightly metallic
@@ -251,6 +255,7 @@ export default function Chamber({ palette, origin, stage = 0 }) {
       // The pale shelf round the edge. Half of what makes a pond read as
       // shallow at its rim and deep in its middle.
       shallow: new THREE.MeshStandardMaterial({
+        ...DECAL,
         color: feature.shallow,
         roughness: 0.7,
         metalness: 0,
@@ -283,6 +288,8 @@ export default function Chamber({ palette, origin, stage = 0 }) {
         seed: 211,
       }),
       glow: new THREE.MeshBasicMaterial({
+        // Veins lying flat on the chamber floor.
+        ...DECAL,
         color: palette.glow,
         transparent: true,
         opacity: palette.glowStrength * 0.7,

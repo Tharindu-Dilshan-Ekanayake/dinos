@@ -5,6 +5,7 @@ import UIOverlay from './components/UIOverlay.jsx'
 import LoadingVeil from './components/LoadingVeil.jsx'
 import { unlockAudio } from './systems/audio.js'
 import { useQuality } from './systems/useQuality.js'
+import { useGameStore } from './store/useGameStore.js'
 
 export default function App() {
   /*
@@ -36,18 +37,49 @@ export default function App() {
         // Cap the pixel ratio: phones with dpr 3+ would otherwise render 9x the
         // pixels for no visible gain on a scene this stylised.
         dpr={quality.dpr}
-        gl={{ antialias: quality.antialias, powerPreference: 'high-performance' }}
+        gl={{
+          antialias: quality.antialias,
+          powerPreference: 'high-performance',
+          // Keeps depth precision usable across the long stage corridor.
+          logarithmicDepthBuffer: true,
+        }}
         /*
          * The far plane has to clear the skydome, which now sits well past the
          * fog so that three chambers of corridor can be seen in front of it.
          * At the old 140 the far end of the corridor was simply clipped away.
          */
-        camera={{ position: [0, 3.1, 12.2], fov: 40, near: 0.1, far: 460 }}
+        /*
+         * `near` at 0.5, not 0.1.
+         *
+         * The depth buffer's precision is spent according to the ratio between
+         * the near and far planes, and almost all of it goes to the first few
+         * units. At 0.1/460 that ratio is 4600:1 and surfaces a few centimetres
+         * apart forty units away - a path lying on paving, a lily pad on water,
+         * a marking on a dino - land in the same depth bucket and tear against
+         * each other as the camera moves. That is the flicker.
+         *
+         * Nothing is ever within half a unit of this camera: it orbits the
+         * player at ten units minimum. So this is five times the precision
+         * everywhere, for nothing.
+         */
+        camera={{ position: [0, 3.1, 12.2], fov: 40, near: 0.5, far: 460 }}
         onCreated={(state) => {
           // A handle for scripts/budget.mjs, which measures draw calls and
           // triangles in a real browser. `import.meta.env.DEV` is a literal at
           // build time, so this block is not in the shipped bundle at all.
-          if (import.meta.env.DEV) window.__scene = state
+          if (import.meta.env.DEV) {
+            window.__scene = state
+            /*
+             * The store, from *this* module instance.
+             *
+             * A script that imports the store by URL can end up with a second
+             * copy - Vite gives the app's own import an HMR query string, and a
+             * different URL is a different module. Driving that copy changes
+             * nothing the app can see, which reads as "the call did nothing"
+             * and cost a long diagnosis once already.
+             */
+            window.__store = useGameStore
+          }
         }}
       >
         <Suspense fallback={null}>

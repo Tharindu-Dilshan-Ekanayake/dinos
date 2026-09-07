@@ -16,10 +16,10 @@ import { EVENTS, emit } from '../../systems/events.js'
 import { consumeInteract } from '../../systems/input.js'
 import { playerPosition } from '../../systems/playerState.js'
 import ArenaGate from './ArenaGate.jsx'
+import EntranceGate from './EntranceGate.jsx'
 import FightCatcher from './FightCatcher.jsx'
 import LobbyCamera from './LobbyCamera.jsx'
 import LobbyEnvironment from './LobbyEnvironment.jsx'
-import HubBoard from './HubBoard.jsx'
 import LobbyGround from './LobbyGround.jsx'
 import Player from './Player.jsx'
 import Podium from './Podium.jsx'
@@ -104,7 +104,7 @@ function Interactions() {
   return null
 }
 
-export default function LobbyScene() {
+export default function LobbyScene({ includePlayer = true }) {
   return (
     <>
       <LobbyCamera clamp={clampToPlaza} />
@@ -132,8 +132,8 @@ export default function LobbyScene() {
       ))}
 
       <ArenaGate />
-      <HubBoard />
-      <Player />
+      <EntranceGate />
+      {includePlayer && <Player />}
       <TrainingSystem />
       <Interactions />
     </>

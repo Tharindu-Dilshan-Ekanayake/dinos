@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import { AREA_TRANSITION_SECONDS, paletteForStage } from '../../data/areas.js'
+import { paletteForStage } from '../../data/areas.js'
 import { APPROACH_EDGE_Z, chamberOrigin, chamberWindow } from '../../data/arena.js'
 import { MAX_STAGES } from '../../data/stages.js'
 import {
@@ -196,7 +196,8 @@ export default function ArenaEnvironment() {
 
   useFrame((_, delta) => {
     const target = paletteForStage(stageIndex)
-    const t = Math.min(1, delta / AREA_TRANSITION_SECONDS)
+    // Stage changes should feel like walking into the next colorful room.
+    const t = 1
 
     // The stage's own hour of the day, plus whatever the weather is adding.
     const warmth = mood.warmth

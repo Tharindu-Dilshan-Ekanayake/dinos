@@ -17,6 +17,8 @@ import { mergeBoxesByMaterial } from '../../systems/mergeBoxes.js'
 import { voxelMaterial } from '../../systems/voxelTexture.js'
 import InstancedBlocks from '../InstancedBlocks.jsx'
 import MergedBoxes, { useMergedBoxes } from '../MergedBoxes.jsx'
+import { DECAL, DECAL_ABOVE } from '../../systems/decal.js'
+import { ARENA_RAMP_TOP_Z } from '../../data/lobby.js'
 
 /**
  * The hub's terrain: a checkered stone concourse, bright grass lanes either
@@ -56,8 +58,9 @@ function useLobbyMaterials() {
      * the grass - in this world every surface is a moulded brick, and a smooth
      * plaza in the middle of it was the one place that gave the game away.
      */
-    const paving = (color, accent, repeat, seed) =>
+    const paving = (color, accent, repeat, seed, decal) =>
       voxelMaterial(color, {
+        decal,
         pattern: 'studs',
         cells: 4,
         variance: 0.05,
@@ -121,14 +124,20 @@ function useLobbyMaterials() {
       stoneWide: masonry([2, 1], 71),
       stoneNarrow: masonry([1, 1], 73),
       stoneStep: masonry([7, 1], 79),
-      concourse: paving('#fdf6e3', '#ffd9a0', [PLAZA.halfWidth / 2, plazaLength / 4], 83),
+      /*
+       * Painted onto the kerb slab, one centimetre above it, and the lanes are
+       * painted on top of that again. Two stacked overlays need two different
+       * biases or they fight each other instead of the thing underneath.
+       */
+      concourse: paving('#e4ecf5', '#c6d4e4', [PLAZA.halfWidth / 2, plazaLength / 4], 83, DECAL),
       tierSurface: paving(
-        '#fdf6e3',
-        '#ffd9a0',
+        '#e4ecf5',
+        '#c6d4e4',
         [(LEFT_TIER.maxX - LEFT_TIER.minX) / 4, (LEFT_TIER.maxZ - LEFT_TIER.minZ) / 4],
-        89
+        89,
+        DECAL
       ),
-      lane: paving('#8ce85f', '#6ad04a', [1.6, plazaLength / 4], 97),
+      lane: paving('#8ce85f', '#6ad04a', [1.6, plazaLength / 4], 97, DECAL_ABOVE),
       kerb: make(LOBBY_PALETTE.pathEdge),
       post: make('#a9713f'),
       rail: make('#c98a4b'),
@@ -248,6 +257,42 @@ function Trees({ materials }) {
   )
 }
 
+/** A colorful tree line behind the far stone wall. */
+function BackTrees({ materials }) {
+  const trees = useMemo(
+    () =>
+      [
+        [-28, 6.8, -65, 1.25],
+        [-20, 7.4, -68, 1.05],
+        [-11, 6.6, -66, 1.35],
+        [0, 7.8, -69, 1.15],
+        [11, 6.6, -66, 1.3],
+        [21, 7.2, -68, 1.05],
+        [29, 6.8, -65, 1.25],
+      ].map(([x, y, z, scale]) => ({ position: [x, y, z], scale, rotation: 0 })),
+    []
+  )
+
+  const groups = useMemo(() => mergeBoxesByMaterial(treeBoxes({ seed: 41 })), [])
+  useEffect(() => () => groups.forEach((group) => group.geometry.dispose()), [groups])
+
+  const tint = {
+    trunk: materials.trunk,
+    leaf: materials.leafDark,
+    leafLight: materials.leaf,
+  }
+
+  return groups.map((group) => (
+    <InstancedBlocks
+      key={`back-${group.key}`}
+      items={trees}
+      geometry={group.geometry}
+      material={tint[group.key] ?? materials.leaf}
+      castShadow
+    />
+  ))
+}
+
 /**
  * Real stones standing proud of the raised tier's faces.
  *
@@ -357,11 +402,34 @@ function Tufts({ materials }) {
   return <InstancedBlocks items={items} geometry={geometry} material={materials.tuft} />
 }
 
+/**
+ * Where the grass runs between the paving, measured out from the centre line.
+ *
+ * The walkway itself stays stone - it is the way to the arena and wants to read
+ * as a road - and the lanes either side of it alternate from there outward.
+ */
+const LANES = [
+  { x: PLAZA.walkwayHalfWidth + 3.4, width: 6.4 },
+  { x: PLAZA.walkwayHalfWidth + 14, width: 5.4 },
+  { x: PLAZA.walkwayHalfWidth + 22, width: 4.4 },
+]
+
 export default function LobbyGround() {
   const materials = useLobbyMaterials()
 
-  const length = PLAZA.from - PLAZA.to
-  const centreZ = (PLAZA.from + PLAZA.to) / 2
+  /*
+   * The paving runs from the plaza's far end all the way through the gateway
+   * to where the arena takes over.
+   *
+   * It used to stop at `PLAZA.to`, seven metres short of the handover, and the
+   * ground beyond it was the grass field a paving-lip lower. So the last stretch
+   * of the walk into Stage 1 was over a raised strip with a step down either
+   * side of it - the small mound you could see between the entrance walls. Now
+   * the whole approach is one flat surface at the height the player walks at.
+   */
+  const paveTo = Math.min(PLAZA.to, ARENA_RAMP_TOP_Z - 1)
+  const length = PLAZA.from - paveTo
+  const centreZ = (PLAZA.from + paveTo) / 2
   const half = PLAZA.halfWidth
   const walk = PLAZA.walkwayHalfWidth
   const y = PLAZA.pathHeight
@@ -411,50 +479,71 @@ export default function LobbyGround() {
 
   const backMaterials = useMemo(
     () => [
-      materials.soil,
-      materials.soil,
+      materials.stoneLong,
+      materials.stoneLong,
       materials.backTop,
-      materials.soil,
-      materials.soil,
-      materials.soil,
+      materials.stoneLong,
+      materials.stoneLong,
+      materials.stoneLong,
     ],
     [materials]
   )
 
   return (
     <group>
-      {/* Base grass field under everything */}
-      <mesh material={materials.field} position={[0, -0.4, centreZ]} receiveShadow>
+      {/*
+        The paved plaza's top face lands on y = 0, and the grass is dropped a
+        lip below it.
+        
+        It used to be the other way round - grass at zero and paving a quarter
+        of a metre above it - while `groundHeightAt` reported zero for the whole
+        plaza. So the walking surface and the drawn surface were 25cm apart: the
+        dino waded through the floor to the ankle, and every pad and pedestal
+        placed at ground level was sunk by exactly the same amount, which is
+        most of why the training row read as painted lines rather than slabs.
+        The path is still raised over the grass; it is the grass that moved.
+      */}
+      <mesh material={materials.field} position={[0, -0.4 - y, centreZ]} receiveShadow>
         <boxGeometry args={[260, 0.8, 280]} />
       </mesh>
 
       {/* Concourse slab + kerb */}
-      <mesh material={materials.kerb} position={[0, y / 2, centreZ]} receiveShadow>
+      <mesh material={materials.kerb} position={[0, -y / 2, centreZ]} receiveShadow>
         <boxGeometry args={[half * 2 + 1.4, y, length + 1.4]} />
       </mesh>
 
       {/* Checkered stone either side of the lanes */}
       <mesh
         material={materials.concourse}
-        position={[0, y + 0.01, centreZ]}
+        position={[0, 0.01, centreZ]}
         rotation-x={-Math.PI / 2}
         receiveShadow
       >
         <planeGeometry args={[half * 2, length]} />
       </mesh>
 
-      {/* Bright grass lanes flanking the central walkway */}
-      {[-1, 1].map((side) => (
-        <mesh
-          key={side}
-          material={materials.lane}
-          position={[side * (walk + 3.4), y + 0.02, centreZ]}
-          rotation-x={-Math.PI / 2}
-          receiveShadow
-        >
-          <planeGeometry args={[6.4, length]} />
-        </mesh>
-      ))}
+      {/*
+        Grass lanes running the length of the plaza.
+        
+        Two of them, flanking the walkway, left the rest of the floor a single
+        sheet of stone thirty metres across. The reference stripes the whole
+        plaza - tile, grass, tile, grass - which is what breaks that sheet into
+        lanes you can see yourself walking down, and what tells you how far
+        along you are without a single sign.
+      */}
+      {LANES.map(({ x, width }) =>
+        [-1, 1].map((side) => (
+          <mesh
+            key={`${x}-${side}`}
+            material={materials.lane}
+            position={[side * x, 0.02, centreZ]}
+            rotation-x={-Math.PI / 2}
+            receiveShadow
+          >
+            <planeGeometry args={[width, length]} />
+          </mesh>
+        ))
+      )}
 
       {/* Terraces */}
       {TERRACES.map((terrace, i) =>
@@ -535,14 +624,29 @@ export default function LobbyGround() {
       })}
 
       {/* Back terrace closing the far end */}
-      <mesh
-        material={backMaterials}
-        position={[0, 1.7, PLAZA.to - 9]}
-        receiveShadow
-        castShadow
-      >
-        <boxGeometry args={[half * 2 + 70, 3.4, 14]} />
-      </mesh>
+      {/*
+        The terrace closing the back of the plaza, in two halves.
+        
+        It was one 126-metre block straight across the far end - which was fine
+        while the hub sat six metres *below* the arena and you climbed a ramp
+        through it. Flat, it is a wall standing in the walkway: the small mound
+        between the entrance walls was this, and nothing else.
+      */}
+      {[-1, 1].map((side) => {
+        const inner = ARENA_ENTRANCE.gapHalfWidth
+        const outer = half + 35
+        return (
+          <mesh
+            key={side}
+            material={backMaterials}
+            position={[side * ((inner + outer) / 2), 3.4, PLAZA.to - 9]}
+            receiveShadow
+            castShadow
+          >
+            <boxGeometry args={[outer - inner, 6.8, 14]} />
+          </mesh>
+        )
+      })}
 
       {/* Fences along the plaza edges and across the back */}
       {[-1, 1].map((side) => (
@@ -575,6 +679,7 @@ export default function LobbyGround() {
       <Tufts materials={materials} />
       <ToyBlocks />
       <Trees materials={materials} />
+      <BackTrees materials={materials} />
     </group>
   )
 }

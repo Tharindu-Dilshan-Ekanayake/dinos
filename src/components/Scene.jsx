@@ -2,6 +2,8 @@ import { Suspense, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import ArenaScene from './ArenaScene.jsx'
 import LobbyScene from './lobby/LobbyScene.jsx'
+import ArenaPlayer from './arena/ArenaPlayer.jsx'
+import Player from './lobby/Player.jsx'
 import { useGameStore } from '../store/useGameStore.js'
 import { updateTimeScale } from '../systems/timeScale.js'
 import { EVENTS, emit } from '../systems/events.js'
@@ -42,12 +44,15 @@ function TimeStepper() {
  */
 export default function Scene() {
   const scene = useGameStore((s) => s.scene)
+  const inLobby = scene === 'lobby'
 
   return (
     <>
       <TimeStepper />
       <Suspense fallback={null}>
-        {scene === 'lobby' ? <LobbyScene /> : <ArenaScene />}
+        {inLobby ? <LobbyScene includePlayer={false} /> : <ArenaScene includePlayer={false} />}
+        <Player active={inLobby} />
+        <ArenaPlayer active={!inLobby} />
       </Suspense>
     </>
   )

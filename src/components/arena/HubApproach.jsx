@@ -78,11 +78,10 @@ export default function HubApproach() {
       wall: voxelMaterial(p.wall, {
         pattern: 'studs',
         cells: 6,
-        variance: 0.1,
-        fleck: 0.34,
+        variance: 0.09,
         fleckDepth: 0.22,
-        repeat: [2, 3],
-        seed: 29,
+        repeat: [3, 2],
+        seed: 17,
       }),
       wallTop: new THREE.MeshStandardMaterial({
         color: p.wallTop,
@@ -115,7 +114,7 @@ export default function HubApproach() {
   )
 
   return (
-    <group>
+    <group name="HubApproach">
       <InstancedBlocks items={items.grass} geometry={block} material={materials.grass} />
       <InstancedBlocks items={items.paving} geometry={block} material={materials.paving} />
       <InstancedBlocks items={items.walkway} geometry={block} material={materials.walkway} />

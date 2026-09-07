@@ -14,6 +14,7 @@ import { useGameStore } from '../../store/useGameStore.js'
 import { playerPosition } from '../../systems/playerState.js'
 import { voxelMaterial } from '../../systems/voxelTexture.js'
 import DinoModel, { animateDinoRig, useDinoMaterials, useDinoRig } from '../DinoModel.jsx'
+import { DECAL } from '../../systems/decal.js'
 
 /**
  * One evolution podium: a pad, the tier's dino turning on top, and a sign
@@ -30,7 +31,6 @@ export default function Podium({ podium }) {
   // Only re-renders when the player's progress actually changes state here.
   const unlocked = useGameStore((s) => podium.evolutionIndex <= s.unlockedIndex)
   const equipped = useGameStore((s) => podium.evolutionIndex === s.equippedIndex)
-  const totalWins = useGameStore((s) => s.totalWins)
   const equip = useGameStore((s) => s.equipEvolution)
 
   /*
@@ -57,9 +57,12 @@ export default function Podium({ podium }) {
   const padMaterial = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: unlocked ? evolution.aura : '#3a4152',
+        color: evolution.aura,
         roughness: 0.55,
         flatShading: true,
+        emissive: new THREE.Color(evolution.aura),
+        // Lit when it is yours, and merely coloured when it is not.
+        emissiveIntensity: unlocked ? 0.35 : 0.08,
       }),
     [unlocked, evolution.aura]
   )
@@ -68,7 +71,16 @@ export default function Podium({ podium }) {
   // stands in rather than being a smooth pedestal dropped into it.
   const baseMaterial = useMemo(
     () =>
-      voxelMaterial(unlocked ? '#e7ecf3' : '#5b6472', {
+      /*
+       * The same stone whether or not the tier is yours.
+       *
+       * Locked used to repaint the plinth slate grey and the top plate dark
+       * navy, which made the half of the gallery you are working *toward* the
+       * half that tells you nothing - and it is the half worth looking at. Lock
+       * is said by the label and by how brightly the pad is lit, never by
+       * taking its colour away.
+       */
+      voxelMaterial('#e7ecf3', {
         pattern: 'bricks',
         cells: 4,
         variance: 0.07,
@@ -77,7 +89,7 @@ export default function Podium({ podium }) {
         roughness: 0.85,
         seed: 61,
       }),
-    [unlocked]
+    []
   )
 
   // The pad's own material is disposed with the podium; the base's map lives
@@ -125,7 +137,6 @@ export default function Podium({ podium }) {
 
   const status = equipped ? 'EQUIPPED' : unlocked ? 'TAP TO EQUIP' : 'LOCKED'
   const statusColor = equipped ? '#86efac' : unlocked ? '#fde68a' : '#94a3b8'
-  const remaining = Math.max(0, evolution.unlockAtWins - totalWins)
 
   return (
     <group
@@ -138,24 +149,32 @@ export default function Podium({ podium }) {
         equip(podium.evolutionIndex)
       }}
     >
-      {/* Base block */}
-      <mesh material={baseMaterial} position={[0, 0.35, 0]} castShadow receiveShadow>
-        <boxGeometry args={[3.2, 0.7, 3.2]} />
+      {/*
+        A flat pad on the floor, not a pedestal.
+        
+        The gallery used to stand on knee-high plinths under signs mounted on
+        posts, which turned a row of dinos into a row of *furniture* - and from
+        anywhere down the plaza you read the signs before you read the animals.
+        In the reference the dino simply stands on a coloured slab at ground
+        level with its numbers floating over it, so the row is a row of dinos.
+      */}
+      <mesh material={baseMaterial} position={[0, 0.12, 0]} receiveShadow>
+        <boxGeometry args={[4.4, 0.24, 4.4]} />
       </mesh>
-      {/* Coloured top pad */}
-      <mesh ref={padRef} material={padMaterial} position={[0, 0.78, 0]} castShadow receiveShadow>
-        <boxGeometry args={[2.8, 0.2, 2.8]} />
+      <mesh ref={padRef} material={padMaterial} position={[0, 0.26, 0]} receiveShadow>
+        <boxGeometry args={[3.9, 0.1, 3.9]} />
       </mesh>
 
-      {/* Ground glow ring that brightens as you approach */}
-      <mesh ref={glowRef} position={[0, 0.9, 0]} rotation-x={-Math.PI / 2}>
-        <ringGeometry args={[1.5, 1.95, 24]} />
+      {/* Ground glow that brightens as you approach */}
+      <mesh ref={glowRef} position={[0, 0.32, 0]} rotation-x={-Math.PI / 2}>
+        <ringGeometry args={[1.7, 2.2, 24]} />
         <meshBasicMaterial
           color={unlocked ? evolution.aura : '#94a3b8'}
           transparent
           opacity={0.22}
           side={THREE.DoubleSide}
           depthWrite={false}
+          {...DECAL}
           fog={false}
         />
       </mesh>
@@ -163,7 +182,7 @@ export default function Podium({ podium }) {
       {/* The tier's dino, facing the walkway. Always drawn: the gallery is the
           reason to walk down this row, and a podium whose dino fades out as you
           approach the far end of it is a worse game, not a faster one. */}
-      <group ref={spinner} position={[0, 1.1, 0]} scale={evolution.scale * PODIUM_DINO_SCALE}>
+      <group ref={spinner} position={[0, 0.31, 0]} scale={evolution.scale * PODIUM_DINO_SCALE}>
         {/*
           Offset so the axis runs through the animal's middle rather than its
           hip. The tail is nearly three times as long as the snout, so turned
@@ -175,50 +194,39 @@ export default function Podium({ podium }) {
         </group>
       </group>
 
-      {/* Sign */}
-      <Billboard position={[0, 4.1, 0]}>
-        <mesh position={[0, 0, -0.02]}>
-          <planeGeometry args={[2.5, 1.08]} />
-          <meshBasicMaterial color="#0b1220" transparent opacity={0.8} fog={false} />
-        </mesh>
-
+      {/*
+        Numbers floating over the animal, with no board behind them.
+        
+        A dark panel on a post is a *sign*; outlined text hanging in the air is
+        a label on the thing it names, which is what the reference uses and what
+        keeps thirteen of these from reading as a row of billboards.
+      */}
+      <Billboard position={[0, 3.5, 0]}>
         <Text
-          position={[0, 0.33, 0]}
-          fontSize={0.23}
-          color={unlocked ? evolution.aura : '#cbd5e1'}
+          position={[0, 0.34, 0]}
+          fontSize={0.4}
+          color="#ffd166"
           anchorX="center"
           anchorY="middle"
-          outlineWidth={0.02}
-          outlineColor="#0b1220"
-          maxWidth={2.35}
+          outlineWidth={0.055}
+          outlineColor="#12100e"
         >
-          {evolution.name}
+          {`+${formatNumber(evolution.power)} / Damage`}
         </Text>
 
         <Text
-          position={[0, 0.02, 0]}
-          fontSize={0.19}
-          color="#fbbf24"
-          anchorX="center"
-          anchorY="middle"
-          outlineWidth={0.018}
-          outlineColor="#0b1220"
-        >
-          {`+${formatNumber(evolution.power)} Damage / click`}
-        </Text>
-
-        <Text
-          position={[0, -0.3, 0]}
-          fontSize={0.155}
+          position={[0, -0.08, 0]}
+          fontSize={0.32}
           color={statusColor}
           anchorX="center"
           anchorY="middle"
-          outlineWidth={0.016}
-          outlineColor="#0b1220"
+          outlineWidth={0.048}
+          outlineColor="#12100e"
         >
-          {unlocked ? status : `${formatNumber(remaining)} more wins`}
+          {unlocked ? status.toUpperCase() : `${formatNumber(evolution.unlockAtWins)} Wins`}
         </Text>
       </Billboard>
+
     </group>
   )
 }

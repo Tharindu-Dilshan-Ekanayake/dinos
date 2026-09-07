@@ -20,9 +20,9 @@ import { TRAINING_PADS } from './training.js'
 
 export const PLAZA = {
   /** Walkable half-width and length of the paved area. */
-  halfWidth: 28,
+  halfWidth: 34,
   from: 26,
-  to: -48,
+  to: -56,
   /** Height of the raised path above the grass. */
   pathHeight: 0.25,
   /** Half-width of the central walkway stripe. */
@@ -30,13 +30,6 @@ export const PLAZA = {
 }
 
 /** Keeps the player inside the plaza without needing collision meshes. */
-export const PLAYER_BOUNDS = {
-  minX: -PLAZA.halfWidth + 1.2,
-  maxX: PLAZA.halfWidth - 1.2,
-  minZ: PLAZA.to + 2.5,
-  maxZ: PLAZA.from - 2,
-}
-
 export const PLAYER_SPEED = 8.5
 export const PLAYER_TURN_SPEED = 10
 
@@ -45,21 +38,40 @@ export const PLAYER_SPAWN = [0, 0, 18]
 
 /* ----------------------------------------------------------------- palette */
 
+/*
+ * The hub breathes the same air as the level at the top of its ramp.
+ *
+ * Sky, fog colour and fog distances used to be the hub's own - a paler blue
+ * with haze starting six units further out than the Jungle Hollow's. Crossing
+ * swapped one atmosphere for the other in a single frame, which washes the
+ * whole screen a different colour at the exact moment you step through the
+ * gateway. That colour pop *is* the "teleport effect": the geometry lines up,
+ * and then the air changes. Matched to AREAS[0], the crossing has nothing left
+ * to show.
+ */
 export const LOBBY_PALETTE = {
   skyTop: '#2f7fd4',
-  skyBottom: '#9fd4f5',
-  fog: '#bfe0f2',
-  fogNear: 60,
-  fogFar: 170,
-  grass: '#5fbb46',
-  grassDark: '#4a9c37',
+  skyBottom: '#bde9ff',
+  fog: '#a9dcc0',
+  fogNear: 54,
+  fogFar: 154,
+  grass: '#6ecb3f',
+  grassDark: '#57ab31',
   /** Paving either side of the walkway. */
   path: '#b9c2cd',
   /** The lighter walkway running down the middle. */
   walkway: '#dde4ec',
   pathEdge: '#8e99a8',
-  wall: '#b08968',
-  wallTop: '#8c6a4f',
+  /*
+   * The terraces that frame the plaza are pale sandy stone, not brown earth.
+   *
+   * Dirt sides under grass lids read as a hole dug in a field. The reference
+   * hub is a *built* place - the green sits on courses of light stone the same
+   * colour as the paving, which is what makes the whole bowl read as one
+   * structure rather than as scenery dropped round a floor.
+   */
+  wall: '#cfc7a6',
+  wallTop: '#b5ad8c',
   key: '#fff6e0',
   ambient: '#cfe8ff',
 }
@@ -94,8 +106,8 @@ export const LEFT_STAIRS = {
 
 /** Surface height under a point: plaza, stairs, or the raised tier. */
 export function groundHeightAt(x, z) {
-  const stair = stairHeightAt(x, z)
-  if (stair !== null) return stair
+  const ramp = rampHeightAt(x, z)
+  if (ramp !== null) return ramp
 
   // The grass ledges either side of the entrance, one mirrored onto the other.
   const shoulder = ENTRANCE_SHOULDERS
@@ -237,24 +249,6 @@ export const TRAINING_POSITIONS = TRAINING_PADS.map((_, i) => [
   TRAINING_ROW.startZ + i * TRAINING_ROW.spacing,
 ])
 
-/* --------------------------------------------------------------- hub board */
-
-/**
- * Where the game's own sign stands.
- *
- * Over the treadmill row, against the fence, facing across it. Training is the
- * longest anybody stands still in this game, so that is the wall worth putting
- * a sign on - and from the walkway it closes off the right-hand side of the
- * hub, which was open lawn behind the machines.
- */
-export const HUB_BOARD = {
-  position: [TRAINING_ROW.x + 6.5, 0, TRAINING_ROW.startZ - 6],
-  /** Turned to face back across the treadmills, toward the walkway. */
-  rotationY: -Math.PI / 2,
-  /** Half the frame's width, for the walk-into guard. */
-  halfWidth: 8.4,
-}
-
 /* ------------------------------------------------------- rebirth pedestals */
 
 /** Rebirth milestones shown on the pedestal row. */
@@ -310,17 +304,29 @@ export const ARENA_GATE = {
  */
 export const ARENA_ENTRANCE = {
   /** Half-width of the walkable corridor between the walls. */
-  gapHalfWidth: 3.6,
+  gapHalfWidth: 5.2,
   wallWidth: 10,
-  wallHeight: 11,
+  /** Tall stone gate walls, scaled to frame the hub's main approach. */
+  wallHeight: 15,
   /** Walls run from the plaza end (near) to well past the stair top (far). */
   wallFromZ: -38,
   wallToZ: -52,
-  /** Staircase. */
-  stepCount: 10,
-  stepRise: 0.62,
-  stepRun: 1.45,
-  stepFromZ: -40.5,
+  /**
+   * The way through to the arena. Flat.
+   *
+   * It was a flight of ten steps, then a ramp. Both are *seams*: they announce
+   * that one place has ended and another is starting, and a climb also means
+   * the hub and the arena sit at different heights - so crossing between them
+   * had to move you vertically as well as horizontally, and no amount of
+   * lining up the coordinates hides that.
+   *
+   * At zero rise the two halves of the game are one plane. `APPROACH_DROP`
+   * falls out as zero, the walls stop tilting, and walking through the gateway
+   * is walking down a corridor.
+   */
+  rampRise: 0,
+  rampRun: 14.5,
+  rampFromZ: -40.5,
   /**
    * Grass shoulder either side of the walls.
    *
@@ -329,6 +335,23 @@ export const ARENA_ENTRANCE = {
    * you can get up onto rather than a wall you bounce off.
    */
   shoulderHeight: 1.8,
+}
+
+/**
+ * Where you are standing when you come back out of the arena.
+ *
+ * At the foot of the ramp, facing up the plaza - so a run ends where it began
+ * and you walk home from the doorway you left by.
+ *
+ * It used to be wherever your *arena* coordinates happened to land. Walking
+ * back out of Stage 1 leaves you around z=+10 in arena space, which is inside
+ * the hub's bounds, so nothing repositioned you at all and you simply appeared
+ * standing in the middle of the plaza with the entrance a long way behind you.
+ */
+export const HUB_ARRIVAL = {
+  position: [0, 0, ARENA_ENTRANCE.rampFromZ + 3],
+  /** Facing +Z: up the plaza, with the ramp at your back. */
+  angle: -Math.PI / 2,
 }
 
 /**
@@ -352,17 +375,41 @@ export const ENTRANCE_SHOULDERS = (() => {
   }
 })()
 
-/** Z of the top of the staircase. */
-export const ARENA_STAIR_TOP_Z =
-  ARENA_ENTRANCE.stepFromZ - ARENA_ENTRANCE.stepCount * ARENA_ENTRANCE.stepRun
+/** Z of the top of the ramp, where it meets the arena's landing. */
+export const ARENA_RAMP_TOP_Z = ARENA_ENTRANCE.rampFromZ - ARENA_ENTRANCE.rampRun
 
-/** Height of the staircase surface at a point, or null when off the stairs. */
-export function stairHeightAt(x, z) {
+/**
+ * Keeps the player inside the plaza without needing collision meshes.
+ *
+ * `minZ` reaches past the plaza's own end and up the ramp to where the arena
+ * takes over. It used to stop at the paving, which is nine metres short of the
+ * top of the climb - so once the handover moved to the top of the ramp there
+ * was no way to reach it and Stage 1 became unenterable. Walking down there is
+ * only possible inside the gateway: the controller squeezes X to the gap the
+ * moment you leave the plaza. See Player.jsx.
+ */
+export const PLAYER_BOUNDS = {
+  minX: -PLAZA.halfWidth + 1.2,
+  maxX: PLAZA.halfWidth - 1.2,
+  minZ: ARENA_RAMP_TOP_Z - 1,
+  maxZ: PLAZA.from - 2,
+}
+
+/** How steeply the ramp climbs, for anything that has to lie on it. */
+export const ARENA_RAMP_ANGLE = Math.atan2(ARENA_ENTRANCE.rampRise, ARENA_ENTRANCE.rampRun)
+
+/**
+ * Height of the ramp surface at a point, or null when off it.
+ *
+ * Linear, which is the whole point: the dino walks up a slope rather than
+ * climbing ten discrete risers, so nothing about crossing into the arena reads
+ * as crossing anything.
+ */
+export function rampHeightAt(x, z) {
   const e = ARENA_ENTRANCE
   if (Math.abs(x) > e.gapHalfWidth) return null
-  if (z > e.stepFromZ || z < ARENA_STAIR_TOP_Z) return null
-  const step = Math.floor((e.stepFromZ - z) / e.stepRun) + 1
-  return Math.min(e.stepCount, step) * e.stepRise
+  if (z > e.rampFromZ || z < ARENA_RAMP_TOP_Z) return null
+  return ((e.rampFromZ - z) / e.rampRun) * e.rampRise
 }
 
 /* --------------------------------------------------------------- collision */
@@ -407,13 +454,6 @@ const ENTRANCE_WALL_OBSTACLES = (() => {
 })()
 
 export const OBSTACLES = [
-  // The board's two legs. Turned a quarter turn, so they stand apart along Z.
-  // The screen itself is well overhead.
-  ...[-1, 1].map((side) => ({
-    x: HUB_BOARD.position[0],
-    z: HUB_BOARD.position[2] + side * 7.4,
-    radius: 1,
-  })),
   ...PODIUMS.map((p) => ({ x: p.position[0], z: p.position[2], radius: PODIUM_RADIUS })),
   ...REBIRTH_POSITIONS.map((p) => ({ x: p[0], z: p[2], radius: PEDESTAL_RADIUS })),
   ...ENTRANCE_WALL_OBSTACLES,

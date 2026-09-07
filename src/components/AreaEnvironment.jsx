@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import { AREAS, AREA_TRANSITION_SECONDS } from '../data/areas.js'
+import { AREAS } from '../data/areas.js'
 import { useGameStore } from '../store/useGameStore.js'
 import { useQuality } from '../systems/useQuality.js'
 
@@ -132,8 +132,8 @@ export default function AreaEnvironment() {
 
   useFrame((_, delta) => {
     const target = AREAS[areaIndex] ?? AREAS[0]
-    // Frame-rate independent lerp toward the target palette.
-    const t = Math.min(1, delta / AREA_TRANSITION_SECONDS)
+    // Keep the world bright and immediate when an area changes.
+    const t = 1
 
     colors.skyTop.lerp(tmpColor.set(target.skyTop), t)
     colors.skyBottom.lerp(tmpColor.set(target.skyBottom), t)

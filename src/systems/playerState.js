@@ -33,18 +33,34 @@ export const playerMotion = { velocityY: 0, grounded: true }
  */
 export const playerActivity = { training: false }
 
-/** Reset to the hub entrance, e.g. when returning from the arena. */
-export function resetPlayerPosition() {
-  playerPosition.set(...PLAYER_SPAWN)
-  playerFacing.angle = Math.PI / 2
-  playerMotion.velocityY = 0
-  playerMotion.grounded = true
+/**
+ * Whether the dino was *put* somewhere rather than walking there.
+ *
+ * The follow camera eases toward wherever the dino is, which is what makes a
+ * swing glide instead of snapping. Across a teleport that same easing becomes a
+ * six-hundred-unit fly-through of the corridor - and entering Stage 1 looked
+ * like the game was playing a cutscene at you. A camera cannot tell a long walk
+ * from a jump cut by watching the position, so the jump says so itself.
+ */
+let teleported = true
+
+/** Reads and clears the teleport flag. Camera-only. */
+export function consumeTeleport() {
+  const value = teleported
+  teleported = false
+  return value
 }
 
-/** Drop the player at an arbitrary spawn, used when entering the arena. */
-export function placePlayer(position, angle = Math.PI / 2) {
+/** Reset to the hub entrance, e.g. when returning from the arena. */
+export function resetPlayerPosition() {
+  placePlayer(PLAYER_SPAWN)
+}
+
+/** Drop the player at an arbitrary spawn, optionally without a camera cut. */
+export function placePlayer(position, angle = Math.PI / 2, { markTeleport = true } = {}) {
   playerPosition.set(position[0], position[1] ?? 0, position[2])
   playerFacing.angle = angle
   playerMotion.velocityY = 0
   playerMotion.grounded = true
+  teleported = markTeleport
 }

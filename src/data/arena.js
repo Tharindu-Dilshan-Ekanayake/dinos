@@ -6,7 +6,8 @@ import { TREE_HALF_WIDTH } from './foliage.js'
  */
 import {
   ARENA_ENTRANCE,
-  ARENA_STAIR_TOP_Z,
+  ARENA_RAMP_ANGLE,
+  ARENA_RAMP_TOP_Z,
   LEFT_TIER,
   PLAZA,
   PODIUMS,
@@ -34,7 +35,7 @@ export const ARENA = {
   /** Where the side walls stop, behind the camera. */
   frontZ: 10,
   /** Half-width of the opening left in the back wall. */
-  gapHalfWidth: 4.6,
+  gapHalfWidth: 5.4,
   /** Size of one checker square on the floor. */
   tileSize: 2.6,
   /** Radius of the raised fighting pad ring. */
@@ -196,21 +197,47 @@ export function buildArenaMouth() {
 /** Ground outside the mouth begins at the far face of the mouth wall. */
 export const APPROACH_EDGE_Z = ARENA.frontZ + MOUTH_DEPTH
 
-/** Flat ground between the doorway and the top step. */
+/** Flat ground between the doorway and the top of the ramp. */
 const LANDING_DEPTH = 4.5
 
-/** How far the hub sits below the arena floor: the staircase's whole climb. */
-export const APPROACH_DROP = ARENA_ENTRANCE.stepCount * ARENA_ENTRANCE.stepRise
+/**
+ * Where the arena hands you over to the hub, in arena coordinates.
+ *
+ * The two scenes' *walkable* ground never used to meet. The arena stopped you
+ * at the front of Stage 1's chamber and the hub stopped you at the top of its
+ * ramp, and between them lay eighteen units of mouth and landing that neither
+ * would let you stand in. So crossing was a jump however it was dressed: you
+ * were picked up on one side of the gap and put down on the other, and the
+ * camera had no way to make that look like walking.
+ *
+ * This is the one plane both scenes can put you on - the top of the hub's ramp,
+ * which is also the far edge of the arena's landing. Walk over it in either
+ * direction and you carry on from the same spot in the other scene.
+ */
+export const MOUTH_EXIT_Z = APPROACH_EDGE_Z + LANDING_DEPTH
+
+/**
+ * How far past the line you are put down.
+ *
+ * Landing exactly on the handover plane means standing on the far scene's own
+ * trigger, which sends you straight back - and then forward, and then back. A
+ * step's worth of clearance on the inside means you have arrived somewhere, and
+ * have to actually walk back over the line to leave again.
+ */
+export const SEAM_MARGIN = 1.5
+
+/** How far the hub sits below the arena floor: the ramp's whole climb. */
+export const APPROACH_DROP = ARENA_ENTRANCE.rampRise
 
 /**
  * Hub Z to arena Z.
  *
  * Both scenes run along the same axes, so the hub only has to be slid down the
- * corridor until its staircase lands on the arena's landing. X needs no
+ * corridor until the top of its ramp lands on the arena's landing. X needs no
  * mapping at all: the podiums you walk past on your left on the way in are on
  * your right looking back out, which is exactly what turning round does.
  */
-export const LOBBY_Z_OFFSET = APPROACH_EDGE_Z + LANDING_DEPTH - ARENA_STAIR_TOP_Z
+export const LOBBY_Z_OFFSET = APPROACH_EDGE_Z + LANDING_DEPTH - ARENA_RAMP_TOP_Z
 
 /** Hub Y to arena Y - the arena floor is the top of the stairs. */
 function lobbyY(y) {
@@ -220,6 +247,22 @@ function lobbyY(y) {
 /** Hub Z to arena Z. */
 function lobbyZ(z) {
   return z + LOBBY_Z_OFFSET
+}
+
+/**
+ * The same point, in the other scene's coordinates.
+ *
+ * The hub and the arena share their axes; the hub is simply slid down the
+ * corridor and dropped by the ramp's climb. So crossing between them is a
+ * change of *coordinates*, not of place - and handing the player the converted
+ * position is what makes walking over the seam look like walking.
+ */
+export function hubToArena(x, z) {
+  return [x, lobbyZ(z)]
+}
+
+export function arenaToHubPoint(x, z) {
+  return [x, z - LOBBY_Z_OFFSET]
 }
 
 /**
@@ -260,32 +303,36 @@ export function buildHubApproach() {
   // --- the ground the hub stands on ---------------------------------------
   const groundFrom = APPROACH_EDGE_Z
   const groundDepth = APPROACH_FAR_Z - groundFrom
-  slab(grass, 0, lobbyY(0), groundFrom + groundDepth / 2, 150, groundDepth)
+  // A lip below the paving, exactly as in the hub - see LobbyGround.
+  slab(grass, 0, lobbyY(-PLAZA.pathHeight), groundFrom + groundDepth / 2, 150, groundDepth)
 
   // --- paving, and the lighter walkway down the middle ---------------------
   const plazaFrom = lobbyZ(PLAZA.to)
   const plazaTo = Math.min(APPROACH_FAR_Z, lobbyZ(PLAZA.from))
   const plazaDepth = plazaTo - plazaFrom
   const plazaZ = plazaFrom + plazaDepth / 2
-  slab(paving, 0, lobbyY(PLAZA.pathHeight), plazaZ, PLAZA.halfWidth * 2, plazaDepth)
+  slab(paving, 0, lobbyY(0), plazaZ, PLAZA.halfWidth * 2, plazaDepth)
   walkway.push({
-    position: [0, lobbyY(PLAZA.pathHeight) + 0.05, plazaZ],
+    position: [0, lobbyY(0) + 0.05, plazaZ],
     scale: [PLAZA.walkwayHalfWidth * 2, 0.1, plazaDepth],
   })
 
-  // --- the landing, and the flight down ------------------------------------
+  // --- the landing, and the ramp down --------------------------------------
   slab(steps, 0, 0, APPROACH_EDGE_Z + LANDING_DEPTH / 2, e.gapHalfWidth * 2, LANDING_DEPTH)
-  for (let i = 0; i < e.stepCount; i++) {
-    // Step i counts up from the plaza, exactly as `stairHeightAt` reads them.
-    slab(
-      steps,
-      0,
-      lobbyY((i + 1) * e.stepRise),
-      lobbyZ(e.stepFromZ - (i + 0.5) * e.stepRun),
-      e.gapHalfWidth * 2,
-      e.stepRun * 1.02
-    )
-  }
+  /*
+   * The way through, now that the climb is flat: a plain slab like every other
+   * piece of ground here, filled down to the same floor. It was a tilted box
+   * back when there was a ramp, and a tilted box cannot be filled to a floor -
+   * which made it the one piece of the approach that could be seen from below.
+   */
+  slab(
+    steps,
+    0,
+    lobbyY(e.rampRise),
+    lobbyZ(e.rampFromZ - e.rampRun / 2),
+    e.gapHalfWidth * 2,
+    e.rampRun
+  )
 
   // --- the retaining walls flanking the stairs -----------------------------
   // Run back to the mouth rather than stopping where the hub stops them: from
@@ -915,7 +962,7 @@ export function buildCliffDetails(blocks, seed = 0) {
  * Nothing is ever teleported and no chamber is reused, which is what lets each
  * level carry its own palette and read as a different place.
  */
-export const CHAMBER_SPAN = 40
+export const CHAMBER_SPAN = 32
 
 /** World Z origin of a chamber. All chamber-local coordinates add this. */
 export function chamberOrigin(stageIndex) {
@@ -1241,12 +1288,14 @@ export function stageTravelTarget(stageIndex, x, z) {
   }
 
   /*
-   * Stage 1 has nothing behind it, so its near end is the way out and walking
-   * through banks the run. Narrow, and only at the mouth itself, so brushing
-   * along the front wall on the way to a Return pad never cashes you out.
+   * Stage 1 has nothing behind it, so its near end is the way out.
+   *
+   * The line is out past the mouth and the landing rather than at the chamber's
+   * front wall - see MOUTH_EXIT_Z. Crossing it hands you to the hub at the top
+   * of its ramp, which is the same place you are already standing, so walking
+   * out is a walk rather than a scene change you watch happen.
    */
-  const mouth = chamberOrigin(0) + ENTRY_TRIGGER.z - ENTRY_TRIGGER.radius
-  if (z >= mouth && Math.abs(x) <= ARENA.gapHalfWidth) return -1
+  if (z >= chamberOrigin(0) + MOUTH_EXIT_Z) return -1
 
   return null
 }

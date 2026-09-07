@@ -26,7 +26,7 @@ import IdleDamage from './IdleDamage.jsx'
  * fight. The camera, controller and input are the same ones the hub uses, so
  * moving between the two never changes how the dino handles.
  */
-export default function ArenaScene() {
+export default function ArenaScene({ includePlayer = true }) {
   // Where the open space is depends on where the dino is standing, so the
   // camera's clamp is handed the live player position rather than importing it
   // into the layout data.
@@ -49,7 +49,7 @@ export default function ArenaScene() {
 
       <ArenaFightCatcher />
       <ArenaTravel />
-      <ArenaPlayer />
+      {includePlayer && <ArenaPlayer />}
       <EnemyPack />
       <EnemyAttacks />
       <EnemyAttackEffects />
