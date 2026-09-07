@@ -2,7 +2,11 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { paletteForStage } from '../../data/areas.js'
-import { APPROACH_EDGE_Z, chamberOrigin, chamberWindow } from '../../data/arena.js'
+import {
+  APPROACH_EDGE_Z,
+  chamberOrigin,
+  chamberWindow,
+} from '../../data/arena.js'
 import { MAX_STAGES } from '../../data/stages.js'
 import {
   HORIZON_DISTANCE,
@@ -18,8 +22,6 @@ import InstancedBlocks from '../InstancedBlocks.jsx'
 import SkyBody from '../SkyBody.jsx'
 import VoxelClouds from '../VoxelClouds.jsx'
 import Chamber from './Chamber.jsx'
-import HubApproach from './HubApproach.jsx'
-import Weather from './Weather.jsx'
 import { useQuality } from '../../systems/useQuality.js'
 
 const tmpColor = new THREE.Color()
@@ -82,13 +84,16 @@ export default function ArenaEnvironment() {
   const glowLightRef = useRef()
 
   // What the air and the sky are doing at this level.
-  const weather = useMemo(() => weatherForStage(stageIndex), [stageIndex])
-  const mood = useMemo(() => skyMoodForStage(stageIndex), [stageIndex])
+  // Atmosphere is deliberately fixed across the corridor. The terrain can
+  // vary by room, but changing global fog, sky and lights at the exact
+  // boundary makes a normal walk read like a transition.
+  const weather = useMemo(() => weatherForStage(0), [])
+  const mood = useMemo(() => skyMoodForStage(0), [])
   // The skyline belongs to the biome: forested hills, smoking volcanoes, ice
   // mountains, marsh mounds or rift crystal.
   const ridge = useMemo(
-    () => buildRidge(stageIndex, mood, paletteForStage(stageIndex).ridge),
-    [stageIndex, mood]
+    () => buildRidge(0, mood, paletteForStage(0).ridge),
+    [mood]
   )
 
   /*
@@ -195,8 +200,8 @@ export default function ArenaEnvironment() {
   const bedrockRef = useRef()
 
   useFrame((_, delta) => {
-    const target = paletteForStage(stageIndex)
-    // Stage changes should feel like walking into the next colorful room.
+    const target = paletteForStage(0)
+    // Keep the shared air fixed; individual chambers carry their own palette.
     const t = 1
 
     // The stage's own hour of the day, plus whatever the weather is adding.
@@ -243,10 +248,9 @@ export default function ArenaEnvironment() {
     }
     if (ambientRef.current) ambientRef.current.color.copy(live.ambient)
 
-    const pulse = 0.75 + Math.sin(performance.now() * 0.0018) * 0.25
     if (glowLightRef.current) {
       glowLightRef.current.position.set(playerPosition.x, 1.2, playerPosition.z)
-      glowLightRef.current.intensity = live.glowStrength * pulse * 2.4
+      glowLightRef.current.intensity = live.glowStrength * 2.4
       glowLightRef.current.color.copy(live.glow)
     }
 
@@ -309,7 +313,7 @@ export default function ArenaEnvironment() {
           count={mood.clouds + (weather.cloudBoost ?? 0)}
           radius={HORIZON_DISTANCE * 0.88}
           height={mood.cloudHeight}
-          seed={8675309 + stageIndex * 977}
+          seed={8675309}
         />
         {/* Hung in the key light's own direction, so the shadows on the
             ground point away from it. */}
@@ -339,13 +343,8 @@ export default function ArenaEnvironment() {
         <planeGeometry args={[BEDROCK_SIZE, BEDROCK_SIZE]} />
       </mesh>
 
-      <Weather weather={weather} />
       {/* Nothing flies in a downpour or a blizzard. */}
       <Birds hidden={(weather.darken ?? 0) > 0.12 || (weather.fogPull ?? 0) > 0.3} />
-
-      {/* The stairs down and the hub at the bottom, off the near end of the
-          first chamber - mounted only while that chamber is. */}
-      {window_.some((chamber) => chamber.stage === 0) && <HubApproach />}
 
       {window_.map((chamber) => (
         <Chamber

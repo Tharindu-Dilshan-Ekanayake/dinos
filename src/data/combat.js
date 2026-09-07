@@ -29,14 +29,14 @@ export const MAX_PLAYER_HEALTH = 100
  * health, and a pack you are badly under-geared for still kills you quickly.
  */
 const BITE_BY_RATING = {
-  easy: 1.5,
-  fair: 2.5,
-  risky: 6,
-  blocked: 10,
+  easy: 0.6,
+  fair: 1.2,
+  risky: 2.5,
+  blocked: 4,
 }
 
 /** A boss comes alone, so it has to hit for what a whole pack would. */
-const BOSS_BITE_MULTIPLIER = 1.7
+const BOSS_BITE_MULTIPLIER = 1.2
 
 /** Damage one enemy bite does to the player. */
 export function enemyBite(clickPower, stageIndex) {
@@ -56,13 +56,13 @@ export const ENEMY_ATTACK_INTERVAL = 1.15
 export const ENEMY_ATTACK_RANGE = 3.4
 
 /** Health regained per second once nothing has touched you for a moment. */
-export const HEALTH_REGEN_PER_SECOND = 5
+export const HEALTH_REGEN_PER_SECOND = 8
 
 /** Quiet seconds before that regeneration starts. */
-export const REGEN_DELAY = 3.5
+export const REGEN_DELAY = 2
 
 /** Health handed back for clearing a level. */
-export const CLEAR_HEAL = 25
+export const CLEAR_HEAL = 50
 
 /** How often health changes are committed to the store, in seconds. */
 export const HEALTH_FLUSH_INTERVAL = 0.2

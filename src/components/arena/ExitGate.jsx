@@ -1,11 +1,9 @@
-import { useEffect, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import {
   ARENA,
   EXIT_BARRIER_Z,
   EXIT_GATE,
-  PASSAGE_HALF_WIDTH,
   chamberOrigin,
 } from '../../data/arena.js'
 import { formatNumber } from '../../data/progression.js'
@@ -32,7 +30,7 @@ const UNLOCKED = new THREE.Color('#3fa9ff')
  * there - is looked at through a sheet of blue.
  */
 const SHUT_OPACITY = 0.6
-const OPEN_OPACITY = 0.2
+const OPEN_OPACITY = 0.16
 
 /** Half the barrier's thickness, so its lettering sits on the face. */
 const FACE = 0.06
@@ -61,11 +59,6 @@ export default function ExitGate({ stage, active = true, sealed }) {
   // A boolean, not the number: this is a 3D component and re-reconciling it on
   // every click would be paid for in the frame budget.
   const strongEnough = useGameStore((s) => s.clickPower >= requiredDamage(stage + 1))
-
-  const barrierRef = useRef()
-  const barrierMat = useRef()
-  const glowRef = useRef()
-  const anim = useRef({ open: sealed ? 0 : 1, pulse: 0 })
 
   const nextIndex = stage + 1
   const atEnd = nextIndex >= MAX_STAGES
@@ -98,36 +91,6 @@ export default function ExitGate({ stage, active = true, sealed }) {
   )
 
   useEffect(() => () => Object.values(materials).forEach((m) => m.dispose()), [materials])
-
-  useFrame((_, rawDelta) => {
-    const delta = Math.min(rawDelta, 0.05)
-    const a = anim.current
-
-    // Each gate answers for its own chamber: shut until that level is down.
-    const target = sealed ? 0 : 1
-    a.open += (target - a.open) * Math.min(1, delta * 3.5)
-    a.pulse += delta * 3
-
-    /*
-     * The barrier never leaves. It used to slide into the floor when a chamber
-     * cleared, which took the gate's whole plaque with it - and a doorway that
-     * empties out says nothing about where it goes. It stays lit across the
-     * gateway and changes state instead: red while the level holds it shut,
-     * blue once it will let you through.
-     */
-    if (barrierMat.current) {
-      barrierMat.current.color.copy(LOCKED).lerp(UNLOCKED, a.open)
-      // Red is a wall and pulses like one; blue is a door standing open, so it
-      // thins out of the way of the level showing through it.
-      barrierMat.current.opacity =
-        SHUT_OPACITY +
-        (OPEN_OPACITY - SHUT_OPACITY) * a.open +
-        Math.sin(a.pulse) * 0.08 * (1 - a.open)
-    }
-    if (glowRef.current) {
-      glowRef.current.material.opacity = a.open * (0.35 + Math.sin(a.pulse * 1.4) * 0.12)
-    }
-  })
 
   // Tell the HUD what this gate is offering - the one in front of you only.
   useEffect(() => {
@@ -172,13 +135,12 @@ export default function ExitGate({ stage, active = true, sealed }) {
       {/* The seal itself, hung between the towers rather than floating in
           front of them - the pillars and the light are one gate. */}
       <group position-z={EXIT_BARRIER_Z}>
-        <mesh ref={barrierRef} position={[0, HEIGHT / 2, 0]}>
+        <mesh position={[0, HEIGHT / 2, 0]}>
           <planeGeometry args={[WIDTH, HEIGHT]} />
           <meshBasicMaterial
-            ref={barrierMat}
-            color={LOCKED}
+            color={sealed ? LOCKED : UNLOCKED}
             transparent
-            opacity={SHUT_OPACITY}
+            opacity={sealed ? SHUT_OPACITY : OPEN_OPACITY}
             side={THREE.DoubleSide}
             depthWrite={false}
           {...DECAL}
@@ -215,20 +177,6 @@ export default function ExitGate({ stage, active = true, sealed }) {
               </HeadlineText>
             </group>
           ))}
-
-        {/* Ground glow once it opens */}
-        <mesh ref={glowRef} rotation-x={-Math.PI / 2} position={[0, 0.06, 0]}>
-          <planeGeometry args={[PASSAGE_HALF_WIDTH * 2, 3]} />
-          <meshBasicMaterial
-            color="#8affa0"
-            transparent
-            opacity={0}
-            blending={THREE.AdditiveBlending}
-            depthWrite={false}
-          {...DECAL}
-            fog={false}
-          />
-        </mesh>
       </group>
     </group>
   )

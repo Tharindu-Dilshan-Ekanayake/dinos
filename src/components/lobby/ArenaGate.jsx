@@ -11,6 +11,8 @@ import {
 import {
   APPROACH_DROP,
   APPROACH_EDGE_Z,
+  ARENA,
+  CHAMBER_SPAN,
   LOBBY_Z_OFFSET,
   chamberOrigin,
 } from '../../data/arena.js'
@@ -31,12 +33,12 @@ const E = ARENA_ENTRANCE
 /**
  * How much of the corridor the hub can see up its own staircase.
  *
- * Three levels, each with its own palette and its own gateway, which is as far
- * as the hub's fog carries: the third is mostly haze and exists so the run does
- * not visibly stop at the second. Showing only Stage 1 made the climb look like
- * it led to a single room.
+ * The hub shows only the room it physically joins. Rendering Stage 2 and 3
+ * here created a second copy of those chambers before the player had crossed
+ * Stage 1, so their walls and labels could suddenly vanish at the handoff.
+ * The arena itself keeps its normal forward window once Stage 1 is entered.
  */
-const STAGES_IN_VIEW = [0, 1, 2]
+const STAGES_IN_VIEW = [0]
 
 /** Matches the arena's own gate headline, so one colour means one thing. */
 const RATING_COLOR = {
@@ -66,13 +68,7 @@ const CHAMBER_FLOOR_WIDTH = 110
  * toward you at the bottom, which is how a retaining wall is built and what
  * gives the silhouette its shoulders. `top` is where that course stops.
  */
-const WALL_COURSES = [
-  { top: 4.6, width: E.wallWidth, inset: 0 },
-  { top: 7.8, width: E.wallWidth - 1.6, inset: 0.8 },
-  { top: 10.4, width: E.wallWidth - 3.4, inset: 1.7 },
-]
-// Total wall height for unified slab rendering
-const WALL_TOTAL_HEIGHT = WALL_COURSES[WALL_COURSES.length - 1].top
+const WALL_TOTAL_HEIGHT = E.wallHeight
 
 const WALL_CENTRE_X = E.gapHalfWidth + E.wallWidth / 2
 const WALL_LENGTH = E.wallFromZ - E.wallToZ
@@ -104,7 +100,7 @@ const INNER_FACE_X = E.gapHalfWidth
  * which is what the player controller walks on, so the visible staircase and
  * the surface underfoot can never drift apart.
  */
-export default function ArenaGate() {
+export default function ArenaGate({ active = true, showPreview = true }) {
   const enterArena = useGameStore((s) => s.enterArena)
   const bestStage = useGameStore((s) => s.bestStage)
   // A rating key rather than the number itself: this is a 3D component, and it
@@ -185,6 +181,27 @@ export default function ArenaGate() {
   )
   useEffect(() => () => Object.values(geometries).forEach((g) => g.dispose()), [geometries])
 
+  // Lightweight route markers carry the visible line of stages beyond the
+  // fully built Stage 1 chamber. They keep the lobby's view long without
+  // mounting dozens of complete battle rooms a second time.
+  const distantRoute = useMemo(() => {
+    const path = []
+    const posts = []
+    for (let stage = 1; stage < MAX_STAGES; stage++) {
+      const origin = chamberOrigin(stage)
+      path.push({
+        position: [0, -0.7, origin],
+        scale: [ARENA.gapHalfWidth * 2, 0.12, CHAMBER_SPAN],
+      })
+      const z = origin + ARENA.frontZ - 1.2
+      posts.push(
+        { position: [-ARENA.gapHalfWidth - 0.45, 1.15, z], scale: [0.42, 2.3, 0.42] },
+        { position: [ARENA.gapHalfWidth + 0.45, 1.15, z], scale: [0.42, 2.3, 0.42] }
+      )
+    }
+    return { path, posts }
+  }, [])
+
   /** Grass lid, dirt sides: [+x, -x, +y, -y, +z, -z]. */
   const groundMaterials = useMemo(
     () => [
@@ -247,6 +264,7 @@ export default function ArenaGate() {
   }, [])
 
   useFrame((_, rawDelta) => {
+    if (!active) return
     const delta = Math.min(rawDelta, 0.05)
     const a = anim.current
     a.phase += delta
@@ -349,25 +367,39 @@ export default function ArenaGate() {
         by the same two numbers the arena uses to put the hub at the bottom of
         these stairs. Walk up and you arrive in the place you were looking at.
       */}
-      <group position={[0, APPROACH_DROP, -LOBBY_Z_OFFSET]}>
-        {STAGES_IN_VIEW.map((stage) => (
-          <group key={stage}>
-            <Chamber
-              stage={stage}
-              palette={paletteForStage(stage)}
-              origin={chamberOrigin(stage)}
-            />
-            {/*
-              The gateways too, so the levels read as levels from down here
-              rather than as three empty rooms. `active` false: none of these
-              is the chamber you are standing in, and a gate in the hub has
-              nothing to tell the arena's HUD.
-            */}
-            <EntryGate stage={stage} />
-            <ExitGate stage={stage} active={false} sealed />
-          </group>
-        ))}
-      </group>
+      {showPreview && (
+        <group position={[0, APPROACH_DROP, -LOBBY_Z_OFFSET]}>
+          {STAGES_IN_VIEW.map((stage) => (
+            <group key={stage}>
+              <Chamber
+                stage={stage}
+                palette={paletteForStage(stage)}
+                origin={chamberOrigin(stage)}
+              />
+              {/*
+                The gateways too, so the levels read as levels from down here
+                rather than as three empty rooms. `active` false: none of these
+                is the chamber you are standing in, and a gate in the hub has
+                nothing to tell the arena's HUD.
+              */}
+              <EntryGate stage={stage} />
+              <ExitGate stage={stage} active={false} sealed />
+            </group>
+          ))}
+          <InstancedBlocks
+            items={distantRoute.path}
+            geometry={geometries.block}
+            material={materials.tread}
+            receiveShadow
+          />
+          <InstancedBlocks
+            items={distantRoute.posts}
+            geometry={geometries.block}
+            material={materials.post}
+            castShadow
+          />
+        </group>
+      )}
 
       {/* The landing bridging the top step to the chamber's own floor. */}
       <mesh

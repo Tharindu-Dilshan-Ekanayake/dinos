@@ -1,12 +1,8 @@
-import { useEffect, useMemo, useRef } from 'react'
-import { useFrame } from '@react-three/fiber'
+import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { ARENA, ENTRY_TRIGGER, chamberOrigin } from '../../data/arena.js'
 import { paletteForStage } from '../../data/areas.js'
 import { voxelMaterial } from '../../systems/voxelTexture.js'
-import { DECAL } from '../../systems/decal.js'
-
-const WIDTH = ARENA.gapHalfWidth * 2
 
 /*
  * Low, and standing wide of the opening rather than across it.
@@ -37,9 +33,6 @@ const POST_HEIGHT = 1.7
  * the thresholds of the levels you came through rather than bare ground.
  */
 export default function EntryGate({ stage }) {
-  const glowRef = useRef()
-  const anim = useRef({ phase: 0 })
-
   /*
    * Built like everything else in the world: a coursed stone post in the
    * biome's own rock under a warm lamp.
@@ -66,13 +59,6 @@ export default function EntryGate({ stage }) {
 
   useEffect(() => () => Object.values(materials).forEach((m) => m.dispose()), [materials])
 
-  useFrame((_, rawDelta) => {
-    anim.current.phase += Math.min(rawDelta, 0.05)
-    if (glowRef.current) {
-      glowRef.current.material.opacity = 0.16 + Math.sin(anim.current.phase * 2) * 0.06
-    }
-  })
-
   return (
     <group position={[0, 0, chamberOrigin(stage) + ENTRY_TRIGGER.z]}>
       {/* Wide of the gap, so the corridor between chambers stays clear. */}
@@ -86,19 +72,6 @@ export default function EntryGate({ stage }) {
           </mesh>
         </group>
       ))}
-
-      <mesh ref={glowRef} rotation-x={-Math.PI / 2} position={[0, 0.04, 0]}>
-        <planeGeometry args={[WIDTH, 2.4]} />
-        <meshBasicMaterial
-          color="#9fd8ff"
-          transparent
-          opacity={0.18}
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-          {...DECAL}
-          fog={false}
-        />
-      </mesh>
     </group>
   )
 }

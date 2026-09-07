@@ -54,7 +54,7 @@ export const LOBBY_PALETTE = {
   skyBottom: '#bde9ff',
   fog: '#a9dcc0',
   fogNear: 54,
-  fogFar: 154,
+  fogFar: 420,
   grass: '#6ecb3f',
   grassDark: '#57ab31',
   /** Paving either side of the walkway. */
@@ -88,8 +88,8 @@ export const LOBBY_PALETTE = {
  * the row must still have tier under it.
  */
 export const LEFT_TIER = {
-  minX: -23,
-  maxX: -13.4,
+  minX: -31,
+  maxX: -21.8,
   minZ: -30,
   maxZ: 17,
   height: 2.4,
@@ -199,8 +199,8 @@ export const INTERACT_RADIUS = 3.2
  * visible from the walkway at once.
  */
 export const PODIUM_ROWS = [
-  { x: -10.2, y: 0, count: 7 },
-  { x: -18, y: LEFT_TIER.height, count: 6 },
+  { x: -18.5, y: 0, count: 7 },
+  { x: -26.4, y: LEFT_TIER.height, count: 6 },
 ]
 
 /**
@@ -229,7 +229,7 @@ export const TRAINING_PADS_LAYOUT = TRAINING_PADS
  * path between the gallery and the arena.
  */
 export const TRAINING_ROW = {
-  x: 19,
+  x: 26.5,
   startZ: 16,
   /*
    * Short enough that the last machine stops well clear of the entrance's
@@ -305,12 +305,12 @@ export const ARENA_GATE = {
 export const ARENA_ENTRANCE = {
   /** Half-width of the walkable corridor between the walls. */
   gapHalfWidth: 5.2,
-  wallWidth: 10,
+  wallWidth: 6,
   /** Tall stone gate walls, scaled to frame the hub's main approach. */
-  wallHeight: 15,
+  wallHeight: 8,
   /** Walls run from the plaza end (near) to well past the stair top (far). */
-  wallFromZ: -38,
-  wallToZ: -52,
+  wallFromZ: -46,
+  wallToZ: -58,
   /**
    * The way through to the arena. Flat.
    *
@@ -325,7 +325,7 @@ export const ARENA_ENTRANCE = {
    * is walking down a corridor.
    */
   rampRise: 0,
-  rampRun: 14.5,
+  rampRun: 3.5,
   rampFromZ: -40.5,
   /**
    * Grass shoulder either side of the walls.

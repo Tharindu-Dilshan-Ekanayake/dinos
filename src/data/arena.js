@@ -47,9 +47,9 @@ export const ARENA = {
  * what gives the walls their layered, carved-out look.
  */
 export const TIERS = [
-  { inset: 0, height: 2.4, depth: 5 },
-  { inset: 5, height: 5.2, depth: 5 },
-  { inset: 10, height: 8.6, depth: 6 },
+  { inset: 0, height: 2.4, depth: 4 },
+  { inset: 3.5, height: 5.2, depth: 4 },
+  { inset: 6, height: 8.6, depth: 4 },
 ]
 
 /** Deterministic LCG so the arena is identical on every load. */
@@ -198,7 +198,7 @@ export function buildArenaMouth() {
 export const APPROACH_EDGE_Z = ARENA.frontZ + MOUTH_DEPTH
 
 /** Flat ground between the doorway and the top of the ramp. */
-const LANDING_DEPTH = 4.5
+const LANDING_DEPTH = 1.5
 
 /**
  * Where the arena hands you over to the hub, in arena coordinates.
@@ -224,7 +224,7 @@ export const MOUTH_EXIT_Z = APPROACH_EDGE_Z + LANDING_DEPTH
  * step's worth of clearance on the inside means you have arrived somewhere, and
  * have to actually walk back over the line to leave again.
  */
-export const SEAM_MARGIN = 1.5
+export const SEAM_MARGIN = 0.35
 
 /** How far the hub sits below the arena floor: the ramp's whole climb. */
 export const APPROACH_DROP = ARENA_ENTRANCE.rampRise

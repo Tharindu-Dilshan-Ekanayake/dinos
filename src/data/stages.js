@@ -16,7 +16,7 @@ export const BOSS_EVERY = 5
  * TARGET_CLICKS_TO_CLEAR. At 4.5 a boss was a fifty-four click fight - nearly
  * half a minute of standing still in front of something that bites.
  */
-export const BOSS_HEALTH_MULTIPLIER = 2.2
+export const BOSS_HEALTH_MULTIPLIER = 1.55
 
 /**
  * Wins granted for clearing a normal stage.
@@ -25,13 +25,13 @@ export const BOSS_HEALTH_MULTIPLIER = 2.2
  * makes the next damage gate reachable. Paying out in ones made the roster
  * feel a very long way off from inside a fight.
  */
-export const BASE_WIN_REWARD = 3
+export const BASE_WIN_REWARD = 6
 
 /** Extra wins per stage cleared (linear drip so late stages stay worth it). */
-export const WIN_REWARD_PER_STAGE = 1.2
+export const WIN_REWARD_PER_STAGE = 2
 
 /** Bosses pay this much more than a normal stage. */
-export const BOSS_WIN_MULTIPLIER = 6
+export const BOSS_WIN_MULTIPLIER = 4
 
 /** Total number of stages before the loop caps out. */
 export const MAX_STAGES = 75
@@ -82,7 +82,7 @@ export function stageLabel(stageIndex) {
  * "Recommended Damage" the arena shows is simply the stage's health divided by
  * this, so the advice can never drift away from the actual health curve.
  */
-export const TARGET_CLICKS_TO_CLEAR = 12
+export const TARGET_CLICKS_TO_CLEAR = 8
 
 /**
  * Damage each level's gate demands, in order.
@@ -97,10 +97,10 @@ export const TARGET_CLICKS_TO_CLEAR = 12
  * x4) and later ones settle near x1.8, which keeps a seventy-five level ladder
  * from running off the end of arithmetic.
  */
-const ENTRY_ANCHORS = [0, 40, 375, 1500]
-const ENTRY_GROWTH_FLOOR = 1.75
-const ENTRY_GROWTH_EXTRA = 1.45
-const ENTRY_GROWTH_DECAY = 0.9
+const ENTRY_ANCHORS = [0, 12, 32, 75]
+const ENTRY_GROWTH_FLOOR = 1.42
+const ENTRY_GROWTH_EXTRA = 0.38
+const ENTRY_GROWTH_DECAY = 0.92
 
 const ENTRY_TABLE = (() => {
   const out = [...ENTRY_ANCHORS]

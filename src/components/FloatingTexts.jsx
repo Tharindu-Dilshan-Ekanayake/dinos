@@ -30,6 +30,22 @@ export default function FloatingTexts() {
       const node = document.createElement('div')
       node.className = `float-text text-outline ${className}`
       node.textContent = text
+      if (className === 'damage-gain-burst') {
+        node.className = 'float-text damage-gain-burst'
+
+        const arm = document.createElement('span')
+        arm.className = 'damage-gain-arm'
+        arm.setAttribute('aria-hidden', 'true')
+        arm.textContent = String.fromCodePoint(0x1f4aa)
+
+        const copy = document.createElement('span')
+        copy.className = 'damage-gain-copy'
+        const value = document.createElement('span')
+        value.className = 'damage-gain-value'
+        value.textContent = text.split(' ')[0]
+        copy.append(value)
+        node.replaceChildren(arm, copy)
+      }
       node.style.left = `${x}px`
       node.style.top = `${y}px`
       node.style.setProperty('--tilt', `${(Math.random() - 0.5) * 14}deg`)
@@ -80,7 +96,7 @@ export default function FloatingTexts() {
           `+${formatNumber(gain)} 💪`,
           cx + 34 + Math.random() * 18,
           cy - 26 - Math.random() * 16,
-          'text-[20px] text-emerald-300'
+          'damage-gain-burst'
         )
       }),
 

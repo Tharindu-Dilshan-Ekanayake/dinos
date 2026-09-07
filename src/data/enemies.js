@@ -38,6 +38,25 @@ export const BOSS_ARCHETYPE = {
   pattern: 'ridge',
 }
 
+/*
+ * A level is a pack, not a uniform painted army. These colourways cycle by
+ * both stage and slot so a raptor, trike and stego read as separate creatures
+ * even while they share a biome's terrain.
+ */
+const ENEMY_COLOURWAYS = [
+  { body: '#e85b45', belly: '#ffe0bd', spike: '#ffd166', aura: '#ff9b78', mark: '#8f2e28' },
+  { body: '#2f9ee5', belly: '#d9f3ff', spike: '#b9efff', aura: '#79c8ff', mark: '#145d9b' },
+  { body: '#63b84a', belly: '#e1ffd0', spike: '#d5f06d', aura: '#9cea75', mark: '#287537' },
+  { body: '#9a63d9', belly: '#f0dfff', spike: '#ffd166', aura: '#d5a7ff', mark: '#54258c' },
+  { body: '#ef9834', belly: '#fff0c2', spike: '#fff2a8', aura: '#ffc35d', mark: '#a64d13' },
+  { body: '#2eb9a0', belly: '#d7fff5', spike: '#a8ffe7', aura: '#6ce3c9', mark: '#107562' },
+  { body: '#df4f91', belly: '#ffd8ea', spike: '#ffd1a8', aura: '#ff92be', mark: '#8a2352' },
+]
+
+function enemyColourway(stageIndex, slot) {
+  return ENEMY_COLOURWAYS[(Math.max(0, stageIndex | 0) * 3 + slot * 2) % ENEMY_COLOURWAYS.length]
+}
+
 /**
  * How each shape actually fights.
  *
@@ -122,14 +141,15 @@ function slotShift(stageIndex, slot) {
 export function enemyAppearance(area, stageIndex, slot, boss) {
   const archetype = enemyArchetype(stageIndex, slot, boss)
   const shift = slotShift(stageIndex, slot)
+  const colours = enemyColourway(stageIndex, slot)
 
   return {
     id: `${area.id}-${archetype.id}-${slot}`,
     ...archetype,
-    body: area.enemy,
-    belly: area.enemyAccent,
-    spike: boss ? '#ffd166' : area.enemyAccent,
-    aura: area.enemyAccent,
+    body: boss ? area.enemy : colours.body,
+    belly: boss ? area.enemyAccent : colours.belly,
+    spike: boss ? '#ffd166' : colours.spike,
+    aura: boss ? area.enemyAccent : colours.aura,
     // A boss glows; regular enemies pick up a little shine in late biomes.
     glow: boss ? 0.6 : 0,
     // Slight per-slot size variation keeps the line-up from looking stamped.
@@ -139,6 +159,6 @@ export function enemyAppearance(area, stageIndex, slot, boss) {
      * accent is already the belly and the spikes, so drawing stripes in it
      * would be drawing them in a colour the animal is half made of.
      */
-    mark: boss ? '#ffd166' : shadeColor(area.enemy, -0.3),
+    mark: boss ? '#ffd166' : colours.mark,
   }
 }

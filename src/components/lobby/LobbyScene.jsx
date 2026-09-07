@@ -104,13 +104,20 @@ function Interactions() {
   return null
 }
 
-export default function LobbyScene({ includePlayer = true }) {
+export default function LobbyScene({
+  includePlayer = true,
+  includeCamera = true,
+  includeEnvironment = true,
+  includeGameplay = true,
+  includeArenaPreview = true,
+  worldPosition = [0, 0, 0],
+}) {
   return (
-    <>
-      <LobbyCamera clamp={clampToPlaza} />
-      <LobbyEnvironment />
+    <group position={worldPosition}>
+      {includeCamera && <LobbyCamera clamp={clampToPlaza} />}
+      {includeEnvironment && <LobbyEnvironment />}
       <LobbyGround />
-      <FightCatcher />
+      {includeGameplay && <FightCatcher />}
 
       {/* All thirteen stages on show, alternating down the plaza. */}
       {PODIUMS.map((podium) => (
@@ -131,11 +138,11 @@ export default function LobbyScene({ includePlayer = true }) {
         />
       ))}
 
-      <ArenaGate />
+      <ArenaGate active={includeGameplay} showPreview={includeArenaPreview} />
       <EntranceGate />
       {includePlayer && <Player />}
-      <TrainingSystem />
-      <Interactions />
-    </>
+      {includeGameplay && <TrainingSystem />}
+      {includeGameplay && <Interactions />}
+    </group>
   )
 }

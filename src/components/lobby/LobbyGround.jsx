@@ -257,24 +257,42 @@ function Trees({ materials }) {
   )
 }
 
-/** A colorful tree line behind the far stone wall. */
-function BackTrees({ materials }) {
+/** The high garden wall directly behind the rebirth pedestals. */
+function RearGardenWall({ materials, wallMaterials, terrainMaterials, stoneMaterial }) {
+  const terraces = useMemo(
+    () => [
+      // Each ledge steps upward away from the plaza, like the reference hub.
+      { position: [0, 1.1, 29.5], size: [78, 2.2, 4], material: terrainMaterials },
+      { position: [0, 3, 33], size: [80, 6, 4], material: terrainMaterials },
+      { position: [0, 5.3, 36.5], size: [84, 10.6, 4], material: wallMaterials },
+    ],
+    []
+  )
+
   const trees = useMemo(
     () =>
       [
-        [-28, 6.8, -65, 1.25],
-        [-20, 7.4, -68, 1.05],
-        [-11, 6.6, -66, 1.35],
-        [0, 7.8, -69, 1.15],
-        [11, 6.6, -66, 1.3],
-        [21, 7.2, -68, 1.05],
-        [29, 6.8, -65, 1.25],
-      ].map(([x, y, z, scale]) => ({ position: [x, y, z], scale, rotation: 0 })),
+        [-36, 10.6, 36.5, 1.05, 0.2],
+        [-29, 10.6, 36.5, 1.48, 1.1],
+        [-21, 10.6, 36.5, 1.1, 2.3],
+        [-12, 10.6, 36.5, 1.55, 0.7],
+        [-3, 10.6, 36.5, 1.02, 1.8],
+        [6, 10.6, 36.5, 1.35, 2.8],
+        [15, 10.6, 36.5, 1.1, 0.5],
+        [24, 10.6, 36.5, 1.56, 1.6],
+        [33, 10.6, 36.5, 1.08, 2.5],
+      ].map(([x, y, z, scale, rotation]) => ({ position: [x, y, z], scale, rotation })),
     []
   )
 
   const groups = useMemo(() => mergeBoxesByMaterial(treeBoxes({ seed: 41 })), [])
+  const stoneItems = useMemo(
+    () => wallStones({ axis: 'x', from: -41, to: 41, faceAt: 34.45, height: 10.6, seed: 121 }),
+    []
+  )
+  const stoneGeometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
   useEffect(() => () => groups.forEach((group) => group.geometry.dispose()), [groups])
+  useEffect(() => () => stoneGeometry.dispose(), [stoneGeometry])
 
   const tint = {
     trunk: materials.trunk,
@@ -282,15 +300,144 @@ function BackTrees({ materials }) {
     leafLight: materials.leaf,
   }
 
-  return groups.map((group) => (
-    <InstancedBlocks
-      key={`back-${group.key}`}
-      items={trees}
-      geometry={group.geometry}
-      material={tint[group.key] ?? materials.leaf}
-      castShadow
-    />
-  ))
+  return (
+    <group name="RearGardenWall">
+      {terraces.map((terrace, i) => (
+        <mesh key={i} material={terrace.material} position={terrace.position} castShadow receiveShadow>
+          <boxGeometry args={terrace.size} />
+        </mesh>
+      ))}
+      <InstancedBlocks
+        items={stoneItems}
+        geometry={stoneGeometry}
+        material={stoneMaterial}
+        castShadow
+        receiveShadow
+      />
+      {groups.map((group) => (
+        <InstancedBlocks
+          key={`back-${group.key}`}
+          items={trees}
+          geometry={group.geometry}
+          material={tint[group.key] ?? materials.leaf}
+          castShadow
+        />
+      ))}
+    </group>
+  )
+}
+
+/**
+ * The outer perimeter joins the rear garden wall into a complete forested
+ * enclosure. The only break is the arena approach, so the lobby still has a
+ * natural way out while every normal camera angle lands on stone and trees.
+ */
+function PerimeterGardenWall({ materials, wallMaterials, stoneMaterial }) {
+  const walls = useMemo(
+    () => [
+      // Straight flanks stop early, then kick inward into garden-like corners.
+      { position: [-73, 4.4, -30], size: [4, 8.8, 82] },
+      { position: [73, 4.4, -30], size: [4, 8.8, 82] },
+      { position: [-65.5, 4.4, 23.25], size: [4, 8.8, 30.5], rotation: 0.515 },
+      { position: [65.5, 4.4, 23.25], size: [4, 8.8, 30.5], rotation: -0.515 },
+      // Arena-side wall, split around the gateway.
+      { position: [-42, 4.4, -73], size: [62, 8.8, 4] },
+      { position: [42, 4.4, -73], size: [62, 8.8, 4] },
+      // Wings connecting the tall rear garden to the outer sides.
+      { position: [-57.5, 4.4, 36.5], size: [31, 8.8, 4] },
+      { position: [57.5, 4.4, 36.5], size: [31, 8.8, 4] },
+    ],
+    []
+  )
+
+  const trees = useMemo(
+    () =>
+      [
+        [-73, 8.8, -63, 1.2, 0.3],
+        [-73, 8.8, -49, 1.5, 1.7],
+        [-73, 8.8, -34, 1.08, 2.5],
+        [-73, 8.8, -19, 1.38, 0.8],
+        [-73, 8.8, -4, 1.12, 2.1],
+        [-69, 8.8, 10, 1.55, 1.2],
+        [-62, 8.8, 22, 1.18, 2.7],
+        [73, 8.8, -62, 1.45, 2.8],
+        [73, 8.8, -47, 1.1, 0.9],
+        [73, 8.8, -32, 1.52, 2.2],
+        [73, 8.8, -17, 1.2, 0.4],
+        [73, 8.8, -2, 1.4, 1.6],
+        [69, 8.8, 10, 1.06, 2.6],
+        [62, 8.8, 22, 1.5, 0.7],
+        [-66, 8.8, -73, 1.1, 0.5],
+        [-53, 8.8, -73, 1.48, 1.9],
+        [-39, 8.8, -73, 1.2, 2.7],
+        [-25, 8.8, -73, 1.55, 1.1],
+        [-14, 8.8, -73, 1.08, 2.4],
+        [14, 8.8, -73, 1.42, 0.3],
+        [27, 8.8, -73, 1.16, 1.5],
+        [41, 8.8, -73, 1.52, 2.8],
+        [54, 8.8, -73, 1.1, 0.9],
+        [66, 8.8, -73, 1.45, 2.1],
+        [-64, 8.8, 36.5, 1.16, 0.7],
+        [-51, 8.8, 36.5, 1.5, 2.3],
+        [51, 8.8, 36.5, 1.22, 1.4],
+        [64, 8.8, 36.5, 1.46, 2.6],
+      ].map(([x, y, z, scale, rotation]) => ({ position: [x, y, z], scale, rotation })),
+    []
+  )
+
+  const stoneItems = useMemo(
+    () => [
+      ...wallStones({ axis: 'z', from: -71, to: 11, faceAt: -70.9, height: 8.8, seed: 211 }),
+      ...wallStones({ axis: 'z', from: -71, to: 11, faceAt: 70.9, height: 8.8, seed: 223 }),
+      ...wallStones({ axis: 'x', from: -71, to: -11, faceAt: -70.9, height: 8.8, seed: 227 }),
+      ...wallStones({ axis: 'x', from: 11, to: 71, faceAt: -70.9, height: 8.8, seed: 229 }),
+    ],
+    []
+  )
+
+  const treeGroups = useMemo(() => mergeBoxesByMaterial(treeBoxes({ seed: 67 })), [])
+  const stoneGeometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
+  useEffect(() => () => treeGroups.forEach((group) => group.geometry.dispose()), [treeGroups])
+  useEffect(() => () => stoneGeometry.dispose(), [stoneGeometry])
+
+  const tint = {
+    trunk: materials.trunk,
+    leaf: materials.leafDark,
+    leafLight: materials.leaf,
+  }
+
+  return (
+    <group name="PerimeterGardenWall">
+      {walls.map((wall, i) => (
+        <mesh
+          key={i}
+          material={wallMaterials}
+          position={wall.position}
+          rotation-y={wall.rotation ?? 0}
+          castShadow
+          receiveShadow
+        >
+          <boxGeometry args={wall.size} />
+        </mesh>
+      ))}
+      <InstancedBlocks
+        items={stoneItems}
+        geometry={stoneGeometry}
+        material={stoneMaterial}
+        castShadow
+        receiveShadow
+      />
+      {treeGroups.map((group) => (
+        <InstancedBlocks
+          key={group.key}
+          items={trees}
+          geometry={group.geometry}
+          material={tint[group.key] ?? materials.leaf}
+          castShadow
+        />
+      ))}
+    </group>
+  )
 }
 
 /**
@@ -555,7 +702,7 @@ export default function LobbyGround() {
             receiveShadow
             castShadow
           >
-            <boxGeometry args={[terrace.width, terrace.height, length + 60]} />
+            <boxGeometry args={[terrace.width, terrace.height, length]} />
           </mesh>
         ))
       )}
@@ -679,7 +826,17 @@ export default function LobbyGround() {
       <Tufts materials={materials} />
       <ToyBlocks />
       <Trees materials={materials} />
-      <BackTrees materials={materials} />
+      <PerimeterGardenWall
+        materials={materials}
+        wallMaterials={backMaterials}
+        stoneMaterial={materials.stoneNarrow}
+      />
+      <RearGardenWall
+        materials={materials}
+        wallMaterials={backMaterials}
+        terrainMaterials={terraceMaterials[1]}
+        stoneMaterial={materials.stoneNarrow}
+      />
     </group>
   )
 }

@@ -56,7 +56,7 @@ const CONFIG = {
   groundHeightAt,
 }
 
-export default function Player({ active = true }) {
+export default function Player({ active = true, worldOffset = [0, 0, 0] }) {
   const evolutionIndex = useGameStore((s) => s.evolutionIndex)
   const evolution = EVOLUTIONS[evolutionIndex] ?? EVOLUTIONS[0]
   const materials = useDinoMaterials(evolution)
@@ -161,9 +161,9 @@ export default function Player({ active = true }) {
     if (root.current) {
       // Step into the swing, along whatever way the dino is facing.
       root.current.position.set(
-        playerPosition.x + Math.cos(playerFacing.angle) * lunge * 0.5,
-        playerPosition.y,
-        playerPosition.z - Math.sin(playerFacing.angle) * lunge * 0.5
+        playerPosition.x + worldOffset[0] + Math.cos(playerFacing.angle) * lunge * 0.5,
+        playerPosition.y + worldOffset[1],
+        playerPosition.z + worldOffset[2] - Math.sin(playerFacing.angle) * lunge * 0.5
       )
       root.current.rotation.y = playerFacing.angle
     }
@@ -180,7 +180,15 @@ export default function Player({ active = true }) {
   })
 
   return (
-    <group ref={root} visible={active} position={[playerPosition.x, 0, playerPosition.z]}>
+    <group
+      ref={root}
+      visible={active}
+      position={[
+        playerPosition.x + worldOffset[0],
+        worldOffset[1],
+        playerPosition.z + worldOffset[2],
+      ]}
+    >
       <group ref={tilt} scale={evolution.scale}>
         <DinoModel evolution={evolution} materials={materials} rig={rig} />
       </group>

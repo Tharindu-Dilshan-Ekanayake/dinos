@@ -41,7 +41,7 @@ const MAX_LOOK_DOWN = 0.62
  */
 const CUT_ABOVE = 8
 
-export default function LobbyCamera({ clamp }) {
+export default function LobbyCamera({ clamp, worldOffset = [0, 0, 0] }) {
   const camera = useThree((s) => s.camera)
   const gl = useThree((s) => s.gl)
 
@@ -62,6 +62,7 @@ export default function LobbyCamera({ clamp }) {
       playerPosition.y + Math.sin(orbit.pitch) * orbit.distance,
       playerPosition.z + Math.cos(orbit.yaw) * horizontal
     )
+    desired.current.add(new THREE.Vector3(...worldOffset))
 
     if (clamp) clamp(desired.current)
 
@@ -89,9 +90,9 @@ export default function LobbyCamera({ clamp }) {
       mounted.current = true
       current.current.copy(desired.current)
       lookAt.current.set(
-        playerPosition.x,
-        playerPosition.y + LOOK_HEIGHT,
-        playerPosition.z
+        playerPosition.x + worldOffset[0],
+        playerPosition.y + worldOffset[1] + LOOK_HEIGHT,
+        playerPosition.z + worldOffset[2]
       )
     } else {
       // Frame-rate independent smoothing.
@@ -104,15 +105,19 @@ export default function LobbyCamera({ clamp }) {
      * against the distance actually achieved rather than the one asked for, so
      * it eases down as the walls close in and back up as they open out.
      */
-    const eye = playerPosition.y + LOOK_HEIGHT
+    const eye = playerPosition.y + worldOffset[1] + LOOK_HEIGHT
     const reach = Math.hypot(
-      current.current.x - playerPosition.x,
-      current.current.z - playerPosition.z
+      current.current.x - (playerPosition.x + worldOffset[0]),
+      current.current.z - (playerPosition.z + worldOffset[2])
     )
     const ceiling = eye + reach * Math.tan(MAX_LOOK_DOWN)
     if (current.current.y > ceiling) current.current.y = ceiling
 
-    lookTarget.current.set(playerPosition.x, playerPosition.y + LOOK_HEIGHT, playerPosition.z)
+    lookTarget.current.set(
+      playerPosition.x + worldOffset[0],
+      playerPosition.y + worldOffset[1] + LOOK_HEIGHT,
+      playerPosition.z + worldOffset[2]
+    )
     lookAt.current.lerp(lookTarget.current, 1 - Math.pow(0.0006, delta))
 
     camera.position.copy(current.current)

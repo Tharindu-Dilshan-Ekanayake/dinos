@@ -8,8 +8,6 @@ import {
   buildArenaMouth,
   buildArenaProps,
   buildCliffDetails,
-  buildGlowVeins,
-  buildGroundPatches,
   buildGroundScatter,
   buildLogs,
   buildPools,
@@ -84,15 +82,10 @@ export default function Chamber({ palette, origin, stage = 0 }) {
     () => buildArenaProps(blocks, stage, detailCount(44, detail)),
     [blocks, stage, detail]
   )
-  const veins = useMemo(() => buildGlowVeins(detailCount(26, detail)), [detail])
 
   // Per-level dressing: the walls repeat down the corridor, the scatter on
   // them does not.
   const details = useMemo(() => buildCliffDetails(blocks, stage), [blocks, stage])
-  const patches = useMemo(() => {
-    const all = buildGroundPatches(stage, detailCount(18, detail))
-    return { light: all.filter((p) => p.light), dark: all.filter((p) => !p.light) }
-  }, [stage, detail])
   const scatter = useMemo(
     () => buildGroundScatter(stage, detailCount(46, detail), detailCount(18, detail)),
     [stage, detail]
@@ -189,25 +182,6 @@ export default function Chamber({ palette, origin, stage = 0 }) {
         fleckDepth: 0.2,
         seed: 131,
       }),
-      // Two tones of the floor, laid over it as blocky clearings.
-      patchLight: voxelMaterial(shadeColor(palette.floorA, 0.07), {
-        pattern: 'studs',
-        cells: 8,
-        variance: 0.07,
-        fleck: 0.26,
-        fleckDepth: 0.15,
-        repeat: 2,
-        seed: 37,
-      }),
-      patchDark: voxelMaterial(palette.floorB, {
-        pattern: 'studs',
-        cells: 8,
-        variance: 0.07,
-        fleck: 0.26,
-        fleckDepth: 0.15,
-        repeat: 2,
-        seed: 41,
-      }),
       tuft: new THREE.MeshStandardMaterial({
         color: palette.tuft,
         roughness: 0.85,
@@ -287,16 +261,6 @@ export default function Chamber({ palette, origin, stage = 0 }) {
         fleckDepth: 0.22,
         seed: 211,
       }),
-      glow: new THREE.MeshBasicMaterial({
-        // Veins lying flat on the chamber floor.
-        ...DECAL,
-        color: palette.glow,
-        transparent: true,
-        opacity: palette.glowStrength * 0.7,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        toneMapped: false,
-      }),
     }
   }, [palette, slabDepth])
 
@@ -319,7 +283,6 @@ export default function Chamber({ palette, origin, stage = 0 }) {
       // A single blade - four-sided and tapered - scaled per instance into a
       // leaning tuft. Unit height, so an instance's Y scale is its height.
       blade: new THREE.CylinderGeometry(0.045, 0.11, 1, 4),
-      vein: new THREE.PlaneGeometry(1, 1),
     }),
     []
   )
@@ -356,20 +319,6 @@ export default function Chamber({ palette, origin, stage = 0 }) {
       >
         <boxGeometry args={[FLOOR_WIDTH, FLOOR_THICKNESS, slabDepth]} />
       </mesh>
-
-      {/* Blocky clearings breaking up the grass. */}
-      <InstancedBlocks
-        items={patches.light}
-        geometry={geometries.block}
-        material={materials.patchLight}
-        receiveShadow
-      />
-      <InstancedBlocks
-        items={patches.dark}
-        geometry={geometries.block}
-        material={materials.patchDark}
-        receiveShadow
-      />
 
       {/*
         Water, or lava. Three flat plates - shelf, surface, kerb - and whatever
@@ -428,18 +377,6 @@ export default function Chamber({ palette, origin, stage = 0 }) {
         material={materials.bark}
         castShadow
       />
-
-      {palette.glowStrength > 0 &&
-        veins.map((vein, i) => (
-          <mesh
-            key={i}
-            geometry={geometries.vein}
-            material={materials.glow}
-            position={vein.position}
-            rotation={[-Math.PI / 2, 0, vein.rotation]}
-            scale={[vein.width, vein.length, 1]}
-          />
-        ))}
 
       {/* Terraces: dirt at the fighting floor, stone stepping away behind it. */}
       <InstancedBlocks
