@@ -101,6 +101,68 @@
   animation: float-up 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
+/* The main click reward: a chunky punch badge, not a small line of text. */
+@keyframes damage-gain-pop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.42) rotate(var(--tilt, 0deg));
+  }
+  16% {
+    opacity: 1;
+    transform: translate(-50%, -78%) scale(1.14) rotate(var(--tilt, 0deg));
+  }
+  72% {
+    opacity: 1;
+    transform: translate(-50%, -135%) scale(1) rotate(var(--tilt, 0deg));
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -205%) scale(0.82) rotate(var(--tilt, 0deg));
+  }
+}
+
+@keyframes damage-arm-swing {
+  0% { transform: rotate(-32deg) scale(0.72); }
+  38% { transform: rotate(14deg) scale(1.2); }
+  100% { transform: rotate(0deg) scale(1); }
+}
+
+.damage-gain-burst {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #fff1a3;
+  text-shadow:
+    -2px -2px 0 #201b16,
+    2px -2px 0 #201b16,
+    -2px 2px 0 #201b16,
+    2px 2px 0 #201b16,
+    0 4px 10px rgba(32, 27, 22, 0.55);
+  transform-origin: center;
+  animation: damage-gain-pop 0.95s cubic-bezier(0.2, 0.9, 0.25, 1) forwards;
+}
+
+.damage-gain-arm {
+  display: block;
+  font-size: 38px;
+  line-height: 1;
+  filter: drop-shadow(0 3px 0 rgba(32, 27, 22, 0.5));
+  animation: damage-arm-swing 0.34s ease-out both;
+}
+
+.damage-gain-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 0.9;
+}
+
+.damage-gain-value {
+  font-size: 38px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
 @keyframes banner-sweep {
   0% {
     opacity: 0;
@@ -123,6 +185,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .float-text,
+  .damage-gain-burst,
+  .damage-gain-arm,
   .area-banner {
     animation-duration: 0.01ms;
   }

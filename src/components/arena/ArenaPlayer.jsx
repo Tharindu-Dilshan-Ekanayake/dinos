@@ -5,6 +5,9 @@ import {
   ARENA_PLAYER_SPAWN,
   ARENA_PLAYER_SPEED,
   ARENA_PLAYER_TURN_SPEED,
+  ARENA,
+  CHAMBER_SPAN,
+  MOUTH_EXIT_Z,
   PASSAGE_HALF_WIDTH,
   PASSAGE_LENGTH,
   arenaGroundHeight,
@@ -64,7 +67,7 @@ const DEATH_TOPPLE = 0.66
  * resolved against the orbit camera - with two additions: it snaps to face
  * whatever it is attacking, and it lunges on every hit.
  */
-export default function ArenaPlayer() {
+export default function ArenaPlayer({ active = true }) {
   const evolutionIndex = useGameStore((s) => s.evolutionIndex)
   const evolution = EVOLUTIONS[evolutionIndex] ?? EVOLUTIONS[0]
   const materials = useDinoMaterials(evolution)
@@ -79,9 +82,18 @@ export default function ArenaPlayer() {
 
   useEffect(() => installInput(), [])
 
-  // Drop in at the front of the level the run starts on.
+  /*
+   * Drop in at the front of the level the run starts on - but only when the
+   * dino is not already somewhere sensible.
+   *
+   * Walking in from the hub hands the arena a converted position, and a reload
+   * with the arena scene saved hands it a stale hub one. The first must be left
+   * alone and the second must not be, so the test is whether the dino is
+   * anywhere near the corridor it is supposed to be standing in.
+   */
   useEffect(() => {
     const origin = chamberOrigin(useGameStore.getState().stageIndex)
+    if (Math.abs(playerPosition.z - origin) < CHAMBER_SPAN * 1.5) return
     placePlayer(
       [ARENA_PLAYER_SPAWN[0], ARENA_PLAYER_SPAWN[1], origin + ARENA_PLAYER_SPAWN[2]],
       Math.PI / 2
@@ -103,19 +115,20 @@ export default function ArenaPlayer() {
       // Crossing into a new level must NOT move the dino: you walked here, and
       // the chambers are laid end to end so you simply keep going. The only
       // repositioning is a fresh run, handled on mount.
-      on(EVENTS.STAGE_ENTER, ({ fresh }) => {
-        if (!fresh) return
-        const origin = chamberOrigin(useGameStore.getState().stageIndex)
-        placePlayer(
-          [ARENA_PLAYER_SPAWN[0], ARENA_PLAYER_SPAWN[1], origin + ARENA_PLAYER_SPAWN[2]],
-          Math.PI / 2
-        )
-      }),
+      /*
+       * Nothing repositions on a stage change any more, fresh or not.
+       *
+       * Entering the arena used to drop you in the middle of Stage 1's chamber
+       * however you got there. `enterArena` now converts the position you
+       * walked in on, so a second placement here would undo exactly the thing
+       * that makes the crossing look like walking.
+       */
     ]
     return () => unsubscribers.forEach((off) => off())
   }, [])
 
   useFrame((_, rawDelta) => {
+    if (!active) return
     const a = anim.current
     const delta = Math.min(rawDelta, 0.05)
     const scaled = delta * getTimeScale()
@@ -143,7 +156,14 @@ export default function ArenaPlayer() {
     bounds.maxZ =
       stageIndex > 0
         ? origin + ARENA_BOUNDS.maxZ + PASSAGE_LENGTH
-        : origin + ARENA_BOUNDS.maxZ
+        /*
+         * Stage 1's near end reaches out through the mouth and across the
+         * landing to the top of the hub's ramp. That last stretch is the only
+         * ground both scenes can put you on, and letting you walk it is what
+         * turns leaving the arena into a walk rather than a scene change you
+         * watch happen. See MOUTH_EXIT_Z.
+         */
+        : origin + MOUTH_EXIT_Z + 0.6
 
     // A dying dino stops taking input.
     const { moving } = dead ? { moving: false } : stepPlayer(delta, CONFIG)
@@ -152,11 +172,18 @@ export default function ArenaPlayer() {
     // wall, so squeeze the dino into it rather than letting them walk through
     // solid terrace.
     const localAfter = playerPosition.z - origin
-    if (localAfter < ARENA_BOUNDS.minZ || localAfter > ARENA_BOUNDS.maxZ) {
+    if (localAfter < ARENA_BOUNDS.minZ) {
       playerPosition.x = Math.min(
         PASSAGE_HALF_WIDTH,
         Math.max(-PASSAGE_HALF_WIDTH, playerPosition.x)
       )
+    } else if (localAfter > ARENA_BOUNDS.maxZ) {
+      /*
+       * Past the chamber's front wall you are in the mouth, which is a doorway
+       * the width of the hub's gateway - not the width of the arena.
+       */
+      const gap = stageIndex > 0 ? PASSAGE_HALF_WIDTH : ARENA.gapHalfWidth
+      playerPosition.x = Math.min(gap, Math.max(-gap, playerPosition.x))
     }
 
     // Face the enemy you are fighting whenever you are not steering elsewhere,
@@ -259,7 +286,7 @@ export default function ArenaPlayer() {
   })
 
   return (
-    <group ref={root} position={ARENA_PLAYER_SPAWN}>
+    <group ref={root} visible={active} position={ARENA_PLAYER_SPAWN}>
       <group ref={scaler} scale={evolution.scale}>
         <DinoModel evolution={evolution} materials={materials} rig={rig} />
       </group>

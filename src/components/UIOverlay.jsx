@@ -6,7 +6,6 @@ import { useGameStore } from '../store/useGameStore.js'
 import { EVENTS, on } from '../systems/events.js'
 import ArenaControls from './ArenaControls.jsx'
 import DeathReturn from './DeathReturn.jsx'
-import AreaBanner from './AreaBanner.jsx'
 import EvolutionTrack from './EvolutionTrack.jsx'
 import FloatingTexts from './FloatingTexts.jsx'
 import BottomDetails from './BottomDetails.jsx'
@@ -213,7 +212,6 @@ export default function UIOverlay() {
     <>
       <FloatingTexts />
       <ScreenFlash />
-      <AreaBanner />
       {!inLobby && <StageHeadline />}
 
       <div className="pointer-events-none absolute inset-0 z-10 flex flex-col justify-between">

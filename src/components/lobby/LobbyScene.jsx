@@ -16,10 +16,10 @@ import { EVENTS, emit } from '../../systems/events.js'
 import { consumeInteract } from '../../systems/input.js'
 import { playerPosition } from '../../systems/playerState.js'
 import ArenaGate from './ArenaGate.jsx'
+import EntranceGate from './EntranceGate.jsx'
 import FightCatcher from './FightCatcher.jsx'
 import LobbyCamera from './LobbyCamera.jsx'
 import LobbyEnvironment from './LobbyEnvironment.jsx'
-import HubBoard from './HubBoard.jsx'
 import LobbyGround from './LobbyGround.jsx'
 import Player from './Player.jsx'
 import Podium from './Podium.jsx'
@@ -104,13 +104,20 @@ function Interactions() {
   return null
 }
 
-export default function LobbyScene() {
+export default function LobbyScene({
+  includePlayer = true,
+  includeCamera = true,
+  includeEnvironment = true,
+  includeGameplay = true,
+  includeArenaPreview = true,
+  worldPosition = [0, 0, 0],
+}) {
   return (
-    <>
-      <LobbyCamera clamp={clampToPlaza} />
-      <LobbyEnvironment />
+    <group position={worldPosition}>
+      {includeCamera && <LobbyCamera clamp={clampToPlaza} />}
+      {includeEnvironment && <LobbyEnvironment />}
       <LobbyGround />
-      <FightCatcher />
+      {includeGameplay && <FightCatcher />}
 
       {/* All thirteen stages on show, alternating down the plaza. */}
       {PODIUMS.map((podium) => (
@@ -131,11 +138,11 @@ export default function LobbyScene() {
         />
       ))}
 
-      <ArenaGate />
-      <HubBoard />
-      <Player />
-      <TrainingSystem />
-      <Interactions />
-    </>
+      <ArenaGate active={includeGameplay} showPreview={includeArenaPreview} />
+      <EntranceGate />
+      {includePlayer && <Player />}
+      {includeGameplay && <TrainingSystem />}
+      {includeGameplay && <Interactions />}
+    </group>
   )
 }

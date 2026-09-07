@@ -272,11 +272,22 @@ export function voxelTintMap(options = {}) {
  * white; callers dispose the material, never the map, which the cache owns.
  */
 export function voxelMaterial(color, options = {}) {
-  const { roughness = 0.95, flatShading = true, ...textureOptions } = options
+  const {
+    roughness = 0.95,
+    flatShading = true,
+    /*
+     * A surface painted onto another surface. Passed straight through to the
+     * material as a polygon offset - see systems/decal.js for why a centimetre
+     * of physical separation is not enough on its own.
+     */
+    decal,
+    ...textureOptions
+  } = options
   return new THREE.MeshStandardMaterial({
     map: voxelTexture(color, textureOptions),
     roughness,
     metalness: 0,
     flatShading,
+    ...(decal ?? {}),
   })
 }

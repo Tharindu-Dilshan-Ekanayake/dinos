@@ -49,8 +49,16 @@ export default function ScreenFlash() {
       ),
       on(EVENTS.EVOLVE, () => flash('rgba(255,214,102,0.9)', 0.7)),
       on(EVENTS.REBIRTH, () => flash('rgba(201,163,255,0.95)', 0.9)),
-      on(EVENTS.AREA_CHANGE, () => flash('rgba(255,255,255,0.8)', 0.6)),
-      on(EVENTS.SCENE_CHANGE, () => flash('rgba(255,255,255,0.9)', 0.85)),
+      /*
+       * Crossing between the hub and the arena, or from one biome into the
+       * next, used to wash the screen white.
+       *
+       * Both are *seams*, and the whole point of the corridor is that there
+       * are none: the hub rises into the arena down a ramp you can see the
+       * length of, and the biomes lerp their colours over a second and a half.
+       * A flash on top of that announces a loading screen that is not there.
+       * What is left flashes for things that actually happened to you.
+       */
     ]
 
     return () => {

@@ -128,6 +128,8 @@ const CORNERS = [
  */
 const ROW_HALF = 2.2
 const MAX_DEPTH = 0.55
+/** How tall a piece of dressing may stand beside a flat pad. */
+const MAX_HEIGHT = 0.55
 
 /**
  * Squeeze a dressing into the space one pad owns.
@@ -165,6 +167,22 @@ function fitToRow(items) {
     // reaches back over the belt.
     if (Math.abs(item.position[2]) < PAD_HALF) {
       item.scale[2] = Math.min(item.scale[2], 1)
+    }
+
+    /*
+     * And nothing stands tall.
+     *
+     * The dressing was built when a pad was a machine, so braziers, ice spikes
+     * and orb stalks all reached a metre and a half - taller than the slab is
+     * now thick. Against a flat square they stopped being dressing and became
+     * the thing you see, and ten squares' worth of it made the right-hand side
+     * of the hub a thicket. Capped to kerb height it does what dressing is for:
+     * it tells one rung from another out of the corner of your eye.
+     */
+    if (item.scale[1] > MAX_HEIGHT) {
+      const shrink = MAX_HEIGHT / item.scale[1]
+      item.scale[1] = MAX_HEIGHT
+      item.position[1] *= shrink
     }
   }
   return items

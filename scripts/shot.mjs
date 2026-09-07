@@ -69,7 +69,6 @@ writeFileSync(
   }
   try {
     await import('http://localhost:${PORT}/src/main.jsx')
-    const store = (await import('http://localhost:${PORT}/src/store/useGameStore.js')).useGameStore
 
     /*
      * Let the hub come up first, whatever we are here to photograph. The scene
@@ -90,9 +89,9 @@ writeFileSync(
 
     // A scene and a level to look at, both optional.
     if (${JSON.stringify(scene)} === 'arena') {
-      store.getState().enterArena()
+      window.__store.getState().enterArena()
       if (${stage} > 0 || ${area} > 0) {
-        store.setState({ stageIndex: ${stage}, areaIndex: ${area} })
+        window.__store.setState({ stageIndex: ${stage}, areaIndex: ${area} })
       }
       /*
        * A level change rebuilds three chambers' worth of geometry and re-runs

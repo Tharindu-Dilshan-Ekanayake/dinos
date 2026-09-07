@@ -10,7 +10,8 @@
     "server": "node server/leaderboard-server.js",
     "smoke": "node scripts/smoke.mjs",
     "budget": "node scripts/budget.mjs",
-    "shot": "node scripts/shot.mjs"
+    "shot": "node scripts/shot.mjs",
+    "probe": "node scripts/probe.mjs"
   },
   "dependencies": {
     "@react-three/drei": "^9.114.3",

@@ -29,6 +29,9 @@ import { areaIndexForStage } from '../data/areas.js'
 import { MIN_HITS_TO_CLEAR, enemyCountForStage } from '../data/arena.js'
 import { EVENTS, emit } from '../systems/events.js'
 import { loadSave } from '../systems/persistence.js'
+import { HUB_ARRIVAL } from '../data/lobby.js'
+import { placePlayer, playerFacing, playerPosition } from '../systems/playerState.js'
+import { SEAM_MARGIN, arenaToHubPoint, hubToArena } from '../data/arena.js'
 
 const COMBO_WINDOW_MS = 900
 const MAX_COMBO = 8
@@ -380,6 +383,18 @@ export const useGameStore = create((set, get) => ({
       playerHealth: MAX_PLAYER_HEALTH,
       areaIndex: 0,
     })
+    /*
+     * Put down where you already are, in the arena's own numbers.
+     *
+     * You walk in over the top of the hub's ramp, which is the same physical
+     * spot as the far edge of the arena's landing - so converting the position
+     * rather than spawning you in the middle of the chamber is the whole
+     * difference between stepping through a doorway and being teleported.
+     */
+    const [ax, az] = hubToArena(playerPosition.x, playerPosition.z)
+    // A step inside, so the arena's own way-out trigger is behind you.
+    placePlayer([ax, 0, az - SEAM_MARGIN], playerFacing.angle, { markTeleport: false })
+
     if (s.areaIndex !== 0) emit(EVENTS.AREA_CHANGE, { from: s.areaIndex, to: 0 })
     emit(EVENTS.SCENE_CHANGE, { scene: 'arena' })
     emit(EVENTS.STAGE_ENTER, { stageIndex: 0, fresh: true })
@@ -392,7 +407,13 @@ export const useGameStore = create((set, get) => ({
    * Called by the Return pads at the end of a cleared level, and by walking
    * back out of the arena entrance.
    */
-  claimRunWins() {
+  /**
+   * `walked` is true when you carried yourself out through the mouth, and
+   * false when a Return pad cashed you out from deep in the corridor. One is a
+   * step over a line and should land you exactly where you were; the other is
+   * a trip home and lands you at the hub's front door.
+   */
+  claimRunWins({ walked = false } = {}) {
     const s = get()
     const carried = s.runWins
     const totalWins = s.totalWins + carried
@@ -424,6 +445,21 @@ export const useGameStore = create((set, get) => ({
       areaIndex: 0,
       ...derive(next),
     })
+
+    /*
+     * Put down at the arena's doorway, not left wherever the arena's own
+     * coordinates happened to fall. Walking out of Stage 1 leaves you around
+     * z=+10 in arena space, which is *inside* the hub's bounds - so the hub's
+     * own "are you lost?" check saw nothing wrong and you simply appeared
+     * standing in the middle of the plaza.
+     */
+    if (walked) {
+      const [hx, hz] = arenaToHubPoint(playerPosition.x, playerPosition.z)
+      // Likewise: a step down the ramp, clear of the hub's way-in trigger.
+      placePlayer([hx, 0, hz + SEAM_MARGIN], playerFacing.angle)
+    } else {
+      placePlayer(HUB_ARRIVAL.position, HUB_ARRIVAL.angle)
+    }
 
     emit(EVENTS.CLAIM_WINS, { wins: carried })
     emit(EVENTS.SCENE_CHANGE, { scene: 'lobby' })
@@ -462,7 +498,8 @@ export const useGameStore = create((set, get) => ({
     if (nextIndex === s.stageIndex) return true
 
     if (nextIndex < 0) {
-      get().claimRunWins()
+      // Walked out over the mouth, so keep the position across the seam.
+      get().claimRunWins({ walked: true })
       return true
     }
     if (nextIndex >= MAX_STAGES) {
@@ -569,6 +606,8 @@ export const useGameStore = create((set, get) => ({
       playerHealth: MAX_PLAYER_HEALTH,
       areaIndex: 0,
     })
+    // Dying puts you at the same doorway a finished run does.
+    placePlayer(HUB_ARRIVAL.position, HUB_ARRIVAL.angle)
     emit(EVENTS.RESPAWN)
     emit(EVENTS.SCENE_CHANGE, { scene: 'lobby' })
   },

@@ -9,7 +9,8 @@ import { useGameStore } from '../../store/useGameStore.js'
 import { playerPosition } from '../../systems/playerState.js'
 import { voxelTexture } from '../../systems/voxelTexture.js'
 import InstancedBlocks from '../InstancedBlocks.jsx'
-import MergedBoxes, { mergeBoxes } from '../MergedBoxes.jsx'
+import { DECAL } from '../../systems/decal.js'
+import { shadeColor } from '../../data/areas.js'
 
 /**
  * A training pad: stand on it and your dino trains, adding permanent Damage at
@@ -18,121 +19,33 @@ import MergedBoxes, { mergeBoxes } from '../MergedBoxes.jsx'
  * The "am I standing on it" test and every bit of the pad's animation run from
  * useFrame against the shared player position, so a row of nine pads costs no
  * React renders while you walk the hub.
- */
 /**
- * The machine, as boxes rather than as JSX.
+ * How big a square you stand on.
  *
- * Identical on every pad - only the colours differ - so this is merged once at
- * module scope and the geometry is shared by all nine. See MergedBoxes.
- *
- * Laid out like the real thing. The pad used to be square: a 4.5m slab as wide
- * as it was long, with rails down two sides and a console behind the runner's
- * back. That is a dance floor with handrails, not a treadmill. A treadmill is
- * *long* - a narrow belt with a console at the head of it that you look at
- * while you run - so the deck now runs 6 metres along the belt and only 3
- * across, which also puts a clear metre of grass between one machine and the
- * next down the row.
- *
- * Local +Z is the way the dino faces while training (Player.jsx turns it to
- * world -X, which is this axis once the pad is given its quarter turn), so the
- * console is at +Z where a runner can read it, and the sign is behind at -Z.
+ * Long down the row rather than square, so ten of them read as a row of
+ * platforms rather than a chessboard - but flat, with nothing standing on it.
+ * See the render for why the machine that used to be here went away.
  */
-const FURNITURE = mergeBoxes([
-  /* ---- deck ---- */
-  // Rubber feet, so the chassis stands on something rather than on the lawn.
-  ...[-1, 1].flatMap((sx) =>
-    [-1, 1].map((sz) => ({
-      material: 'base',
-      position: [sx * 1.2, 0.05, 0.1 + sz * 3.2],
-      size: [0.44, 0.1, 0.44],
-    }))
-  ),
-
-  /*
-   * Side rails: the fixed strips either side of the belt that you put your
-   * feet on when you step off it mid-run. They are most of why a treadmill
-   * reads as a treadmill from above - a belt with nothing beside it is a mat.
-   */
-  ...[-1, 1].map((side) => ({
-    material: 'base',
-    position: [side * 1.16, 0.47, 0.1],
-    size: [0.46, 0.22, 6],
-    shadow: true,
-  })),
-
-  // Rollers at both ends of the belt.
-  ...[-3.05, 3.25].map((z) => ({
-    material: 'base',
-    position: [0, 0.44, z],
-    size: [2.15, 0.32, 0.32],
-    shadow: true,
-  })),
-
-  // The motor housing under the console, sloped off the front of the deck.
-  { material: 'frame', position: [0, 0.44, 3.56], size: [2.5, 0.38, 0.62], shadow: true },
-  { material: 'base', position: [0, 0.66, 3.62], size: [2.15, 0.14, 0.46], rotation: [0.5, 0, 0] },
-
-  /* ---- console ---- */
-  /*
-   * Carried high, on uprights, and kept small.
-   *
-   * The first version hung a two-metre slab off the front at chest height,
-   * which from anywhere in front of the machine was a billboard with a
-   * treadmill hiding behind it. A console is a handful of dials you glance up
-   * at - the belt is the thing you are meant to be looking at.
-   */
-  ...[-1, 1].map((side) => ({
-    material: 'base',
-    position: [side * 1.06, 1.16, 3.24],
-    size: [0.2, 1.38, 0.24],
-    shadow: true,
-  })),
-  { material: 'base', position: [0, 1.82, 3.22], size: [2.5, 0.18, 0.26], shadow: true },
-
-  // The display, angled back toward whoever is running at it.
-  { material: 'frame', position: [0, 2.04, 3.38], size: [1.54, 0.54, 0.12], rotation: [-0.5, 0, 0] },
-  { material: 'lamp', position: [0, 2.06, 3.32], size: [1.24, 0.38, 0.05], rotation: [-0.5, 0, 0] },
-  // A row of buttons under it - the small stuff that sells a machine as a
-  // machine and costs nothing, because it is merged into the same three draws.
-  ...[-0.62, -0.21, 0.21, 0.62].map((x) => ({
-    material: 'lamp',
-    position: [x, 1.64, 3.14],
-    size: [0.24, 0.08, 0.12],
-  })),
-
-  /* ---- handrails ---- */
-  // Running back from the console along both sides, on a rear post each.
-  ...[-1, 1].flatMap((side) => [
-    {
-      material: 'frame',
-      position: [side * 1.3, 1.24, 0.7],
-      size: [0.18, 0.18, 5],
-      shadow: true,
-    },
-    { material: 'base', position: [side * 1.3, 0.86, -1.6], size: [0.2, 0.86, 0.2] },
-    // Grip caps at the trailing end, so a rail stops rather than being cut off.
-    { material: 'lamp', position: [side * 1.3, 1.24, -1.98], size: [0.24, 0.24, 0.4] },
-  ]),
-])
+const PAD_WIDTH = 4
+const PAD_LENGTH = 6.2
 
 /**
- * Lights chasing down the rails, in the pad's own colour.
+ * Lights chasing round the slab's rim, in the pad's own colour.
  *
- * A machine that only changes brightness when you stand on it reads as a lamp.
- * What says *running* is something with a direction to it, so a string of
- * sparks travels the length of both rails - a slow drift when the row is idle,
- * a hard sprint under a dino - and each pad runs them in its own accent, so the
- * row lights up as a ladder of colours rather than nine of the same machine.
+ * A square that only changes *brightness* when you stand on it reads as a
+ * lamp. What says *running* is something with a direction to it, so a string of
+ * sparks travels the edge - a slow drift when the row is idle, a hard sprint
+ * under a dino - and each pad runs them in its own accent, so the row lights up
+ * as a ladder of colours rather than ten of the same square.
  *
- * One instanced mesh per pad: ten machines cost ten draws for the lot, and the
+ * One instanced mesh per pad: ten squares cost ten draws for the lot, and the
  * matrices are written in the frame loop the pad already runs.
  */
-const CHASE_PER_RAIL = 9
-const CHASE_COUNT = CHASE_PER_RAIL * 2
-/** The stretch of rail they travel, and how far out the rails are. */
-const CHASE_FROM = -2.9
-const CHASE_TO = 3.1
-const CHASE_X = 1.16
+const CHASE_COUNT = 24
+/** The rim they run, a hair outside the surface they light. */
+const CHASE_X = PAD_WIDTH / 2 + 0.16
+const CHASE_Z = PAD_LENGTH / 2 + 0.16
+const CHASE_Y = 0.3
 
 export default function TrainingPad({ pad, position }) {
   const rebirths = useGameStore((s) => s.rebirths)
@@ -178,17 +91,25 @@ export default function TrainingPad({ pad, position }) {
       roughness: 0.55,
       flatShading: true,
       emissive: new THREE.Color(pad.accent),
-      emissiveIntensity: unlocked ? 0.25 : 0,
+      // Lit when it is yours, coloured either way.
+      emissiveIntensity: unlocked ? 0.3 : 0.08,
     })
     const frame = new THREE.MeshStandardMaterial({
       color: pad.accent,
       roughness: 0.6,
       flatShading: true,
     })
-    // Chunkier, darker blocks under the belt - the machine it runs on.
+    /*
+     * The kerb round the pad, in a deeper cut of the pad's own colour.
+     *
+     * It was slate grey, which was right when it was the chassis of a machine
+     * and wrong now that it is the border of a coloured square: ten grey kerbs
+     * turned the row back into ten of the same thing seen from any distance
+     * where the surface itself is foreshortened away.
+     */
     const base = new THREE.MeshStandardMaterial({
-      color: '#4a5468',
-      roughness: 0.85,
+      color: shadeColor(pad.accent, -0.35),
+      roughness: 0.8,
       flatShading: true,
     })
     const lamp = new THREE.MeshStandardMaterial({
@@ -268,23 +189,38 @@ export default function TrainingPad({ pad, position }) {
      * them from a drift to a sprint, and brightens them.
      */
     if (chaseRef.current) {
-      chase.phase = (chase.phase + delta * (0.16 + a.active * 0.9)) % 1
-      const span = CHASE_TO - CHASE_FROM
+      chase.phase = (chase.phase + delta * (0.1 + a.active * 0.55)) % 1
       chase.quaternion.identity()
 
-      for (let i = 0; i < CHASE_PER_RAIL; i++) {
-        // Evenly spaced round the loop, all sliding together.
-        const t = (i / CHASE_PER_RAIL + chase.phase) % 1
-        // Faded in and out at the ends, so a spark arrives rather than pops.
-        const fade = Math.sin(t * Math.PI)
-        const size = 0.1 + fade * 0.26
-
-        for (let side = 0; side < 2; side++) {
-          chase.position.set(side === 0 ? -CHASE_X : CHASE_X, 0.62, CHASE_FROM + t * span)
-          chase.scale.set(size, size * 0.5, size * 2.4)
-          chase.matrix.compose(chase.position, chase.quaternion, chase.scale)
-          chaseRef.current.setMatrixAt(i * 2 + side, chase.matrix)
+      /*
+       * Walked round the rectangle rather than up two straight rails: the
+       * perimeter is parameterised 0-1 and each spark sits at its own offset
+       * along it, so they keep even spacing round the corners.
+       */
+      const perimeter = (PAD_WIDTH + PAD_LENGTH) * 2
+      for (let i = 0; i < CHASE_COUNT; i++) {
+        const t = ((i / CHASE_COUNT + chase.phase) % 1) * perimeter
+        let x
+        let z
+        if (t < PAD_WIDTH) {
+          x = -CHASE_X + t
+          z = -CHASE_Z
+        } else if (t < PAD_WIDTH + PAD_LENGTH) {
+          x = CHASE_X
+          z = -CHASE_Z + (t - PAD_WIDTH)
+        } else if (t < PAD_WIDTH * 2 + PAD_LENGTH) {
+          x = CHASE_X - (t - PAD_WIDTH - PAD_LENGTH)
+          z = CHASE_Z
+        } else {
+          x = -CHASE_X
+          z = CHASE_Z - (t - PAD_WIDTH * 2 - PAD_LENGTH)
         }
+
+        const size = 0.16 + a.active * 0.16
+        chase.position.set(x, CHASE_Y, z)
+        chase.scale.set(size, size * 0.5, size)
+        chase.matrix.compose(chase.position, chase.quaternion, chase.scale)
+        chaseRef.current.setMatrixAt(i, chase.matrix)
       }
 
       chaseRef.current.instanceMatrix.needsUpdate = true
@@ -301,32 +237,34 @@ export default function TrainingPad({ pad, position }) {
 
   return (
     /*
-     * Turned a quarter turn so the belt runs across the row toward the
-     * walkway, which is the way you face while you are on it. Laid along the
-     * row the machines read as nine planks end to end rather than as a rank of
-     * treadmills - and the dino ran sideways down its own belt.
+     * Turned a quarter turn, so the slab's long axis runs toward the walkway
+     * - the way you face while you are standing on it - and its short axis
+     * along the row, which is what lets ten of them sit close together.
      */
     <group name="TrainingPad" position={position} rotation-y={-Math.PI / 2}>
-      {/* Chassis, frame and the belt itself - long down the running axis and
-          narrow across it, which is the shape that reads as a treadmill from
-          any angle rather than only from the end with the console on it. */}
-      <mesh material={materials.base} position={[0, 0.09, 0.1]} receiveShadow castShadow>
-        <boxGeometry args={[3, 0.18, 7.6]} />
-      </mesh>
-      <mesh material={materials.frame} position={[0, 0.26, 0.1]} receiveShadow castShadow>
-        <boxGeometry args={[2.62, 0.24, 7]} />
-      </mesh>
-      <mesh ref={padRef} material={materials.surface} position={[0, 0.42, 0.1]} receiveShadow>
-        <boxGeometry args={[1.86, 0.14, 6]} />
-      </mesh>
-
       {/*
-        Side rails, rollers, the motor housing, the console with its display
-        and buttons, and the handrails running back from it - forty-odd boxes
-        apiece across nine machines, merged down to three draws. The same boxes
-        in the same places, just not submitted one at a time.
+        A flat slab on the floor, not a machine.
+
+        This was a full treadmill: chassis, side rails, rollers, a motor
+        housing, a console on uprights and handrails running back from it. It
+        looked like a treadmill and it read like *furniture* - ten of them made
+        the right of the hub a showroom you walk between rather than a row of
+        squares you stand on. The reference is a coloured slab with a number
+        over it, and standing on it is the whole interaction.
+
+        What is kept is everything that says the thing is *running*: the surface
+        scrolls, the rim brightens as you step on, and the sparks chase round
+        the edge in the pad's own colour.
       */}
-      <MergedBoxes groups={FURNITURE} materials={materials} />
+      <mesh material={materials.base} position={[0, 0.07, 0]} receiveShadow>
+        <boxGeometry args={[PAD_WIDTH + 0.5, 0.14, PAD_LENGTH + 0.5]} />
+      </mesh>
+      <mesh material={materials.frame} position={[0, 0.17, 0]} receiveShadow>
+        <boxGeometry args={[PAD_WIDTH + 0.22, 0.1, PAD_LENGTH + 0.22]} />
+      </mesh>
+      <mesh ref={padRef} material={materials.surface} position={[0, 0.24, 0]} receiveShadow>
+        <boxGeometry args={[PAD_WIDTH, 0.08, PAD_LENGTH]} />
+      </mesh>
 
       {/*
         The pad's own dressing - bullion, crystals, a lava crust, ice spikes,
@@ -347,7 +285,7 @@ export default function TrainingPad({ pad, position }) {
         castShadow
       />
 
-      {/* Sparks running the rails - see CHASE_PER_RAIL. */}
+      {/* Sparks running the rim - see CHASE_COUNT. */}
       <instancedMesh
         ref={chaseRef}
         args={[undefined, undefined, CHASE_COUNT]}
@@ -360,25 +298,27 @@ export default function TrainingPad({ pad, position }) {
           opacity={0.4}
           blending={THREE.AdditiveBlending}
           depthWrite={false}
+          {...DECAL}
           toneMapped={false}
           fog={false}
         />
       </instancedMesh>
 
-      <mesh ref={glowRef} position={[0, 0.51, 0.1]} rotation-x={-Math.PI / 2}>
-        <ringGeometry args={[0.8, 1.24, 6]} />
+      <mesh ref={glowRef} position={[0, 0.3, 0]} rotation-x={-Math.PI / 2}>
+        <ringGeometry args={[1.5, 2.1, 24]} />
         <meshBasicMaterial
           color={pad.accent}
           transparent
           opacity={0.25}
           side={THREE.DoubleSide}
           depthWrite={false}
+          {...DECAL}
           fog={false}
         />
       </mesh>
 
       {/* Column of light while training */}
-      <mesh ref={beamRef} position={[0, 2.6, 0.1]} visible={false}>
+      <mesh ref={beamRef} position={[0, 2.6, 0]} visible={false}>
         <cylinderGeometry args={[1.5, 1.1, 5, 6, 1, true]} />
         <meshBasicMaterial
           color={pad.accent}
@@ -386,61 +326,45 @@ export default function TrainingPad({ pad, position }) {
           opacity={0}
           side={THREE.DoubleSide}
           depthWrite={false}
+          {...DECAL}
           blending={THREE.AdditiveBlending}
           fog={false}
         />
       </mesh>
 
-      {/* Back post carrying the sign, behind the runner rather than in front
-          of them - the console is what you look at while you are on it. */}
-      <mesh material={materials.frame} position={[0, 1.6, -4]} castShadow>
-        <boxGeometry args={[0.28, 3.2, 0.28]} />
-      </mesh>
-
-      <Billboard position={[0, 3.9, -4]}>
-        <mesh position={[0, 0, -0.02]}>
-          <planeGeometry args={[2.7, 1.1]} />
-          <meshBasicMaterial color="#0b1220" transparent opacity={0.84} fog={false} />
-        </mesh>
-
+      {/*
+        The number floating over the slab, with no post under it and no board
+        behind it - the same treatment the gallery's labels get, because they
+        are the same kind of thing: a label on the square, not a sign beside it.
+      */}
+      <Billboard position={[0, 2.5, 0]}>
         <Text
-          position={[0, 0.31, 0]}
-          fontSize={0.31}
+          position={[0, 0.3, 0]}
+          fontSize={0.42}
           color={pad.color}
           anchorX="center"
           anchorY="middle"
-          outlineWidth={0.026}
-          outlineColor="#0b1220"
+          outlineWidth={0.058}
+          outlineColor="#12100e"
         >
           {`x${pad.multiplier} Damage`}
         </Text>
 
         <Text
-          position={[0, -0.03, 0]}
-          fontSize={0.18}
-          color="#e2e8f0"
-          anchorX="center"
-          anchorY="middle"
-          outlineWidth={0.018}
-          outlineColor="#0b1220"
-        >
-          {`+${formatNumber(rate)}/sec`}
-        </Text>
-
-        <Text
-          position={[0, -0.33, 0]}
-          fontSize={0.17}
+          position={[0, -0.14, 0]}
+          fontSize={0.3}
           color={unlocked ? '#86efac' : '#fca5a5'}
           anchorX="center"
           anchorY="middle"
-          outlineWidth={0.017}
-          outlineColor="#0b1220"
+          outlineWidth={0.045}
+          outlineColor="#12100e"
         >
           {unlocked
-            ? 'STAND TO TRAIN'
+            ? `+${formatNumber(rate)}/sec`
             : `${pad.requiresRebirths} Rebirth${pad.requiresRebirths === 1 ? '' : 's'}`}
         </Text>
       </Billboard>
+
     </group>
   )
 }

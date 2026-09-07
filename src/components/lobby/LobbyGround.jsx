@@ -17,6 +17,8 @@ import { mergeBoxesByMaterial } from '../../systems/mergeBoxes.js'
 import { voxelMaterial } from '../../systems/voxelTexture.js'
 import InstancedBlocks from '../InstancedBlocks.jsx'
 import MergedBoxes, { useMergedBoxes } from '../MergedBoxes.jsx'
+import { DECAL, DECAL_ABOVE } from '../../systems/decal.js'
+import { ARENA_RAMP_TOP_Z } from '../../data/lobby.js'
 
 /**
  * The hub's terrain: a checkered stone concourse, bright grass lanes either
@@ -56,8 +58,9 @@ function useLobbyMaterials() {
      * the grass - in this world every surface is a moulded brick, and a smooth
      * plaza in the middle of it was the one place that gave the game away.
      */
-    const paving = (color, accent, repeat, seed) =>
+    const paving = (color, accent, repeat, seed, decal) =>
       voxelMaterial(color, {
+        decal,
         pattern: 'studs',
         cells: 4,
         variance: 0.05,
@@ -121,14 +124,20 @@ function useLobbyMaterials() {
       stoneWide: masonry([2, 1], 71),
       stoneNarrow: masonry([1, 1], 73),
       stoneStep: masonry([7, 1], 79),
-      concourse: paving('#fdf6e3', '#ffd9a0', [PLAZA.halfWidth / 2, plazaLength / 4], 83),
+      /*
+       * Painted onto the kerb slab, one centimetre above it, and the lanes are
+       * painted on top of that again. Two stacked overlays need two different
+       * biases or they fight each other instead of the thing underneath.
+       */
+      concourse: paving('#e4ecf5', '#c6d4e4', [PLAZA.halfWidth / 2, plazaLength / 4], 83, DECAL),
       tierSurface: paving(
-        '#fdf6e3',
-        '#ffd9a0',
+        '#e4ecf5',
+        '#c6d4e4',
         [(LEFT_TIER.maxX - LEFT_TIER.minX) / 4, (LEFT_TIER.maxZ - LEFT_TIER.minZ) / 4],
-        89
+        89,
+        DECAL
       ),
-      lane: paving('#8ce85f', '#6ad04a', [1.6, plazaLength / 4], 97),
+      lane: paving('#8ce85f', '#6ad04a', [1.6, plazaLength / 4], 97, DECAL_ABOVE),
       kerb: make(LOBBY_PALETTE.pathEdge),
       post: make('#a9713f'),
       rail: make('#c98a4b'),
@@ -248,6 +257,189 @@ function Trees({ materials }) {
   )
 }
 
+/** The high garden wall directly behind the rebirth pedestals. */
+function RearGardenWall({ materials, wallMaterials, terrainMaterials, stoneMaterial }) {
+  const terraces = useMemo(
+    () => [
+      // Each ledge steps upward away from the plaza, like the reference hub.
+      { position: [0, 1.1, 29.5], size: [78, 2.2, 4], material: terrainMaterials },
+      { position: [0, 3, 33], size: [80, 6, 4], material: terrainMaterials },
+      { position: [0, 5.3, 36.5], size: [84, 10.6, 4], material: wallMaterials },
+    ],
+    []
+  )
+
+  const trees = useMemo(
+    () =>
+      [
+        [-36, 10.6, 36.5, 1.05, 0.2],
+        [-29, 10.6, 36.5, 1.48, 1.1],
+        [-21, 10.6, 36.5, 1.1, 2.3],
+        [-12, 10.6, 36.5, 1.55, 0.7],
+        [-3, 10.6, 36.5, 1.02, 1.8],
+        [6, 10.6, 36.5, 1.35, 2.8],
+        [15, 10.6, 36.5, 1.1, 0.5],
+        [24, 10.6, 36.5, 1.56, 1.6],
+        [33, 10.6, 36.5, 1.08, 2.5],
+      ].map(([x, y, z, scale, rotation]) => ({ position: [x, y, z], scale, rotation })),
+    []
+  )
+
+  const groups = useMemo(() => mergeBoxesByMaterial(treeBoxes({ seed: 41 })), [])
+  const stoneItems = useMemo(
+    () => wallStones({ axis: 'x', from: -41, to: 41, faceAt: 34.45, height: 10.6, seed: 121 }),
+    []
+  )
+  const stoneGeometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
+  useEffect(() => () => groups.forEach((group) => group.geometry.dispose()), [groups])
+  useEffect(() => () => stoneGeometry.dispose(), [stoneGeometry])
+
+  const tint = {
+    trunk: materials.trunk,
+    leaf: materials.leafDark,
+    leafLight: materials.leaf,
+  }
+
+  return (
+    <group name="RearGardenWall">
+      {terraces.map((terrace, i) => (
+        <mesh key={i} material={terrace.material} position={terrace.position} castShadow receiveShadow>
+          <boxGeometry args={terrace.size} />
+        </mesh>
+      ))}
+      <InstancedBlocks
+        items={stoneItems}
+        geometry={stoneGeometry}
+        material={stoneMaterial}
+        castShadow
+        receiveShadow
+      />
+      {groups.map((group) => (
+        <InstancedBlocks
+          key={`back-${group.key}`}
+          items={trees}
+          geometry={group.geometry}
+          material={tint[group.key] ?? materials.leaf}
+          castShadow
+        />
+      ))}
+    </group>
+  )
+}
+
+/**
+ * The outer perimeter joins the rear garden wall into a complete forested
+ * enclosure. The only break is the arena approach, so the lobby still has a
+ * natural way out while every normal camera angle lands on stone and trees.
+ */
+function PerimeterGardenWall({ materials, wallMaterials, stoneMaterial }) {
+  const walls = useMemo(
+    () => [
+      // Straight flanks stop early, then kick inward into garden-like corners.
+      { position: [-73, 4.4, -30], size: [4, 8.8, 82] },
+      { position: [73, 4.4, -30], size: [4, 8.8, 82] },
+      { position: [-65.5, 4.4, 23.25], size: [4, 8.8, 30.5], rotation: 0.515 },
+      { position: [65.5, 4.4, 23.25], size: [4, 8.8, 30.5], rotation: -0.515 },
+      // Arena-side wall, split around the gateway.
+      { position: [-42, 4.4, -73], size: [62, 8.8, 4] },
+      { position: [42, 4.4, -73], size: [62, 8.8, 4] },
+      // Wings connecting the tall rear garden to the outer sides.
+      { position: [-57.5, 4.4, 36.5], size: [31, 8.8, 4] },
+      { position: [57.5, 4.4, 36.5], size: [31, 8.8, 4] },
+    ],
+    []
+  )
+
+  const trees = useMemo(
+    () =>
+      [
+        [-73, 8.8, -63, 1.2, 0.3],
+        [-73, 8.8, -49, 1.5, 1.7],
+        [-73, 8.8, -34, 1.08, 2.5],
+        [-73, 8.8, -19, 1.38, 0.8],
+        [-73, 8.8, -4, 1.12, 2.1],
+        [-69, 8.8, 10, 1.55, 1.2],
+        [-62, 8.8, 22, 1.18, 2.7],
+        [73, 8.8, -62, 1.45, 2.8],
+        [73, 8.8, -47, 1.1, 0.9],
+        [73, 8.8, -32, 1.52, 2.2],
+        [73, 8.8, -17, 1.2, 0.4],
+        [73, 8.8, -2, 1.4, 1.6],
+        [69, 8.8, 10, 1.06, 2.6],
+        [62, 8.8, 22, 1.5, 0.7],
+        [-66, 8.8, -73, 1.1, 0.5],
+        [-53, 8.8, -73, 1.48, 1.9],
+        [-39, 8.8, -73, 1.2, 2.7],
+        [-25, 8.8, -73, 1.55, 1.1],
+        [-14, 8.8, -73, 1.08, 2.4],
+        [14, 8.8, -73, 1.42, 0.3],
+        [27, 8.8, -73, 1.16, 1.5],
+        [41, 8.8, -73, 1.52, 2.8],
+        [54, 8.8, -73, 1.1, 0.9],
+        [66, 8.8, -73, 1.45, 2.1],
+        [-64, 8.8, 36.5, 1.16, 0.7],
+        [-51, 8.8, 36.5, 1.5, 2.3],
+        [51, 8.8, 36.5, 1.22, 1.4],
+        [64, 8.8, 36.5, 1.46, 2.6],
+      ].map(([x, y, z, scale, rotation]) => ({ position: [x, y, z], scale, rotation })),
+    []
+  )
+
+  const stoneItems = useMemo(
+    () => [
+      ...wallStones({ axis: 'z', from: -71, to: 11, faceAt: -70.9, height: 8.8, seed: 211 }),
+      ...wallStones({ axis: 'z', from: -71, to: 11, faceAt: 70.9, height: 8.8, seed: 223 }),
+      ...wallStones({ axis: 'x', from: -71, to: -11, faceAt: -70.9, height: 8.8, seed: 227 }),
+      ...wallStones({ axis: 'x', from: 11, to: 71, faceAt: -70.9, height: 8.8, seed: 229 }),
+    ],
+    []
+  )
+
+  const treeGroups = useMemo(() => mergeBoxesByMaterial(treeBoxes({ seed: 67 })), [])
+  const stoneGeometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
+  useEffect(() => () => treeGroups.forEach((group) => group.geometry.dispose()), [treeGroups])
+  useEffect(() => () => stoneGeometry.dispose(), [stoneGeometry])
+
+  const tint = {
+    trunk: materials.trunk,
+    leaf: materials.leafDark,
+    leafLight: materials.leaf,
+  }
+
+  return (
+    <group name="PerimeterGardenWall">
+      {walls.map((wall, i) => (
+        <mesh
+          key={i}
+          material={wallMaterials}
+          position={wall.position}
+          rotation-y={wall.rotation ?? 0}
+          castShadow
+          receiveShadow
+        >
+          <boxGeometry args={wall.size} />
+        </mesh>
+      ))}
+      <InstancedBlocks
+        items={stoneItems}
+        geometry={stoneGeometry}
+        material={stoneMaterial}
+        castShadow
+        receiveShadow
+      />
+      {treeGroups.map((group) => (
+        <InstancedBlocks
+          key={group.key}
+          items={trees}
+          geometry={group.geometry}
+          material={tint[group.key] ?? materials.leaf}
+          castShadow
+        />
+      ))}
+    </group>
+  )
+}
+
 /**
  * Real stones standing proud of the raised tier's faces.
  *
@@ -357,11 +549,34 @@ function Tufts({ materials }) {
   return <InstancedBlocks items={items} geometry={geometry} material={materials.tuft} />
 }
 
+/**
+ * Where the grass runs between the paving, measured out from the centre line.
+ *
+ * The walkway itself stays stone - it is the way to the arena and wants to read
+ * as a road - and the lanes either side of it alternate from there outward.
+ */
+const LANES = [
+  { x: PLAZA.walkwayHalfWidth + 3.4, width: 6.4 },
+  { x: PLAZA.walkwayHalfWidth + 14, width: 5.4 },
+  { x: PLAZA.walkwayHalfWidth + 22, width: 4.4 },
+]
+
 export default function LobbyGround() {
   const materials = useLobbyMaterials()
 
-  const length = PLAZA.from - PLAZA.to
-  const centreZ = (PLAZA.from + PLAZA.to) / 2
+  /*
+   * The paving runs from the plaza's far end all the way through the gateway
+   * to where the arena takes over.
+   *
+   * It used to stop at `PLAZA.to`, seven metres short of the handover, and the
+   * ground beyond it was the grass field a paving-lip lower. So the last stretch
+   * of the walk into Stage 1 was over a raised strip with a step down either
+   * side of it - the small mound you could see between the entrance walls. Now
+   * the whole approach is one flat surface at the height the player walks at.
+   */
+  const paveTo = Math.min(PLAZA.to, ARENA_RAMP_TOP_Z - 1)
+  const length = PLAZA.from - paveTo
+  const centreZ = (PLAZA.from + paveTo) / 2
   const half = PLAZA.halfWidth
   const walk = PLAZA.walkwayHalfWidth
   const y = PLAZA.pathHeight
@@ -411,50 +626,71 @@ export default function LobbyGround() {
 
   const backMaterials = useMemo(
     () => [
-      materials.soil,
-      materials.soil,
+      materials.stoneLong,
+      materials.stoneLong,
       materials.backTop,
-      materials.soil,
-      materials.soil,
-      materials.soil,
+      materials.stoneLong,
+      materials.stoneLong,
+      materials.stoneLong,
     ],
     [materials]
   )
 
   return (
     <group>
-      {/* Base grass field under everything */}
-      <mesh material={materials.field} position={[0, -0.4, centreZ]} receiveShadow>
+      {/*
+        The paved plaza's top face lands on y = 0, and the grass is dropped a
+        lip below it.
+        
+        It used to be the other way round - grass at zero and paving a quarter
+        of a metre above it - while `groundHeightAt` reported zero for the whole
+        plaza. So the walking surface and the drawn surface were 25cm apart: the
+        dino waded through the floor to the ankle, and every pad and pedestal
+        placed at ground level was sunk by exactly the same amount, which is
+        most of why the training row read as painted lines rather than slabs.
+        The path is still raised over the grass; it is the grass that moved.
+      */}
+      <mesh material={materials.field} position={[0, -0.4 - y, centreZ]} receiveShadow>
         <boxGeometry args={[260, 0.8, 280]} />
       </mesh>
 
       {/* Concourse slab + kerb */}
-      <mesh material={materials.kerb} position={[0, y / 2, centreZ]} receiveShadow>
+      <mesh material={materials.kerb} position={[0, -y / 2, centreZ]} receiveShadow>
         <boxGeometry args={[half * 2 + 1.4, y, length + 1.4]} />
       </mesh>
 
       {/* Checkered stone either side of the lanes */}
       <mesh
         material={materials.concourse}
-        position={[0, y + 0.01, centreZ]}
+        position={[0, 0.01, centreZ]}
         rotation-x={-Math.PI / 2}
         receiveShadow
       >
         <planeGeometry args={[half * 2, length]} />
       </mesh>
 
-      {/* Bright grass lanes flanking the central walkway */}
-      {[-1, 1].map((side) => (
-        <mesh
-          key={side}
-          material={materials.lane}
-          position={[side * (walk + 3.4), y + 0.02, centreZ]}
-          rotation-x={-Math.PI / 2}
-          receiveShadow
-        >
-          <planeGeometry args={[6.4, length]} />
-        </mesh>
-      ))}
+      {/*
+        Grass lanes running the length of the plaza.
+        
+        Two of them, flanking the walkway, left the rest of the floor a single
+        sheet of stone thirty metres across. The reference stripes the whole
+        plaza - tile, grass, tile, grass - which is what breaks that sheet into
+        lanes you can see yourself walking down, and what tells you how far
+        along you are without a single sign.
+      */}
+      {LANES.map(({ x, width }) =>
+        [-1, 1].map((side) => (
+          <mesh
+            key={`${x}-${side}`}
+            material={materials.lane}
+            position={[side * x, 0.02, centreZ]}
+            rotation-x={-Math.PI / 2}
+            receiveShadow
+          >
+            <planeGeometry args={[width, length]} />
+          </mesh>
+        ))
+      )}
 
       {/* Terraces */}
       {TERRACES.map((terrace, i) =>
@@ -466,7 +702,7 @@ export default function LobbyGround() {
             receiveShadow
             castShadow
           >
-            <boxGeometry args={[terrace.width, terrace.height, length + 60]} />
+            <boxGeometry args={[terrace.width, terrace.height, length]} />
           </mesh>
         ))
       )}
@@ -535,14 +771,29 @@ export default function LobbyGround() {
       })}
 
       {/* Back terrace closing the far end */}
-      <mesh
-        material={backMaterials}
-        position={[0, 1.7, PLAZA.to - 9]}
-        receiveShadow
-        castShadow
-      >
-        <boxGeometry args={[half * 2 + 70, 3.4, 14]} />
-      </mesh>
+      {/*
+        The terrace closing the back of the plaza, in two halves.
+        
+        It was one 126-metre block straight across the far end - which was fine
+        while the hub sat six metres *below* the arena and you climbed a ramp
+        through it. Flat, it is a wall standing in the walkway: the small mound
+        between the entrance walls was this, and nothing else.
+      */}
+      {[-1, 1].map((side) => {
+        const inner = ARENA_ENTRANCE.gapHalfWidth
+        const outer = half + 35
+        return (
+          <mesh
+            key={side}
+            material={backMaterials}
+            position={[side * ((inner + outer) / 2), 3.4, PLAZA.to - 9]}
+            receiveShadow
+            castShadow
+          >
+            <boxGeometry args={[outer - inner, 6.8, 14]} />
+          </mesh>
+        )
+      })}
 
       {/* Fences along the plaza edges and across the back */}
       {[-1, 1].map((side) => (
@@ -575,6 +826,17 @@ export default function LobbyGround() {
       <Tufts materials={materials} />
       <ToyBlocks />
       <Trees materials={materials} />
+      <PerimeterGardenWall
+        materials={materials}
+        wallMaterials={backMaterials}
+        stoneMaterial={materials.stoneNarrow}
+      />
+      <RearGardenWall
+        materials={materials}
+        wallMaterials={backMaterials}
+        terrainMaterials={terraceMaterials[1]}
+        stoneMaterial={materials.stoneNarrow}
+      />
     </group>
   )
 }

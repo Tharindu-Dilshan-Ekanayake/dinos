@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { EVOLUTIONS } from '../../data/evolutions.js'
 import {
+  ARENA_ENTRANCE,
   ARENA_GATE,
+  PLAZA,
   OBSTACLES,
   PLAYER_BOUNDS,
   PLAYER_SPEED,
@@ -54,7 +56,7 @@ const CONFIG = {
   groundHeightAt,
 }
 
-export default function Player() {
+export default function Player({ active = true, worldOffset = [0, 0, 0] }) {
   const evolutionIndex = useGameStore((s) => s.evolutionIndex)
   const evolution = EVOLUTIONS[evolutionIndex] ?? EVOLUTIONS[0]
   const materials = useDinoMaterials(evolution)
@@ -100,8 +102,23 @@ export default function Player() {
   }, [])
 
   useFrame((_, rawDelta) => {
+    if (!active) return
     const delta = Math.min(rawDelta, 0.05)
     const { moving } = stepPlayer(delta, CONFIG)
+
+    /*
+     * Past the end of the paving you are in the gateway, which is the width of
+     * the gap between the entrance walls - not the width of the plaza.
+     *
+     * The walkable bounds now reach nine metres further back than the plaza
+     * does, because the handover to the arena is at the top of the ramp. That
+     * is only somewhere to walk *inside* the gateway; without this you could
+     * stroll off the paving and along the outside of the retaining walls.
+     */
+    if (playerPosition.z < PLAZA.to) {
+      const gap = ARENA_ENTRANCE.gapHalfWidth
+      playerPosition.x = Math.min(gap, Math.max(-gap, playerPosition.x))
+    }
 
     /*
      * A treadmill is the one place the dino works without going anywhere, so
@@ -144,9 +161,9 @@ export default function Player() {
     if (root.current) {
       // Step into the swing, along whatever way the dino is facing.
       root.current.position.set(
-        playerPosition.x + Math.cos(playerFacing.angle) * lunge * 0.5,
-        playerPosition.y,
-        playerPosition.z - Math.sin(playerFacing.angle) * lunge * 0.5
+        playerPosition.x + worldOffset[0] + Math.cos(playerFacing.angle) * lunge * 0.5,
+        playerPosition.y + worldOffset[1],
+        playerPosition.z + worldOffset[2] - Math.sin(playerFacing.angle) * lunge * 0.5
       )
       root.current.rotation.y = playerFacing.angle
     }
@@ -163,7 +180,15 @@ export default function Player() {
   })
 
   return (
-    <group ref={root} position={[playerPosition.x, 0, playerPosition.z]}>
+    <group
+      ref={root}
+      visible={active}
+      position={[
+        playerPosition.x + worldOffset[0],
+        worldOffset[1],
+        playerPosition.z + worldOffset[2],
+      ]}
+    >
       <group ref={tilt} scale={evolution.scale}>
         <DinoModel evolution={evolution} materials={materials} rig={rig} />
       </group>

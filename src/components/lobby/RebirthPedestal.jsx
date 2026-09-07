@@ -8,6 +8,7 @@ import { INTERACT_RADIUS } from '../../data/lobby.js'
 import { useGameStore } from '../../store/useGameStore.js'
 import { playerPosition } from '../../systems/playerState.js'
 import { voxelMaterial } from '../../systems/voxelTexture.js'
+import { DECAL } from '../../systems/decal.js'
 
 /**
  * A rebirth milestone pedestal. Walking up to one and tapping it opens the
@@ -90,6 +91,7 @@ export default function RebirthPedestal({ pedestal, position, onOpen }) {
           opacity={0.18}
           side={THREE.DoubleSide}
           depthWrite={false}
+          {...DECAL}
           fog={false}
         />
       </mesh>
