@@ -13,6 +13,23 @@ const stick = { x: 0, y: 0 }
 /** Set by the interact button / E key, consumed once by the lobby. */
 let interactQueued = false
 
+/**
+ * Whether the interact control (E key or its on-screen button) is currently
+ * held down - separate from `interactQueued` above, which is a one-shot pulse
+ * for instant actions (equip a dino, open the rebirth menu). A "hold to
+ * confirm" prompt (see ReturnPads.jsx / InteractPrompt.jsx) reads this
+ * continuously instead, so the consequential action only fires once a full
+ * hold has actually happened rather than on first touch.
+ */
+let interactHeld = false
+
+/**
+ * How long a "hold to confirm" prompt (see ReturnPads.jsx) must be held before
+ * it actually fires. Shared with InteractPrompt.jsx so the ring it draws and
+ * the moment the action actually happens can never drift apart.
+ */
+export const INTERACT_HOLD_SECONDS = 0.65
+
 /** Set by Space or the jump button, consumed once by the player controller. */
 let jumpQueued = false
 
@@ -40,6 +57,7 @@ export function installInput() {
     }
     if (e.code === 'KeyE') {
       interactQueued = true
+      interactHeld = true
       e.preventDefault()
     }
     // Space jumps. It would otherwise scroll the page, so always swallow it.
@@ -51,10 +69,14 @@ export function installInput() {
 
   const onKeyUp = (e) => {
     if (MOVE_KEYS[e.code]) pressed.delete(MOVE_KEYS[e.code])
+    if (e.code === 'KeyE') interactHeld = false
   }
 
   // Releasing focus while a key is held would otherwise leave the dino walking.
-  const onBlur = () => pressed.clear()
+  const onBlur = () => {
+    pressed.clear()
+    interactHeld = false
+  }
 
   window.addEventListener('keydown', onKeyDown)
   window.addEventListener('keyup', onKeyUp)
@@ -75,6 +97,16 @@ export function setStick(x, y) {
 
 export function queueInteract() {
   interactQueued = true
+}
+
+/** Called by the on-screen interact button on press/release (keyboard drives this itself). */
+export function setInteractHeld(down) {
+  interactHeld = down
+}
+
+/** Whether the interact control is currently held down. */
+export function isInteractHeld() {
+  return interactHeld
 }
 
 export function queueJump() {

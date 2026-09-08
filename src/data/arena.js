@@ -1249,12 +1249,13 @@ export const EXIT_SIGN_Z = ARENA.backZ + 1.6
  * Return pads flanking the exit.
  *
  * Stepping on one banks the Wins you are carrying and sends you back to the
- * hub. They only appear once the chamber is clear, which is what makes the
+ * hub. They stand here the whole fight through - red and inert until the
+ * chamber is actually clear, then blue and live - which is what makes the
  * end of a level a decision - cash out, or push through the gate for more.
  */
 export const RETURN_PADS = [
-  { id: 'left', position: [-ARENA.gapHalfWidth - 2.6, 0, ARENA.backZ + 3.4] },
-  { id: 'right', position: [ARENA.gapHalfWidth + 2.6, 0, ARENA.backZ + 3.4] },
+  { id: 'left', position: [-ARENA.gapHalfWidth - 2, 0, ARENA.backZ + 3.4] },
+  { id: 'right', position: [ARENA.gapHalfWidth + 2, 0, ARENA.backZ + 3.4] },
 ]
 
 export const RETURN_PAD_RADIUS = 1.5

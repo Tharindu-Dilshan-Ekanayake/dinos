@@ -13,14 +13,15 @@ import { playerPosition } from '../../systems/playerState.js'
 const AUTO_ATTACK_INTERVAL = 0.45
 
 /**
- * Turns attack input into damage on whatever the player is standing next to.
+ * Turns attack input into damage on whatever the player is currently targeting.
  *
- * An attack only lands inside ATTACK_RANGE, which is what makes the arena a
- * place you move through rather than a button you hold from the doorway. When
- * you are out of range the swing is refused and the HUD says why.
- *
- * Auto-fight exists because a walkable clicker is miserable to play one tap at
- * a time; it still respects range, so positioning keeps mattering.
+ * A manual swing - a tap, a click, or the attack button - always lands on the
+ * current target regardless of distance: this is a clicker at heart, and
+ * making a click do nothing just because the dino hasn't walked over yet read
+ * as broken rather than as a positioning game. Auto-fight is the one place
+ * range still matters: it exists so a walkable clicker is not miserable to
+ * play one tap at a time, and it only swings once you have actually closed
+ * the distance, which is what keeps walking up to the pack meaningful.
  */
 export default function ArenaCombat() {
   const autoTimer = useRef(0)
@@ -61,24 +62,21 @@ export default function ArenaCombat() {
     const inRange = hasTarget && packState.inRange
 
     const swing = () => {
-      if (!inRange) return false
+      if (!hasTarget) return false
       const target = enemySlots[targetSlot]
       setLastImpact(target.x, 1.2, target.z)
       state.attack([target.x, 1.2, target.z], toScreen(target.x, 1.6, target.z))
       return true
     }
 
-    // Manual swings: a tap, a click, or the attack button.
+    // Manual swings: a tap, a click, or the attack button. These always land
+    // on whatever the current target is; an empty room (no target at all)
+    // still swings - same as clicking against nothing in the hub - it just
+    // has nothing to set as the impact point, so the training gain and its
+    // feedback fire with no target attached.
     if (consumeAttack()) {
-      // The swing is heard whether or not it finds anything - a blow through
-      // empty air still swishes, and that thinner sound is the feedback that
-      // you are out of reach.
-      playSwing({ connects: inRange, heavy: state.evolutionIndex >= 6 })
-      if (hasTarget && !inRange) {
-        emit(EVENTS.DENIED, { reason: 'range' })
-      } else {
-        swing()
-      }
+      playSwing({ connects: hasTarget, heavy: state.evolutionIndex >= 6 })
+      if (!swing()) state.attack()
     }
 
     // Auto-fight.

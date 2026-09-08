@@ -160,7 +160,10 @@ function OtherPlayer({ id, username, worldOffset }) {
   return (
     <group ref={root}>
       <group ref={tilt} scale={evolution.scale}>
-        <DinoModel evolution={evolution} materials={materials} rig={rig} />
+        {/* No shadow: a full lobby is up to seven of these on screen at once,
+            and the shadow pass is the single most expensive thing a dino
+            costs (see quality.js) for a shadow nobody is looking at. */}
+        <DinoModel evolution={evolution} materials={materials} rig={rig} castShadows={false} />
       </group>
       <Billboard position={[0, evolution.scale * 2.3 + 0.7, 0]} follow>
         <HeadlineText size={0.32} color="#bff2ff">

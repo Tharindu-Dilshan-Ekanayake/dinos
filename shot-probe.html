@@ -1,0 +1,83 @@
+<style>#root{width:1100px;height:620px}body{margin:0}</style>
+<div id="root"></div>
+<pre id="log">running</pre>
+<script type="module">
+  const log = document.getElementById('log')
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+  const frames = async (n) => {
+    for (let i = 0; i < n; i++) {
+      window.__scene?.advance(performance.now(), true)
+      await sleep(0)
+    }
+  }
+  try {
+    await import('http://localhost:5179/src/main.jsx')
+
+    /*
+     * Let the hub come up first, whatever we are here to photograph. The scene
+     * handle is published from the Canvas's onCreated, and switching scenes
+     * before React has mounted one leaves nothing to switch.
+     */
+    const settle = async () => {
+      const deadline = Date.now() + 25000
+      while (Date.now() < deadline) {
+        await frames(4)
+        if ((window.__scene?.scene.children.length ?? 0) > 1) return true
+        await sleep(250)
+      }
+      return false
+    }
+    if (!(await settle())) throw new Error('the app never mounted a scene')
+    await frames(30)
+
+    // A scene and a level to look at, both optional.
+    if ("arena" === 'arena') {
+      window.__store.getState().enterArena()
+      if (1 > 0 || 0 > 0) {
+        window.__store.setState({ stageIndex: 1, areaIndex: 0 })
+      }
+      /*
+       * A level change rebuilds three chambers' worth of geometry and re-runs
+       * the biome blend, while the settle check returns straight away because
+       * the hub's scene is still standing. So this waits on frames rather than
+       * on a condition - too few and the picture is of a half-built level.
+       * (No backticks in here: this whole probe is a template literal.)
+       */
+      await settle()
+      await frames(200)
+      // Photograph the level the way the reference shot has it: pack
+      // down, pads live, a couple of Wins in hand.
+      window.__store.setState({ stageCleared: true, dead: false, enemyHealth: 0, runWins: 2 })
+      await frames(90)
+    }
+
+    // Set it late and render straight after: the combat loop recomputes
+    // stageCleared from the head-count every frame, so a clear set at
+    // mount time is gone long before the shutter opens.
+    window.__store.setState({ stageCleared: true, dead: false, enemyHealth: 0, runWins: 2 })
+    await frames(4)
+
+    const s = window.__scene
+    if (!s) throw new Error('no scene handle - is this a dev build?')
+
+    /*
+     * Camera coordinates are given chamber-local, and the corridor lays every
+     * level end to end forty units apart - so Stage 18 is six hundred and
+     * eighty units down the -Z axis. Aiming at the world origin instead
+     * photographed the empty air where Stage 1 used to be, which comes back as
+     * a blank page and looks exactly like a broken renderer.
+     */
+    const arena = await import('http://localhost:5179/src/data/arena.js')
+    const originZ = "arena" === 'arena' ? arena.chamberOrigin(1) : 0
+    s.camera.position.set(0, 6.5, -3 + originZ)
+    s.camera.lookAt(0, 3.2, -16 + originZ)
+    s.camera.updateProjectionMatrix()
+
+    // Render and read in the same task: the drawing buffer is not preserved,
+    // so anything that yields in between hands back a blank canvas.
+    s.gl.render(s.scene, s.camera)
+    log.textContent = s.gl.domElement.toDataURL('image/png')
+  } catch (e) {
+    log.textContent = 'ERROR ' + (e.stack || e)
+  }
+</script>
