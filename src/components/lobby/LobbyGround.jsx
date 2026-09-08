@@ -1,23 +1,27 @@
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import {
+  APPROACH_PATH,
   ARENA_ENTRANCE,
   LEFT_STAIRS,
   LEFT_TIER,
   LOBBY_PALETTE,
   PLAZA,
-  TERRACES,
   lobbyBlocks,
+  lobbyCliffs,
   lobbyTufts,
+  pathChevrons,
   treeLayout,
 } from '../../data/lobby.js'
-import { treeBoxes } from '../../data/foliage.js'
+import { lobbyTreeBoxes, treeBoxes } from '../../data/foliage.js'
 import { mergeBoxesByMaterial } from '../../systems/mergeBoxes.js'
-import { voxelMaterial } from '../../systems/voxelTexture.js'
+import { flatToonMaterial, voxelMaterial } from '../../systems/voxelTexture.js'
 import InstancedBlocks from '../InstancedBlocks.jsx'
 import MergedBoxes, { useMergedBoxes } from '../MergedBoxes.jsx'
-import { DECAL, DECAL_ABOVE } from '../../systems/decal.js'
+import { DECAL, DECAL_ABOVE, DECAL_TOP } from '../../systems/decal.js'
+import { outlineItems, outlineMaterial } from '../../systems/outline.js'
 import { ARENA_RAMP_TOP_Z } from '../../data/lobby.js'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
 /**
  * The hub's terrain: a checkered stone concourse, bright grass lanes either
@@ -38,8 +42,11 @@ import { ARENA_RAMP_TOP_Z } from '../../data/lobby.js'
  */
 function useLobbyMaterials() {
   const bundle = useMemo(() => {
-    const make = (color, extra = {}) =>
-      new THREE.MeshStandardMaterial({ color, roughness: 0.92, flatShading: true, ...extra })
+    // Every material the hub builds goes through the same cel-shaded ramp -
+    // see voxelTexture.js's `toon` option - so the ground, the terrain and a
+    // flat-coloured fence post all read as one render style rather than a
+    // stylised floor standing next to smoothly-lit scenery.
+    const make = (color, extra = {}) => flatToonMaterial(color, extra)
 
     const grass = (color, repeat, seed) =>
       voxelMaterial(color, {
@@ -50,6 +57,7 @@ function useLobbyMaterials() {
         fleckDepth: 0.17,
         repeat,
         seed,
+        toon: true,
       })
 
     /**
@@ -68,6 +76,7 @@ function useLobbyMaterials() {
         repeat,
         roughness: 0.9,
         seed,
+        toon: true,
       })
 
     /** Moulded blocks for anything built out of them: trees, trunks, crates. */
@@ -79,6 +88,7 @@ function useLobbyMaterials() {
         fleckDepth: 0.22,
         roughness: 0.85,
         seed,
+        toon: true,
       })
 
     /** Coursed stone for the tier and its steps. */
@@ -90,6 +100,7 @@ function useLobbyMaterials() {
         fleckDepth: 0.2,
         repeat,
         seed,
+        toon: true,
       })
 
     const plazaLength = PLAZA.from - PLAZA.to
@@ -164,6 +175,62 @@ function useLobbyMaterials() {
        * the seam you notice.
        */
       lane: paving('#8ce85f', '#6ad04a', [0.64, plazaLength / 10], 97, DECAL_ABOVE),
+
+      /*
+       * The cliffs: warm rock under a grass slab.
+       *
+       * Both are worn by one InstancedMesh apiece covering every column on
+       * both banks, so the repeats are chosen for the column the hub has most
+       * of - about twelve wide by five and a half deep - and the taller
+       * columns stretch their courses a little. That stretch is invisible at
+       * this scale and it is what keeps the whole ring of cliffs at two draw
+       * calls instead of one per block.
+       */
+      cliffRock: voxelMaterial(LOBBY_PALETTE.cliffRock, {
+        pattern: 'bricks',
+        cells: 6,
+        variance: 0.09,
+        fleckDepth: 0.22,
+        repeat: [3, 2],
+        seed: 131,
+        toon: true,
+      }),
+      cliffGrass: grass(LOBBY_PALETTE.grass, [4, 2], 137),
+
+      /*
+       * The road to the arena.
+       *
+       * Same moulded slabs as the concourse and laid at the same size, so it
+       * reads as part of the same floor rather than as a rug thrown over it -
+       * the only thing that separates it is that it is warm and the plaza is
+       * cold. That is deliberately the *only* difference: a path that also
+       * changes tile size, pattern and height stops looking like a route
+       * through the hub and starts looking like a different building.
+       *
+       * Painted on, like the lanes either side of it - see APPROACH_PATH for
+       * why this is a decal and not a raised slab.
+       */
+      path: paving(
+        LOBBY_PALETTE.pathStone,
+        '#e0c68d',
+        [
+          (APPROACH_PATH.halfWidth * 2) / 10,
+          (APPROACH_PATH.fromZ - APPROACH_PATH.toZ) / 10,
+        ],
+        101,
+        DECAL_ABOVE
+      ),
+      /** The border line down each edge of the road - a decal on a decal. */
+      pathKerb: paving(
+        LOBBY_PALETTE.pathKerb,
+        '#a8874c',
+        [1, (APPROACH_PATH.fromZ - APPROACH_PATH.toZ) / 6],
+        103,
+        DECAL_TOP
+      ),
+      /** The arrows: real (if shallow) relief, not a decal - see pathChevrons. */
+      pathMark: make(LOBBY_PALETTE.pathMark, { roughness: 0.55 }),
+
       kerb: make(LOBBY_PALETTE.pathEdge),
       post: make('#a9713f'),
       rail: make('#c98a4b'),
@@ -255,51 +322,216 @@ function Fence({ materials, from, to, x, axis = 'z' }) {
   )
 }
 
-/**
- * Blocky pines: a stacked trunk under a cluster of canopy cubes.
- *
- * The shape comes from data/foliage.js, so the hub and the arena grow the same
- * tree. Its blocks are welded into one geometry per tint before instancing, so
- * a fourteen-cube tree draws in three calls across the whole terrace - fewer
- * than the four the old three-slab tree needed.
- */
-function Trees({ materials }) {
-  const trees = useMemo(
-    () =>
-      treeLayout(26).map((tree) => ({
-        position: [tree.position[0], tree.terraceHeight ?? 0, tree.position[2]],
-        rotation: tree.rotation,
-        scale: tree.scale,
-      })),
-    []
-  )
+/** How `lobbyTreeBoxes`' material tags map onto the hub's own tints. */
+const LOBBY_TREE_TINT = {
+  trunk: 'trunk',
+  leafDark: 'leafDark',
+  leaf: 'leafMid',
+  leafLight: 'leaf',
+}
 
-  const groups = useMemo(() => mergeBoxesByMaterial(treeBoxes({ seed: 3 })), [])
+/**
+ * The terrace trees: three shapes in rotation instead of one clone repeated.
+ *
+ * `lobbyTreeBoxes` grows a different silhouette per `kind`, so each shape
+ * needs its own merged geometry - it cannot share one buffer the way a single
+ * uniform tree could. Splitting the 42-tree layout into three buckets by kind
+ * and instancing each bucket against its own geometry keeps the same "weld
+ * first, instance second" shape the rest of the hub uses: three shapes times
+ * up to four materials is twelve draw calls for the whole planted ring, still
+ * a rounding error against the hub's overall budget.
+ */
+/**
+ * Every one of a tree's boxes merged into a single buffer, material ignored -
+ * the whole silhouette in one geometry, for the outline pass to wear.
+ *
+ * `mergeBoxesByMaterial` (used for the coloured passes below) deliberately
+ * keeps materials apart; the outline shell needs the opposite; one shape
+ * covering the trunk and every leaf slab together, since a stroke drawn
+ * around only the trunk or only one canopy layer would leave gaps where the
+ * other blocks poke out past it.
+ */
+function mergeTreeSilhouette(boxes) {
+  const geometries = boxes.map((box) => {
+    const geometry = new THREE.BoxGeometry(box.size[0], box.size[1], box.size[2])
+    if (box.rotation) {
+      geometry.rotateX(box.rotation[0])
+      geometry.rotateY(box.rotation[1])
+      geometry.rotateZ(box.rotation[2])
+    }
+    geometry.translate(box.position[0], box.position[1], box.position[2])
+    return geometry
+  })
+  const merged = mergeGeometries(geometries, false)
+  geometries.forEach((geometry) => geometry.dispose())
+  return merged
+}
+
+/** A uniform grow, applied to the whole merged tree rather than per-box - see
+ * outline.js for why cliffs and toy blocks use a fixed thickness instead: a
+ * tree's own boxes vary far less in size, so one percentage reads fine on
+ * all of them. */
+const TREE_OUTLINE_PART = { position: [0, 0, 0], scale: 1.07 }
+
+function Trees({ materials }) {
+  const layout = useMemo(() => treeLayout(42), [])
+
+  const kinds = useMemo(
+    () =>
+      [0, 1, 2].map((kind) => {
+        const boxes = lobbyTreeBoxes({ kind, seed: 3 + kind })
+        return {
+          kind,
+          items: layout
+            .filter((tree) => tree.kind === kind)
+            .map((tree) => ({
+              position: [tree.position[0], tree.terraceHeight ?? 0, tree.position[2]],
+              rotation: tree.rotation,
+              scale: tree.scale,
+            })),
+          groups: mergeBoxesByMaterial(boxes),
+          silhouette: mergeTreeSilhouette(boxes),
+        }
+      }),
+    [layout]
+  )
 
   useEffect(
-    () => () => groups.forEach((group) => group.geometry.dispose()),
-    [groups]
+    () => () =>
+      kinds.forEach(({ groups, silhouette }) => {
+        groups.forEach((group) => group.geometry.dispose())
+        silhouette.dispose()
+      }),
+    [kinds]
   )
-
-  /** foliage.js names the tints; the hub already has materials for them. */
-  const tint = {
-    trunk: materials.trunk,
-    leaf: materials.leafDark,
-    leafLight: materials.leaf,
-  }
 
   return (
     <>
-      {groups.map((group) => (
-        <InstancedBlocks
-          key={group.key}
-          items={trees}
-          geometry={group.geometry}
-          material={tint[group.key] ?? materials.leaf}
-          castShadow
-        />
+      {kinds.map(({ kind, items, groups, silhouette }) => (
+        <group key={kind}>
+          {groups.map((group) => (
+            <InstancedBlocks
+              key={group.key}
+              items={items}
+              geometry={group.geometry}
+              material={materials[LOBBY_TREE_TINT[group.key]] ?? materials.leaf}
+              castShadow
+            />
+          ))}
+          <InstancedBlocks
+            items={items}
+            geometry={silhouette}
+            material={outlineMaterial()}
+            part={TREE_OUTLINE_PART}
+          />
+        </group>
       ))}
     </>
+  )
+}
+
+/**
+ * The raised grass cliffs framing the plaza.
+ *
+ * Two InstancedMeshes for the whole ring - rock bodies and their grass caps -
+ * however many columns `lobbyCliffs` cuts the terraces into, because every
+ * column shares one geometry per material. The stepped heights come from
+ * `data/lobby.js`, which is also where `terraceSurfaceAt` lives - the lookup
+ * everything planted on the bank (trees, tufts, toy blocks) reads instead of
+ * a flat terrace height, now that the top edge is ragged.
+ */
+function Cliffs({ materials }) {
+  const { bodies, caps } = useMemo(() => lobbyCliffs(), [])
+  const geometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
+  useEffect(() => () => geometry.dispose(), [geometry])
+
+  /*
+   * Two outline passes, not one.
+   *
+   * The rock body is what the eye traces along the ground and up the side
+   * faces; the grass cap is what it traces along the skyline and across the
+   * top - from a normal walking-height view they are two different edges,
+   * and a stroke on only one of them reads as outlined on one side and bare
+   * on the other. Thicker on the cap than the body: it is a thin 0.9-unit
+   * slab, and the same absolute stroke that reads as a clean line on a
+   * multi-metre rock face would all but vanish on something this shallow.
+   */
+  const outlineBodies = useMemo(() => outlineItems(bodies, 0.14), [bodies])
+  const outlineCaps = useMemo(() => outlineItems(caps, 0.1), [caps])
+
+  return (
+    <>
+      <InstancedBlocks
+        items={bodies}
+        geometry={geometry}
+        material={materials.cliffRock}
+        castShadow
+        receiveShadow
+      />
+      <InstancedBlocks
+        items={caps}
+        geometry={geometry}
+        material={materials.cliffGrass}
+        castShadow
+        receiveShadow
+      />
+      <InstancedBlocks items={outlineBodies} geometry={geometry} material={outlineMaterial()} />
+      <InstancedBlocks items={outlineCaps} geometry={geometry} material={outlineMaterial()} />
+    </>
+  )
+}
+
+/**
+ * The road to the arena: a painted stripe running from the spawn point to the
+ * entrance walls, bordered and marked with arrows so the way through the hub
+ * is readable at a glance.
+ *
+ * Every layer is a decal - see APPROACH_PATH in data/lobby.js for why this is
+ * paint rather than a raised slab - except the chevrons, which are shallow
+ * physical relief the same way the plaza's kerb lines are.
+ */
+function ApproachPath({ materials }) {
+  const { halfWidth, fromZ, toZ, rise, kerbWidth, kerbRise } = APPROACH_PATH
+  const length = fromZ - toZ
+  const centreZ = (fromZ + toZ) / 2
+
+  const chevrons = useMemo(() => pathChevrons(), [])
+  const chevronGeometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
+  useEffect(() => () => chevronGeometry.dispose(), [chevronGeometry])
+
+  return (
+    <group name="ApproachPath">
+      <mesh
+        material={materials.path}
+        position={[0, rise, centreZ]}
+        rotation-x={-Math.PI / 2}
+        receiveShadow
+      >
+        <planeGeometry args={[halfWidth * 2, length]} />
+      </mesh>
+
+      {/* A warm border down each edge, so the road reads as built rather than
+          as a colour change painted onto the concourse. */}
+      {[-1, 1].map((side) => (
+        <mesh
+          key={side}
+          material={materials.pathKerb}
+          position={[side * (halfWidth - kerbWidth / 2), rise + kerbRise, centreZ]}
+          rotation-x={-Math.PI / 2}
+          receiveShadow
+        >
+          <planeGeometry args={[kerbWidth, length]} />
+        </mesh>
+      ))}
+
+      {/* Arrows down the middle, pointing the way to the gate. */}
+      <InstancedBlocks
+        items={chevrons}
+        geometry={chevronGeometry}
+        material={materials.pathMark}
+        receiveShadow
+      />
+    </group>
   )
 }
 
@@ -477,6 +709,7 @@ function ToyBlocks() {
           fleckDepth: 0.2,
           roughness: 0.75,
           seed: 200 + i,
+          toon: true,
         })
       ),
     []
@@ -486,6 +719,11 @@ function ToyBlocks() {
     () => BLOCK_TONES.map((_, tone) => stacks.filter((item) => item.tone === tone)),
     [stacks]
   )
+
+  // One outline pass over every block regardless of colour - the stroke is
+  // always the same dark tone, so there is nothing tone-specific to split it
+  // by the way the coloured passes are.
+  const outlineStacks = useMemo(() => outlineItems(stacks, 0.06), [stacks])
 
   useEffect(
     () => () => {
@@ -507,6 +745,7 @@ function ToyBlocks() {
           receiveShadow
         />
       ))}
+      <InstancedBlocks items={outlineStacks} geometry={geometry} material={outlineMaterial()} />
     </>
   )
 }
@@ -663,20 +902,14 @@ export default function LobbyGround() {
         ))
       )}
 
-      {/* Terraces */}
-      {TERRACES.map((terrace, i) =>
-        [-1, 1].map((side) => (
-          <mesh
-            key={`${i}-${side}`}
-            material={terraceMaterials[i % terraceMaterials.length]}
-            position={[side * terrace.offset, terrace.height / 2, centreZ]}
-            receiveShadow
-            castShadow
-          >
-            <boxGeometry args={[terrace.width, terrace.height, length]} />
-          </mesh>
-        ))
-      )}
+      {/*
+        Raised grass cliffs framing the plaza - see Cliffs above for why this
+        replaced a single flat box per terrace.
+      */}
+      <Cliffs materials={materials} />
+
+      {/* The road to the arena, and the arrows pointing down it. */}
+      <ApproachPath materials={materials} />
 
       {/* Raised left tier carrying the back row of stage podiums */}
       <mesh

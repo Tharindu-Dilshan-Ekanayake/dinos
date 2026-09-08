@@ -12,7 +12,7 @@ import {
 } from '../../data/lobby.js'
 import { useGameStore } from '../../store/useGameStore.js'
 import { playerPosition } from '../../systems/playerState.js'
-import { voxelMaterial } from '../../systems/voxelTexture.js'
+import { flatToonMaterial, voxelMaterial } from '../../systems/voxelTexture.js'
 import DinoModel, { animateDinoRig, useDinoMaterials, useDinoRig } from '../DinoModel.jsx'
 import { DECAL } from '../../systems/decal.js'
 
@@ -56,10 +56,7 @@ export default function Podium({ podium }) {
    */
   const padMaterial = useMemo(
     () =>
-      new THREE.MeshStandardMaterial({
-        color: evolution.aura,
-        roughness: 0.55,
-        flatShading: true,
+      flatToonMaterial(evolution.aura, {
         emissive: new THREE.Color(evolution.aura),
         // Lit when it is yours, and merely coloured when it is not.
         emissiveIntensity: unlocked ? 0.35 : 0.08,
@@ -88,6 +85,7 @@ export default function Podium({ podium }) {
         repeat: [2, 1],
         roughness: 0.85,
         seed: 61,
+        toon: true,
       }),
     []
   )

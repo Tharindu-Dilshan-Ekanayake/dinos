@@ -6,7 +6,10 @@ import { formatNumber } from '../../data/progression.js'
 import { recommendedDamage } from '../../data/stages.js'
 import { useGameStore } from '../../store/useGameStore.js'
 import { DECAL } from '../../systems/decal.js'
+import { flatToonMaterial } from '../../systems/voxelTexture.js'
+import GlowSprite from '../GlowSprite.jsx'
 import HeadlineText from '../HeadlineText.jsx'
+import PortalParticles from './PortalParticles.jsx'
 import MergedBoxes, { mergeBoxes } from '../MergedBoxes.jsx'
 
 /**
@@ -95,13 +98,15 @@ export default function EntranceGate() {
   const bestStage = useGameStore((s) => s.bestStage)
   const barrier = useRef()
   const barrierMat = useRef()
+  const glow = useRef()
 
   const materials = useMemo(
     () => ({
-      lamp: new THREE.MeshStandardMaterial({
-        color: '#4cc9f0',
-        roughness: 0.35,
-        flatShading: true,
+      // `toneMapped: false` keeps this reading as a light source rather than
+      // a lit surface - it skips the display's tone-mapping curve entirely,
+      // which is the same trick a real bloom pass earns from a threshold
+      // filter, done here for one glowing shape instead of the whole frame.
+      lamp: flatToonMaterial('#4cc9f0', {
         emissive: OPEN,
         emissiveIntensity: 1.1,
         toneMapped: false,
@@ -116,11 +121,22 @@ export default function EntranceGate() {
     const t = state.clock.elapsedTime
     if (barrierMat.current) barrierMat.current.opacity = 0.2 + Math.sin(t * 1.8) * 0.06
     materials.lamp.emissiveIntensity = 0.9 + Math.sin(t * 1.8) * 0.3
+    // The same breath as the barrier and the lamps, so the whole threshold
+    // reads as one powered thing rather than three independently animated
+    // parts that happen to share a rhythm.
+    if (glow.current) glow.current.scale.setScalar(6 + Math.sin(t * 1.8) * 0.4)
   })
 
   return (
     <group position={[0, 0, GATE_Z]}>
       <MergedBoxes groups={FRAME} materials={materials} />
+
+      {/* A soft haze filling the doorway - the fake-bloom halo for the whole
+          threshold, not just one lamp. See components/GlowSprite.jsx. */}
+      <GlowSprite ref={glow} color="#8fe3ff" size={6} position={[0, HEIGHT * 0.42, 0]} />
+
+      {/* Motes drifting up through the doorway - see PortalParticles.jsx. */}
+      <PortalParticles color="#bdf0ff" />
 
       {/* The threshold itself, hung between the two walls. */}
       <mesh ref={barrier} position={[0, HEIGHT / 2, 0]}>

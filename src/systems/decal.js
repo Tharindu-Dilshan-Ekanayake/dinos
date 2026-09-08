@@ -46,3 +46,16 @@ export const DECAL_ABOVE = {
   polygonOffsetFactor: -4,
   polygonOffsetUnits: -4,
 }
+
+/**
+ * A decal on top of a decal that is itself on top of a decal.
+ *
+ * The approach path stacks three: concourse, the road surface, then the kerb
+ * line down its edges. `DECAL_ABOVE` is already spoken for by the grass lanes
+ * at the middle tier, so the kerb needs a bias stronger than either.
+ */
+export const DECAL_TOP = {
+  polygonOffset: true,
+  polygonOffsetFactor: -6,
+  polygonOffsetUnits: -6,
+}

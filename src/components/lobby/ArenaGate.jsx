@@ -22,7 +22,9 @@ import { formatNumber } from '../../data/progression.js'
 import { MAX_STAGES, damageRating, recommendedDamage } from '../../data/stages.js'
 import { useGameStore } from '../../store/useGameStore.js'
 import { playerPosition } from '../../systems/playerState.js'
-import { voxelMaterial } from '../../systems/voxelTexture.js'
+import { flatToonMaterial, voxelMaterial } from '../../systems/voxelTexture.js'
+import { outlineMaterial } from '../../systems/outline.js'
+import GlowSprite from '../GlowSprite.jsx'
 import InstancedBlocks from '../InstancedBlocks.jsx'
 import Chamber from '../arena/Chamber.jsx'
 import EntryGate from '../arena/EntryGate.jsx'
@@ -111,8 +113,10 @@ export default function ArenaGate({ active = true, showPreview = true }) {
   const anim = useRef({ near: 0, phase: 0, armed: false })
 
   const materials = useMemo(() => {
-    const flat = (color, extra = {}) =>
-      new THREE.MeshStandardMaterial({ color, roughness: 0.9, flatShading: true, ...extra })
+    // Cel-shaded, like the rest of the hub - the portal is the single most
+    // important landmark in it, and the one place a smoothly-lit material
+    // would stand out for the wrong reason.
+    const flat = (color, extra = {}) => flatToonMaterial(color, extra)
 
     return {
       // Coursed stone, tiled along the wall's length rather than square, so the
@@ -130,6 +134,7 @@ export default function ArenaGate({ active = true, showPreview = true }) {
         fleckDepth: 0.22,
         repeat: [3, 2],
         seed: 17,
+        toon: true,
       }),
       pillar: voxelMaterial(LOBBY_PALETTE.gateWall, {
         pattern: 'studs',
@@ -138,6 +143,7 @@ export default function ArenaGate({ active = true, showPreview = true }) {
         fleckDepth: 0.2,
         repeat: [1, 3],
         seed: 19,
+        toon: true,
       }),
       cap: flat(LOBBY_PALETTE.gateWallTop),
       tread: voxelMaterial('#c9d1d9', {
@@ -147,13 +153,13 @@ export default function ArenaGate({ active = true, showPreview = true }) {
         fleckDepth: 0.18,
         repeat: [3, 1],
         seed: 29,
+        toon: true,
       }),
-      trim: flat('#ffd166', { roughness: 0.6 }),
+      trim: flat('#ffd166'),
       post: flat('#5c6672'),
       lantern: flat('#ffd76b', {
         emissive: new THREE.Color('#ffb703'),
         emissiveIntensity: 0.9,
-        roughness: 0.4,
       }),
       grass: voxelMaterial(LOBBY_PALETTE.grass, {
         cells: 8,
@@ -162,6 +168,7 @@ export default function ArenaGate({ active = true, showPreview = true }) {
         fleckDepth: 0.17,
         repeat: [16, 2],
         seed: 37,
+        toon: true,
       }),
       soil: voxelMaterial(LOBBY_PALETTE.wall, {
         cells: 8,
@@ -170,6 +177,7 @@ export default function ArenaGate({ active = true, showPreview = true }) {
         fleckDepth: 0.24,
         repeat: [16, 1],
         seed: 41,
+        toon: true,
       }),
     }
   }, [])
@@ -342,12 +350,77 @@ export default function ArenaGate({ active = true, showPreview = true }) {
           >
             <boxGeometry args={[E.wallWidth, WALL_TOTAL_HEIGHT, WALL_LENGTH]} />
           </mesh>
+          {/*
+            The gateway's silhouette is the one the whole hub points at, so it
+            gets the same inverted-hull stroke the terrain wears - see
+            systems/outline.js. A plain enlarged box rather than InstancedBlocks:
+            there is exactly one of these per side, so instancing would cost a
+            mesh just to hold a single matrix.
+          */}
+          <mesh material={outlineMaterial()} position={[side * 0, WALL_TOTAL_HEIGHT / 2, 0]}>
+            <boxGeometry args={[E.wallWidth + 0.12, WALL_TOTAL_HEIGHT + 0.12, WALL_LENGTH + 0.12]} />
+          </mesh>
           {/* Cap on top of wall - same reason, same answer. */}
           <mesh material={materials.cap} position={[side * 0, WALL_TOTAL_HEIGHT + 0.22, 0]}>
             <boxGeometry args={[E.wallWidth + 0.5, 0.44, WALL_LENGTH + 0.5]} />
           </mesh>
+
+          {/*
+            A lantern set into the inner face, near the plaza end of the wall -
+            the first thing lit as you walk up to the gate rather than
+            something you only see once you are already inside it. Flush
+            against the face and proud of it by a few centimetres, the same
+            way EntranceGate's own lamp strip sits in the wall beside it.
+          */}
+          <mesh
+            material={materials.lantern}
+            position={[
+              -side * (E.wallWidth / 2 + 0.2),
+              WALL_TOTAL_HEIGHT * 0.6,
+              WALL_LENGTH / 2 - 3,
+            ]}
+          >
+            <boxGeometry args={[0.4, 1.3, 0.7]} />
+          </mesh>
+          <pointLight
+            color="#ffb703"
+            intensity={2.6}
+            distance={15}
+            decay={2}
+            position={[
+              -side * (E.wallWidth / 2 + 0.6),
+              WALL_TOTAL_HEIGHT * 0.6,
+              WALL_LENGTH / 2 - 3,
+            ]}
+          />
+          {/* The lantern's own fake-bloom halo - see components/GlowSprite.jsx. */}
+          <GlowSprite
+            color="#ffcf6b"
+            size={2.2}
+            position={[
+              -side * (E.wallWidth / 2 + 0.5),
+              WALL_TOTAL_HEIGHT * 0.6,
+              WALL_LENGTH / 2 - 3,
+            ]}
+          />
         </group>
       ))}
+
+      {/*
+        The lintel: a gold beam across the top of the gap, tying the two walls
+        into one doorway rather than leaving them as a pair of towers with a
+        hole between them. Well above the reach of a jump, so it is scenery,
+        never a ceiling.
+      */}
+      <mesh
+        material={materials.trim}
+        position={[0, WALL_TOTAL_HEIGHT + 0.75, E.wallFromZ]}
+      >
+        <boxGeometry args={[E.gapHalfWidth * 2 + E.wallWidth, 0.6, 0.6]} />
+      </mesh>
+      <mesh material={outlineMaterial()} position={[0, WALL_TOTAL_HEIGHT + 0.75, E.wallFromZ]}>
+        <boxGeometry args={[E.gapHalfWidth * 2 + E.wallWidth + 0.1, 0.72, 0.72]} />
+      </mesh>
 
       {/*
         No grass shoulders.
