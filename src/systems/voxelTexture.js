@@ -312,6 +312,30 @@ export function voxelTintMap(options = {}) {
  * The colour is baked into the texture, so the material's own colour stays
  * white; callers dispose the material, never the map, which the cache owns.
  */
+/**
+ * The cel-shading ramp: how many distinct bands of brightness a toon surface
+ * is allowed, rather than the smooth Lambert falloff `MeshStandardMaterial`
+ * computes.
+ *
+ * Four steps, weighted toward the light end - a fifth of the ramp is shadow,
+ * the rest is lit - because the hub's boxes are mostly lit from above and a
+ * ramp split down the middle reads as muddy on a bright toy world. `NEAREST`
+ * filtering is load-bearing: `MeshToonMaterial` samples this with the dot
+ * product of the light and the normal, and a linear-filtered ramp blurs the
+ * bands back into the smooth gradient toon shading exists to remove.
+ */
+let gradientMapCache = null
+function toonGradientMap() {
+  if (gradientMapCache) return gradientMapCache
+  const data = new Uint8Array([90, 165, 210, 255])
+  const texture = new THREE.DataTexture(data, data.length, 1, THREE.RedFormat)
+  texture.magFilter = THREE.NearestFilter
+  texture.minFilter = THREE.NearestFilter
+  texture.needsUpdate = true
+  gradientMapCache = texture
+  return texture
+}
+
 export function voxelMaterial(color, options = {}) {
   const {
     roughness = 0.95,
@@ -322,13 +346,54 @@ export function voxelMaterial(color, options = {}) {
      * of physical separation is not enough on its own.
      */
     decal,
+    /*
+     * Cel-shaded rather than PBR-lit.
+     *
+     * Opt-in and off by default: the arena's chambers, rim props and every
+     * biome material go through this same factory, and switching the shading
+     * model under them would change how three areas of the game look for a
+     * change that was only ever asked of the hub. Callers that want the
+     * stylised look pass `toon: true` themselves.
+     */
+    toon = false,
     ...textureOptions
   } = options
+  const map = voxelTexture(color, textureOptions)
+
+  if (toon) {
+    return new THREE.MeshToonMaterial({
+      map,
+      flatShading,
+      gradientMap: toonGradientMap(),
+      ...(decal ?? {}),
+    })
+  }
+
   return new THREE.MeshStandardMaterial({
-    map: voxelTexture(color, textureOptions),
+    map,
     roughness,
     metalness: 0,
     flatShading,
     ...(decal ?? {}),
+  })
+}
+
+/**
+ * A cel-shaded material for a flat, untextured colour - fences, kerbs,
+ * lanterns, anything built as a solid tint rather than a painted surface.
+ *
+ * The stylised look does not stop at the ground: a toon-shaded terrain next to
+ * a smoothly-lit fence post is two render styles standing side by side, and
+ * the seam is exactly as visible as it sounds. Everything the hub builds out
+ * of a plain colour goes through this instead of a bare `MeshStandardMaterial`
+ * once it opts into the stylised look, so the whole scene shares one shading
+ * model.
+ */
+export function flatToonMaterial(color, extra = {}) {
+  return new THREE.MeshToonMaterial({
+    color,
+    flatShading: true,
+    gradientMap: toonGradientMap(),
+    ...extra,
   })
 }

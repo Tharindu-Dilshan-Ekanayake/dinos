@@ -21,13 +21,16 @@ import { consumeTeleport, playerPosition } from '../../systems/playerState.js'
 const LOOK_HEIGHT = 2.1
 
 /**
- * Steepest the shot is allowed to get.
+ * Steepest the shot is allowed to get, by default.
  *
  * A corridor has no room sideways, so a camera swung side-on in one gets
  * squeezed in until it is a few metres from the dino - and at that range the
  * orbit's eight metres of height is a near vertical view of your own back,
  * which is what every stage boundary used to look like. Height is the thing to
  * give up there: a camera with nowhere to stand back to comes down instead.
+ *
+ * A caller with more room to work with - see `maxLookDown` below - can raise
+ * this; nothing that mounts this component without the prop changes at all.
  */
 const MAX_LOOK_DOWN = 0.62
 
@@ -41,7 +44,7 @@ const MAX_LOOK_DOWN = 0.62
  */
 const CUT_ABOVE = 8
 
-export default function LobbyCamera({ clamp, worldOffset = [0, 0, 0] }) {
+export default function LobbyCamera({ clamp, worldOffset = [0, 0, 0], maxLookDown = MAX_LOOK_DOWN }) {
   const camera = useThree((s) => s.camera)
   const gl = useThree((s) => s.gl)
 
@@ -110,7 +113,7 @@ export default function LobbyCamera({ clamp, worldOffset = [0, 0, 0] }) {
       current.current.x - (playerPosition.x + worldOffset[0]),
       current.current.z - (playerPosition.z + worldOffset[2])
     )
-    const ceiling = eye + reach * Math.tan(MAX_LOOK_DOWN)
+    const ceiling = eye + reach * Math.tan(maxLookDown)
     if (current.current.y > ceiling) current.current.y = ceiling
 
     lookTarget.current.set(

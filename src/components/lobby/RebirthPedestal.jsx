@@ -7,8 +7,9 @@ import { REBIRTH_WINS_REQUIRED, formatNumber } from '../../data/progression.js'
 import { INTERACT_RADIUS } from '../../data/lobby.js'
 import { useGameStore } from '../../store/useGameStore.js'
 import { playerPosition } from '../../systems/playerState.js'
-import { voxelMaterial } from '../../systems/voxelTexture.js'
+import { flatToonMaterial, voxelMaterial } from '../../systems/voxelTexture.js'
 import { DECAL } from '../../systems/decal.js'
+import GlowSprite from '../GlowSprite.jsx'
 
 /**
  * A rebirth milestone pedestal. Walking up to one and tapping it opens the
@@ -24,6 +25,8 @@ export default function RebirthPedestal({ pedestal, position, onOpen }) {
 
   const crystal = useRef()
   const ringRef = useRef()
+  const lightRef = useRef()
+  const glowRef = useRef()
   const anim = useRef({ near: 0, phase: Math.random() * 6 })
 
   useFrame((_, rawDelta) => {
@@ -36,12 +39,24 @@ export default function RebirthPedestal({ pedestal, position, onOpen }) {
     const inRange = dx * dx + dz * dz < INTERACT_RADIUS * INTERACT_RADIUS
     a.near += ((inRange ? 1 : 0) - a.near) * Math.min(1, delta * 9)
 
+    const bob = 1.6 + Math.sin(a.phase * 1.7) * 0.12 + a.near * 0.15
     if (crystal.current) {
       crystal.current.rotation.y += delta * (0.8 + a.near * 1.6)
-      crystal.current.position.y = 1.6 + Math.sin(a.phase * 1.7) * 0.12 + a.near * 0.15
+      crystal.current.position.y = bob
+    }
+    if (glowRef.current) {
+      // Rides the same float as the crystal it is haloing.
+      glowRef.current.position.y = bob
+      glowRef.current.scale.setScalar(1.6 + a.near * 0.5)
     }
     if (ringRef.current) {
       ringRef.current.material.opacity = 0.18 + a.near * 0.45
+    }
+    if (lightRef.current) {
+      // A base glow always on, brighter once you are standing close enough
+      // to interact - the same "wakes up as you approach" beat the ring uses.
+      const base = achieved ? 1.1 : 0.55
+      lightRef.current.intensity = base + a.near * 1.4
     }
   })
 
@@ -57,12 +72,32 @@ export default function RebirthPedestal({ pedestal, position, onOpen }) {
         repeat: [2, 1],
         roughness: 0.85,
         seed: 61,
+        toon: true,
       }),
     []
   )
   useEffect(() => () => baseMaterial.dispose(), [baseMaterial])
 
   const tint = achieved ? '#c9a3ff' : ready ? '#fbbf24' : '#64748b'
+
+  // Cel-shaded, like everything else the hub is built from - see baseMaterial
+  // above and flatToonMaterial in systems/voxelTexture.js.
+  const capMaterial = useMemo(() => flatToonMaterial(tint), [tint])
+  const crystalMaterial = useMemo(
+    () =>
+      flatToonMaterial(tint, {
+        emissive: tint,
+        emissiveIntensity: achieved ? 0.7 : 0.25,
+      }),
+    [tint, achieved]
+  )
+  useEffect(
+    () => () => {
+      capMaterial.dispose()
+      crystalMaterial.dispose()
+    },
+    [capMaterial, crystalMaterial]
+  )
 
   return (
     <group
@@ -78,9 +113,8 @@ export default function RebirthPedestal({ pedestal, position, onOpen }) {
       <mesh material={baseMaterial} position={[0, 0.4, 0]} castShadow receiveShadow>
         <boxGeometry args={[2.4, 0.8, 2.4]} />
       </mesh>
-      <mesh position={[0, 0.9, 0]} castShadow>
+      <mesh material={capMaterial} position={[0, 0.9, 0]} castShadow>
         <boxGeometry args={[2, 0.24, 2]} />
-        <meshStandardMaterial color={tint} roughness={0.5} flatShading />
       </mesh>
 
       <mesh ref={ringRef} position={[0, 1.04, 0]} rotation-x={-Math.PI / 2}>
@@ -97,16 +131,26 @@ export default function RebirthPedestal({ pedestal, position, onOpen }) {
       </mesh>
 
       {/* Floating crystal marking the milestone */}
-      <mesh ref={crystal} position={[0, 1.6, 0]} castShadow>
+      <mesh ref={crystal} material={crystalMaterial} position={[0, 1.6, 0]} castShadow>
         <octahedronGeometry args={[0.5, 0]} />
-        <meshStandardMaterial
-          color={tint}
-          emissive={tint}
-          emissiveIntensity={achieved ? 0.7 : 0.25}
-          roughness={0.3}
-          flatShading
-        />
       </mesh>
+
+      {/* The crystal's own fake-bloom halo - see components/GlowSprite.jsx. */}
+      <GlowSprite ref={glowRef} color={tint} size={1.6} position={[0, 1.6, 0]} />
+
+      {/*
+        The crystal actually lights the ground it floats over, rather than
+        merely being a bright surface itself. Three of these across the whole
+        hub is nothing a forward renderer notices; not shadow-casting, since a
+        light this close to the ground would otherwise want its own map.
+      */}
+      <pointLight
+        ref={lightRef}
+        color={tint}
+        position={[0, 1.6, 0]}
+        distance={9}
+        decay={2}
+      />
 
       <Billboard position={[0, 3.4, 0]}>
         <mesh position={[0, 0, -0.02]}>

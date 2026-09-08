@@ -99,6 +99,28 @@ export const LOBBY_PALETTE = {
    */
   gateWall: '#4a5464',
   gateWallTop: '#38404d',
+  /*
+   * The rock the grass cliffs are cut from.
+   *
+   * Warm sandy stone, not the brown soil the terraces used to show down their
+   * faces. Brown under green reads as a hole dug in a field; stone under green
+   * reads as land standing up, which is the whole difference between a bank
+   * beside the plaza and a cliff around it.
+   */
+  cliffRock: '#cbb894',
+  cliffRockDeep: '#ab9878',
+  /*
+   * The way to the arena, in warm sandstone against the plaza's cold grey.
+   *
+   * The walkway used to be paved in exactly the material either side of it, so
+   * the one route every run takes was invisible - a stone floor with a stone
+   * stripe down it. A warm path on a cool concourse is the whole of the
+   * wayfinding: you can see where the game wants you to go from the spawn
+   * point, without a single sign.
+   */
+  pathStone: '#f2dfb4',
+  pathKerb: '#c9ab74',
+  pathMark: '#ffd166',
   key: '#fff6e0',
   ambient: '#cfe8ff',
 }
@@ -534,12 +556,191 @@ export function clampToPlaza(point, margin = 1.2) {
 /**
  * Grass terraces stepping away from the plaza. Shared by the ground mesh and
  * the tree scatter so trees always stand on a step rather than floating.
+ *
+ * Five shallow steps, not three deep ones.
+ *
+ * Three of them climbed the same height in a third as many risers, so each
+ * riser was a couple of metres of blank face twelve wide - and with the stone
+ * courses that used to break those faces up gone, the bank beside the walkway
+ * read as a plain grey wall with a green stripe along the top of it. The tops
+ * are what carry everything (trees, tufts, toy blocks); the risers carry
+ * nothing and never did. Cutting the same climb into more, smaller pieces puts
+ * a grass line every metre up the slope, which is what makes it read as ground
+ * rising rather than as a wall standing there.
+ *
+ * `offset` is how far out the step's centre sits. The last one has to stay
+ * inside the perimeter wall at 73 or the hub's own enclosure ends up *behind*
+ * its scenery - which is what a first step at `halfWidth + 61` was doing: 95,
+ * twenty two units outside the wall, with its trees standing in the void past
+ * the edge of the world.
+ *
+ * Everything that decorates them indexes `TERRACES` by `i % length`, so more
+ * steps spreads the scatter further up the bank on its own.
  */
 export const TERRACES = [
-  { offset: PLAZA.halfWidth + 61, height: 1.6, width: 12 },
-  { offset: PLAZA.halfWidth + 17, height: 3.4, width: 12 },
-  { offset: PLAZA.halfWidth + 28, height: 5.6, width: 14 },
+  { offset: PLAZA.halfWidth + 6, height: 1.6, width: 12 },
+  { offset: PLAZA.halfWidth + 17, height: 3.6, width: 12 },
+  { offset: PLAZA.halfWidth + 28, height: 6.2, width: 14 },
+  /*
+   * A fourth step, and the tallest.
+   *
+   * Three stopped at five and a half - below the perimeter wall at 73, so the
+   * hub ended in a fence with open sky behind it. This one tops out above the
+   * wall, which puts *land* behind the enclosure instead: you read a green
+   * bowl the hub sits in rather than a yard with a fence round it. Its outer
+   * face lands exactly on the wall, which is as far out as anything can go
+   * before it is standing outside the world.
+   */
+  { offset: PLAZA.halfWidth + 34, height: 9.4, width: 10 },
 ]
+
+/* ------------------------------------------------------------------ cliffs */
+
+/** Thickness of the grass slab capping every cliff column. */
+export const CLIFF_CAP = 0.9
+
+/**
+ * The voxel the cliff heights are quantised to.
+ *
+ * Heights are rounded to whole multiples of this, so the skyline the bank cuts
+ * is a staircase rather than a slope. That rounding is the entire difference
+ * between a blocky cliff and a lumpy hill: a continuous random height reads as
+ * noise, and the very same randomness snapped to a grid reads as stacked
+ * bricks.
+ */
+export const CLIFF_STEP = 0.55
+
+/** How far a single cliff column runs along Z. */
+const CLIFF_COLUMN_DEPTH = 5.5
+
+/**
+ * The stretch of hub the cliffs wrap.
+ *
+ * `CLIFF_FROM_Z` matches `PLAZA.from` exactly, which is where the old flat
+ * terraces used to start - any further forward and the first column would
+ * overlap the low apron RearGardenWall builds behind the spawn point.
+ * `CLIFF_TO_Z` reaches past where the old terraces stopped, closer to the
+ * arena-side perimeter wall at -73, so the cliffs frame the run-up to the
+ * gate instead of leaving it flanked by bare grass.
+ */
+const CLIFF_FROM_Z = 26
+const CLIFF_TO_Z = -68
+
+/** How far a grass cap oversails the rock it sits on. */
+const CLIFF_OVERHANG = 0.35
+
+/**
+ * The cliffs, as a run of columns per terrace.
+ *
+ * A terrace used to be one long box running the whole length of the plaza,
+ * which from the walkway is a green stripe on a grey wall: the same silhouette
+ * from every angle, and nothing to tell you how far along the hub you are.
+ * Cutting each one into columns whose heights step by a fixed voxel gives the
+ * bank a ragged top edge, a shadow that breaks as it climbs, and a different
+ * profile from every point on the concourse.
+ *
+ * Built once at module load, because two separate things have to agree on it:
+ * the geometry that draws the cliff, and `terraceSurfaceAt`, which every tree,
+ * tuft and toy block is placed against. Generating it twice from one seed
+ * would work right until someone reordered a call.
+ */
+function buildCliffColumns() {
+  let seed = 5150
+  const rand = () => {
+    seed = (seed * 1664525 + 1013904223) % 4294967296
+    return seed / 4294967296
+  }
+
+  return TERRACES.map((terrace) => {
+    const baseInner = terrace.offset - terrace.width / 2
+    const outer = terrace.offset + terrace.width / 2
+    const columns = []
+
+    for (let z = CLIFF_FROM_Z; z > CLIFF_TO_Z; z -= CLIFF_COLUMN_DEPTH) {
+      const depth = Math.min(CLIFF_COLUMN_DEPTH, z - CLIFF_TO_Z)
+      /*
+       * The face is ragged, but only ever *away* from the plaza.
+       *
+       * A column that stepped inward would stand inside PLAYER_BOUNDS, and
+       * since `groundHeightAt` reports zero out here the dino would walk
+       * straight into the side of it with nothing to stop it. Jittering
+       * outward only means the cliff can be as broken as it likes and still
+       * never reach ground anybody can stand on.
+       */
+      const inner = baseInner + Math.round(rand() * 3) * (CLIFF_STEP * 1.4)
+      columns.push({
+        centreZ: z - depth / 2,
+        depth,
+        height: terrace.height + Math.round(rand() * 3) * CLIFF_STEP,
+        inner,
+        outer,
+      })
+    }
+
+    return columns
+  })
+}
+
+export const CLIFF_COLUMNS = buildCliffColumns()
+
+/**
+ * The standable top of terrace `index` at `z` - grass cap included.
+ *
+ * Everything that sits on the bank is placed through this rather than against
+ * `terrace.height`, because with a ragged top edge those two are no longer the
+ * same number. Read the flat height instead and half the trees on a stepped
+ * cliff are buried to the knee while the other half float above it.
+ */
+export function terraceSurfaceAt(index, z) {
+  const columns = CLIFF_COLUMNS[index % CLIFF_COLUMNS.length]
+  for (const column of columns) {
+    const half = column.depth / 2
+    if (z <= column.centreZ + half && z >= column.centreZ - half) {
+      return column.height + CLIFF_CAP
+    }
+  }
+  return TERRACES[index % TERRACES.length].height + CLIFF_CAP
+}
+
+/**
+ * The cliffs as instancing items: rock bodies, and the grass slabs on top.
+ *
+ * Two lists rather than one, because they wear different materials and each is
+ * drawn as a single InstancedMesh - so the whole ring of cliffs around the hub
+ * costs two draw calls however many columns it gets cut into.
+ */
+export function lobbyCliffs() {
+  const bodies = []
+  const caps = []
+
+  for (const columns of CLIFF_COLUMNS) {
+    for (const column of columns) {
+      const width = column.outer - column.inner
+      const centreX = (column.inner + column.outer) / 2
+
+      for (const side of [-1, 1]) {
+        bodies.push({
+          position: [side * centreX, column.height / 2, column.centreZ],
+          scale: [width, column.height, column.depth],
+        })
+        /*
+         * The cap oversails the rock on every side.
+         *
+         * Flush, a grass lid is just the top face of the block painted green.
+         * Proud of it by a few centimetres it throws a shadow line the whole
+         * way round the column, which is what makes the turf read as lying
+         * *on* the rock rather than as being the same block in two colours.
+         */
+        caps.push({
+          position: [side * centreX, column.height + CLIFF_CAP / 2, column.centreZ],
+          scale: [width + CLIFF_OVERHANG, CLIFF_CAP, column.depth + CLIFF_OVERHANG],
+        })
+      }
+    }
+  }
+
+  return { bodies, caps }
+}
 
 /**
  * Grass blades tufting the terraces that frame the plaza.
@@ -556,20 +757,24 @@ export function lobbyTufts(clusters = 150) {
     return seed / 4294967296
   }
 
-  const fromZ = PLAZA.to - 6
-  const spanZ = PLAZA.from - fromZ + 10
+  // Kept inside the run of cliff columns: past either end there is no bank to
+  // stand on, and a tuft out there is a blade of grass hanging in mid-air.
+  const fromZ = CLIFF_TO_Z + 3
+  const spanZ = CLIFF_FROM_Z - 3 - fromZ
 
   for (let i = 0; i < clusters; i++) {
-    const terrace = TERRACES[i % TERRACES.length]
+    const index = i % TERRACES.length
+    const terrace = TERRACES[index]
     const side = i % 2 === 0 ? -1 : 1
     const cx = side * (terrace.offset + (rand() - 0.5) * (terrace.width - 1.5))
     const cz = fromZ + rand() * spanZ
+    const top = terraceSurfaceAt(index, cz)
 
     const blades = 2 + Math.floor(rand() * 3)
     for (let b = 0; b < blades; b++) {
       const height = 0.5 + rand() * 0.5
       items.push({
-        position: [cx + (rand() - 0.5) * 1.2, terrace.height + height / 2, cz + (rand() - 0.5) * 1.2],
+        position: [cx + (rand() - 0.5) * 1.2, top + height / 2, cz + (rand() - 0.5) * 1.2],
         scale: [0.8 + rand() * 0.5, height, 0.8 + rand() * 0.5],
         rotation: rand() * Math.PI,
         tilt: (rand() - 0.5) * 0.2,
@@ -600,18 +805,19 @@ export function lobbyBlocks(stacks = 46, tones = 5) {
     return seed / 4294967296
   }
 
-  const fromZ = PLAZA.to - 4
-  const spanZ = PLAZA.from - fromZ + 8
+  const fromZ = CLIFF_TO_Z + 3
+  const spanZ = CLIFF_FROM_Z - 3 - fromZ
 
   for (let i = 0; i < stacks; i++) {
-    const terrace = TERRACES[i % TERRACES.length]
+    const index = i % TERRACES.length
+    const terrace = TERRACES[index]
     const side = i % 2 === 0 ? -1 : 1
     const cx = side * (terrace.offset + (rand() - 0.5) * (terrace.width - 3))
     const cz = fromZ + rand() * spanZ
 
     // One to three cubes, each a little smaller and turned off the one below.
     const height = 1 + Math.floor(rand() * 3)
-    let base = terrace.height
+    let base = terraceSurfaceAt(index, cz)
     let size = 1.5 + rand() * 0.9
 
     for (let level = 0; level < height; level++) {
@@ -644,25 +850,119 @@ export function treeLayout(count = 26) {
     return seed / 4294967296
   }
 
+  // The planted band is the cliff run, inset a little at both ends so no tree
+  // stands on the last half-column with its canopy out over the drop.
+  const fromZ = CLIFF_TO_Z + 4
+  const spanZ = CLIFF_FROM_Z - 4 - fromZ
+
   for (let i = 0; i < count; i++) {
     const side = i % 2 === 0 ? -1 : 1
-    const terrace = TERRACES[i % TERRACES.length]
+    const index = i % TERRACES.length
+    const terrace = TERRACES[index]
     const t = i / count
     const scale = 0.9 + rand() * 0.85
     // Inset by the canopy's own half-width, so no tree hangs over the terrace
     // edge with nothing underneath it.
     const room = Math.max(0, terrace.width / 2 - TREE_HALF_WIDTH * scale)
+    const z = fromZ + spanZ * (1 - t) - rand() * 3
 
     trees.push({
-      position: [
-        side * (terrace.offset + (rand() - 0.5) * 2 * room),
-        0,
-        PLAZA.from + 6 - t * (PLAZA.from - PLAZA.to + 22) - rand() * 4,
-      ],
-      terraceHeight: terrace.height,
+      position: [side * (terrace.offset + (rand() - 0.5) * 2 * room), 0, z],
+      // Read off the column this tree actually stands on - the tops are
+      // stepped now, so one height for the whole terrace plants half the row
+      // underground and floats the other half.
+      terraceHeight: terraceSurfaceAt(index, z),
+      /*
+       * Which of the three shapes in data/foliage.js this one grows.
+       *
+       * A row of identical pines reads as wallpaper however much you jitter
+       * the scale and spin - the silhouette is the thing the eye matches on,
+       * and jitter does not change a silhouette. Three shapes in rotation,
+       * offset by side so the two banks never mirror each other, is enough
+       * that no two neighbours are the same tree.
+       */
+      kind: (i + (side > 0 ? 1 : 0)) % 3,
       scale,
       rotation: rand() * Math.PI,
     })
   }
   return trees
+}
+
+/* -------------------------------------------------------- approach path */
+
+/**
+ * The road from the spawn point to the arena doorway.
+ *
+ * Exactly as wide as the gap between the entrance walls, and deliberately so:
+ * the path *is* the doorway, drawn all the way back up the plaza to where you
+ * stand when the game loads. You do not have to be told where to go, because
+ * the thing you are standing on runs there and is the only warm-coloured
+ * surface in a hub paved in cold grey.
+ *
+ * It stops at the walls' near face. Past that the gateway takes over and the
+ * floor is the arena's business.
+ */
+/*
+ * The road is painted onto the concourse, not built up over it.
+ *
+ * A true raised slab has to agree with `groundHeightAt`, which reports zero
+ * across the whole plaza - the same trap the concourse itself fell into once
+ * already (see PLAZA.pathHeight's own history above). Zero new collision
+ * surface to keep in step means drawing it the way the grass lanes are drawn:
+ * flat overlays a few centimetres above the floor, biased forward in the
+ * depth buffer with `DECAL_ABOVE`/`DECAL_TOP` rather than actually raised.
+ */
+export const APPROACH_PATH = {
+  halfWidth: PLAZA.walkwayHalfWidth,
+  /*
+   * Starts just short of the spawn point, and behind the rebirth row.
+   *
+   * The monuments stand at z=21.5 with two of them inside the path's own
+   * width, so a road starting any further back would run underneath them and
+   * leave each one standing on a different-coloured floor than the one it was
+   * placed on.
+   */
+  fromZ: PLAYER_SPAWN[2] + 1,
+  toZ: ARENA_ENTRANCE.wallFromZ,
+  /** Paint height above the concourse - a hair, purely to win the depth test. */
+  rise: 0.03,
+  /** The border line down each edge, and how far above the road it sits. */
+  kerbWidth: 0.6,
+  kerbRise: 0.01,
+}
+
+/**
+ * Chevrons laid into the path, pointing the way in.
+ *
+ * Two bars meeting on the centre line, drawn as low reliefs turned about Y
+ * rather than as a painted texture - in a world made of moulded bricks an
+ * arrow is a thing you could pick up, not a decal. Shallow enough that
+ * walking over one is no different from walking over the kerb line beside it:
+ * both are a few centimetres of relief sitting on a floor whose walkable
+ * height never moves from zero. They are what make the path directional - a
+ * plain strip of different-coloured floor tells you a route exists, and the
+ * arrows on it tell you which end of it the game wants.
+ */
+export function pathChevrons() {
+  const out = []
+  // Arm reach across the path, and how far the tip runs ahead of the tails.
+  const reach = APPROACH_PATH.halfWidth * 0.82
+  const depth = 2.2
+  const angle = Math.atan2(depth, reach)
+  const length = Math.hypot(reach, depth)
+  const thickness = 0.05
+
+  for (let z = APPROACH_PATH.fromZ - 7; z > APPROACH_PATH.toZ + 5; z -= 9.5) {
+    for (const side of [-1, 1]) {
+      out.push({
+        position: [side * (reach / 2), APPROACH_PATH.rise + thickness / 2, z - depth / 2],
+        scale: [length, thickness, 0.8],
+        // Rotating +X about Y by θ sweeps it toward -Z, which is the way in.
+        rotation: side * angle,
+      })
+    }
+  }
+
+  return out
 }
