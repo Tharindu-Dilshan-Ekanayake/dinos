@@ -15,7 +15,7 @@ import {
   weatherForStage,
 } from '../../data/weather.js'
 import { useGameStore } from '../../store/useGameStore.js'
-import { playerPosition } from '../../systems/playerState.js'
+import { playerWorld } from '../../systems/playerWorld.js'
 import Birds from '../Birds.jsx'
 import GradientSky from '../GradientSky.jsx'
 import InstancedBlocks from '../InstancedBlocks.jsx'
@@ -236,27 +236,34 @@ export default function ArenaEnvironment() {
     fog.near = live.fogNear
     fog.far = live.fogFar
 
+    /*
+     * Everything below follows the player in *world* space, so it reads the
+     * world position rather than the scene-local one - see playerWorld.js.
+     * Read once here: it is a shared scratch, and one frame wants one value.
+     */
+    const player = playerWorld()
+
     if (keyLightRef.current) {
       keyLightRef.current.color.copy(live.key)
       // A storm does not just add streaks - it takes the sun away.
       keyLightRef.current.intensity = 1.85 * (1 - darken * 0.75)
       // The key light travels with the player: one shadow camera cannot cover
       // a corridor that grows to two thousand units long.
-      keyLightRef.current.position.set(playerPosition.x + 6, 14, playerPosition.z + 8)
-      keyLightRef.current.target.position.set(playerPosition.x, 0, playerPosition.z)
+      keyLightRef.current.position.set(player.x + 6, 14, player.z + 8)
+      keyLightRef.current.target.position.set(player.x, 0, player.z)
       keyLightRef.current.target.updateMatrixWorld()
     }
     if (ambientRef.current) ambientRef.current.color.copy(live.ambient)
 
     if (glowLightRef.current) {
-      glowLightRef.current.position.set(playerPosition.x, 1.2, playerPosition.z)
+      glowLightRef.current.position.set(player.x, 1.2, player.z)
       glowLightRef.current.intensity = live.glowStrength * 2.4
       glowLightRef.current.color.copy(live.glow)
     }
 
     // The skydome follows too, so the corridor never walks out from under it.
     if (skyRef.current) {
-      skyRef.current.position.set(playerPosition.x, 0, playerPosition.z)
+      skyRef.current.position.set(player.x, 0, player.z)
     }
 
     /*
@@ -267,11 +274,7 @@ export default function ArenaEnvironment() {
      */
     if (bedrockRef.current) {
       const far = APPROACH_EDGE_Z - BEDROCK_SIZE / 2
-      bedrockRef.current.position.set(
-        playerPosition.x,
-        -BEDROCK_DROP,
-        Math.min(playerPosition.z, far)
-      )
+      bedrockRef.current.position.set(player.x, -BEDROCK_DROP, Math.min(player.z, far))
     }
   })
 

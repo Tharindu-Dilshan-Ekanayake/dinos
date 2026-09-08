@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { playerPosition } from '../../systems/playerState.js'
+import { playerWorld } from '../../systems/playerWorld.js'
 
 /**
  * The weather in a chamber: rain, snow, drifting leaves, rising embers.
@@ -129,6 +129,13 @@ export default function Weather({ weather }) {
 
     scratch.scale.set(size[0], size[1], size[2])
 
+    /*
+     * The field is centred on the player's *world* position, not the
+     * scene-local one - otherwise the whole downpour steps sixty-three units
+     * sideways the frame you walk into Stage 1. See playerWorld.js.
+     */
+    const player = playerWorld()
+
     for (let i = 0; i < mesh.count; i++) {
       const i3 = i * 3
       const p = pool.position
@@ -154,11 +161,7 @@ export default function Weather({ weather }) {
       if (p[i3 + 2] > FIELD_RADIUS) p[i3 + 2] -= FIELD_RADIUS * 2
       else if (p[i3 + 2] < -FIELD_RADIUS) p[i3 + 2] += FIELD_RADIUS * 2
 
-      scratch.position.set(
-        playerPosition.x + p[i3],
-        p[i3 + 1],
-        playerPosition.z + p[i3 + 2]
-      )
+      scratch.position.set(player.x + p[i3], p[i3 + 1], player.z + p[i3 + 2])
       // Rain leans with the wind; leaves and ash tumble.
       scratch.euler.set(
         spin ? time * spin + pool.spin[i] : 0,

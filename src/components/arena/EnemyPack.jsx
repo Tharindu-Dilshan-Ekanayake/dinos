@@ -11,7 +11,7 @@ import {
   packState,
   resetPack,
 } from '../../systems/arenaEnemies.js'
-import { playerPosition } from '../../systems/playerState.js'
+import { playerWorld } from '../../systems/playerWorld.js'
 import EnemyDino from './EnemyDino.jsx'
 
 /**
@@ -65,11 +65,14 @@ export default function EnemyPack() {
       return
     }
 
+    /*
+     * World space, because this now runs in the hub too: measured against the
+     * scene-local position it would read as sixty-three units closer than it
+     * is, and a pack you are still walking toward would count itself in range.
+     */
+    const player = playerWorld()
     const target = enemySlots[targetSlot]
-    const distance = Math.hypot(
-      playerPosition.x - target.x,
-      playerPosition.z - target.z
-    )
+    const distance = Math.hypot(player.x - target.x, player.z - target.z)
     packState.targetDistance = distance
     packState.inRange = distance <= ATTACK_RANGE
   })

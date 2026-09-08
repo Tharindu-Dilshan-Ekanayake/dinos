@@ -46,26 +46,57 @@ export default function ArenaScene({ includePlayer = true, includeCamera = true,
       <ArenaEnvironment />
       <Gates />
 
+      {/*
+        The pack stands in its chamber whether or not you are in it yet.
+        
+        It used to come into existence on the frame you crossed the threshold,
+        along with everything else here - so looking down the corridor from the
+        hub you saw an empty Stage 1, walked into it, and a pack of dinos
+        appeared out of nothing in front of you. That is the last of the "it
+        teleported" left: not the ground moving, but the room being furnished
+        the moment you were inside it.
+        
+        Mounted always, the level you are walking toward is the level you
+        arrive in. It costs the enemy models being built at startup instead of
+        at the doorway, which is the trade this whole seam is about. What still
+        waits for `active` is everything that *does* something - the attacks,
+        the damage, the travel trigger, the pads' keypress - so a pack visible
+        from the hub is scenery until you are actually in the room with it.
+      */}
+      <EnemyPack />
+      <HitParticles />
+
       {active && (
         <>
           <IdleDamage />
           <ArenaFightCatcher />
           <ArenaTravel />
           {includePlayer && <ArenaPlayer />}
-          <EnemyPack />
           <EnemyAttacks />
           <GateHeadline />
           <ReturnPads />
           <ArenaCombat />
-          <HitParticles />
-
-          <Suspense fallback={null}>
-            <Physics gravity={[0, -26, 0]} timeStep="vary">
-              <DebrisField />
-            </Physics>
-          </Suspense>
         </>
       )}
+
+      {/*
+        The physics world is built once, not at the doorway.
+        
+        It used to be mounted inside the block above, which meant crossing into
+        Stage 1 created a whole rapier world - and nine other components with it
+        - on the single frame you stepped through the gate. That is the hitch:
+        not the geometry, which is drawn continuously either side of the seam,
+        but a dozen things coming into existence at once at the exact moment you
+        are asked to believe nothing happened.
+        
+        An empty world costs a step over no bodies. What actually spawns debris
+        is still gated on the fight being live, so the hub pays nothing for it.
+      */}
+      <Suspense fallback={null}>
+        <Physics gravity={[0, -26, 0]} timeStep="vary">
+          {active && <DebrisField />}
+        </Physics>
+      </Suspense>
     </>
   )
 }
