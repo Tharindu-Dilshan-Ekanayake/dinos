@@ -21,19 +21,46 @@ const PILLAR = 1.5
 
 /** Shut, and holding you here. */
 const LOCKED = new THREE.Color('#ff3b5c')
-/** Open, and letting you through. */
-const UNLOCKED = new THREE.Color('#3fa9ff')
+/**
+ * Open, and letting you through.
+ *
+ * Barely a colour at all: glass with the daylight caught in it, not a blue
+ * filter over the level ahead. A pane you can see the next chamber through is
+ * an invitation; a blue one is a second wall behind the first.
+ */
+const UNLOCKED = new THREE.Color('#e4f4ff')
 
 /*
  * A shut gate is a wall and reads like one. An open one has to thin right out,
  * or the level showing through the doorway - the whole reason the doorway is
  * there - is looked at through a sheet of blue.
  */
-const SHUT_OPACITY = 0.6
-const OPEN_OPACITY = 0.16
+const SHUT_OPACITY = 0.44
+const OPEN_OPACITY = 0.12
 
 /** Half the barrier's thickness, so its lettering sits on the face. */
 const FACE = 0.06
+
+/**
+ * The plaque lettered across the barrier, measured off the reference art.
+ *
+ * Sizes and gaps are ratios taken from the doorway in the reference rather
+ * than numbers that looked about right: the level's name runs a little over two
+ * thirds of the opening's width, what it asks for is a third of that name, and
+ * the figure itself is just under two thirds. Held to those, the block reads
+ * the same at any gate width - and it was the *name* that was wrong before,
+ * set small enough that the doorway looked like a sign rather than the sign
+ * looking like a doorway.
+ *
+ * The one place it departs from the art is the top: the reference's gateway is
+ * nearly square and this one is half again as wide as it is tall, so the block
+ * starts higher than a straight scaling would put it, to keep the number clear
+ * of the floor.
+ */
+const PLAQUE_TOP = HEIGHT * 0.736
+const NAME_SIZE = 1.7
+const ASK_SIZE = NAME_SIZE * 0.36
+const FIGURE_SIZE = NAME_SIZE * 0.62
 
 /**
  * The way to the next level.
@@ -60,6 +87,23 @@ export default function ExitGate({ stage, active = true, sealed }) {
   // every click would be paid for in the frame budget.
   const strongEnough = useGameStore((s) => s.clickPower >= requiredDamage(stage + 1))
 
+  /*
+   * Only the gate you are at, and the one you just came through, say anything.
+   *
+   * Every mounted chamber has a gate, they stand dead in line down the
+   * corridor, and each one lettered its own plaque - so looking forward you
+   * read "Stage 2" over "Stage 3" over "Stage 4", three sets of type at three
+   * sizes stacked in the middle of the screen, none of them legible and none of
+   * them about the doorway you are actually walking to. At the small type it
+   * was merely busy; at the size the reference letters these, it is a wall of
+   * words.
+   *
+   * The one behind you keeps its lettering because you may be walking back out
+   * through it - that is the whole reason the plaque is painted on both faces.
+   */
+  const stageIndex = useGameStore((s) => s.stageIndex)
+  const lettered = active || stage === stageIndex - 1
+
   const nextIndex = stage + 1
   const atEnd = nextIndex >= MAX_STAGES
   const required = atEnd ? 0 : requiredDamage(nextIndex)
@@ -69,18 +113,29 @@ export default function ExitGate({ stage, active = true, sealed }) {
 
   const materials = useMemo(
     () => ({
-      // Dark standing stone, so the pillars read as a made gateway against the
-      // biome's own rock whatever colour that rock happens to be.
-      pillar: voxelMaterial('#3c4353', {
-        pattern: 'bricks',
-        cells: 5,
-        variance: 0.08,
-        fleckDepth: 0.22,
+      /*
+       * Pale cast concrete, studded like a moulded brick.
+       *
+       * Dark standing stone read as one more outcrop in a world already made
+       * of rock - the gateway disappeared into whichever cliff it happened to
+       * be cut through. Poured grey belongs to nothing that grows: it is the
+       * one built thing in the chamber, and it says so against sandstone,
+       * basalt and ice alike.
+       *
+       * Repeated four times up its own height, so a stud on a seven-metre
+       * pillar stays square instead of being stretched into a stripe.
+       */
+      pillar: voxelMaterial('#d9dcd4', {
+        pattern: 'studs',
+        cells: 4,
+        variance: 0.05,
+        fleckDepth: 0.14,
+        repeat: [1, 4],
         seed: 197,
       }),
       cap: new THREE.MeshStandardMaterial({
-        color: '#59627a',
-        roughness: 0.8,
+        color: '#c3c7bd',
+        roughness: 0.85,
         flatShading: true,
       }),
       // A warm lamp down the inner face of each pillar, the same colour the
@@ -156,22 +211,42 @@ export default function ExitGate({ stage, active = true, sealed }) {
           your shoulder from the level beyond.
         */}
         {!atEnd &&
+          lettered &&
           [1, -1].map((facing) => (
             <group
               key={facing}
               position-z={facing * FACE}
               rotation-y={facing > 0 ? 0 : Math.PI}
             >
-              <HeadlineText size={0.98} y={HEIGHT * 0.58} color="#ffffff">
+              {/*
+                Three sizes, not three colours: the level's name huge, what it
+                asks of you small and grey-white under it, the number itself
+                back up in gold. Read at a walk it is a headline with a price
+                under it, which is the decision the gate is actually posing.
+
+                "Recommended" and "Damage:" are two lines on purpose. Set on
+                one they made a band of small type nearly as wide as the
+                gateway, which fought the stage name above it for the eye;
+                broken, the whole plaque sits inside the width of the number.
+              */}
+              <HeadlineText size={NAME_SIZE} y={PLAQUE_TOP} color="#ffffff">
                 {`Stage ${nextIndex + 1}`}
               </HeadlineText>
-              <HeadlineText size={0.34} y={HEIGHT * 0.58 - 0.86} color="#e6ecff">
-                Recommended Damage
+              <HeadlineText size={ASK_SIZE} y={PLAQUE_TOP - 1.51} color="#ffffff">
+                Recommended
               </HeadlineText>
+              <HeadlineText size={ASK_SIZE} y={PLAQUE_TOP - 2.34} color="#ffffff">
+                Damage:
+              </HeadlineText>
+              {/*
+                Gold, because it is the number you are being asked to have -
+                and rose rather than gold when you do not have it yet. One
+                glance at the colour is the whole survivability check.
+              */}
               <HeadlineText
-                size={0.74}
-                y={HEIGHT * 0.58 - 1.66}
-                color={survivable ? '#7ee06a' : '#ff9f9f'}
+                size={FIGURE_SIZE}
+                y={PLAQUE_TOP - 3.38}
+                color={survivable ? '#ffd23f' : '#ff9f9f'}
               >
                 {formatNumber(recommended)}
               </HeadlineText>

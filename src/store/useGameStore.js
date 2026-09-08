@@ -35,6 +35,14 @@ import { SEAM_MARGIN, arenaToHubPoint, hubToArena } from '../data/arena.js'
 
 const COMBO_WINDOW_MS = 900
 const MAX_COMBO = 8
+/**
+ * How long the last enemy's own death animation takes (see EnemyDino.jsx's
+ * `a.death -= delta / 0.55`), plus a small margin for a slow frame. The gate
+ * does not actually unseal until this long after the killing blow, so it can
+ * never read as open while the pack is still visibly falling - see
+ * `_applyDamage` / `_clearStage`.
+ */
+const CLEAR_DELAY_MS = 620
 
 function freshRun() {
   return {
@@ -46,6 +54,8 @@ function freshRun() {
     upgradeLevels: { strength: 0, idle: 0, crit: 0 },
     /** True once this level's pack is down and the exit has unsealed. */
     stageCleared: false,
+    /** True from the killing blow until the pack finishes its own death animation. */
+    clearPending: false,
     /** Wins carried this arena run, banked only on the way out. */
     runWins: 0,
     /** Damage earned by standing on training pads. Reset by a rebirth. */
@@ -257,9 +267,31 @@ export const useGameStore = create((set, get) => ({
   /** Shared damage pipeline for both click and idle sources. */
   _applyDamage(damage, meta) {
     const s = get()
-    // A cleared chamber sits at zero health. Without this guard any further
-    // hit would fall straight through to _clearStage and pay out again.
-    if (s.stageCleared || s.dead) return
+    // A cleared chamber sits at zero health, and a pending one is already on
+    // its way there. Without this guard any further hit would fall straight
+    // through to _clearStage and pay out again.
+    const blocked = s.stageCleared || s.clearPending || s.dead
+
+    /*
+     * A click still swings even here - the animation, the hit particles, the
+     * floating number - exactly like clicking against nothing in the hub. Only
+     * the combat math below (and the payout it can trigger) is guarded; idle
+     * ticks have no swing to show and are left exactly as blocked as before,
+     * since nobody is watching for an idle tick's animation.
+     */
+    if (meta.source === 'click' || !blocked) {
+      emit(EVENTS.HIT, {
+        damage,
+        crit: meta.crit,
+        combo: meta.combo ?? 0,
+        source: meta.source,
+        point: meta.point,
+        screen: meta.screen,
+        maxHealth: stageHealth(s.stageIndex),
+      })
+    }
+
+    if (blocked) return
 
     /*
      * One blow can finish the dino in front of you and no more.
@@ -296,22 +328,30 @@ export const useGameStore = create((set, get) => ({
 
     const remaining = s.enemyHealth - applied
 
-    emit(EVENTS.HIT, {
-      damage,
-      crit: meta.crit,
-      combo: meta.combo ?? 0,
-      source: meta.source,
-      point: meta.point,
-      screen: meta.screen,
-      maxHealth: stageHealth(s.stageIndex),
-    })
-
     if (remaining > 0) {
       set({ enemyHealth: remaining })
       return
     }
 
-    get()._clearStage()
+    /*
+     * The kill lands now - the pool empties and the pack starts falling
+     * immediately - but the exit itself does not unseal for another beat.
+     * `stageCleared` is what every gate, headline and Return pad actually
+     * reads, so holding it back this long is what keeps the exit sealed for
+     * exactly as long as the last enemy is still visibly dying.
+     *
+     * The stage is captured now rather than read again when the timer fires:
+     * retreating is always allowed, even mid-death-animation, and a step back
+     * into the previous chamber during this window must not clear the one you
+     * just walked out of.
+     */
+    const clearedIndex = s.stageIndex
+    set({ enemyHealth: 0, clearPending: true })
+    setTimeout(() => {
+      const now = get()
+      if (now.dead || !now.clearPending || now.stageIndex !== clearedIndex) return
+      now._clearStage()
+    }, CLEAR_DELAY_MS)
   },
 
   /**
@@ -339,6 +379,7 @@ export const useGameStore = create((set, get) => ({
       runWins: s.runWins + reward,
       enemyHealth: 0,
       stageCleared: true,
+      clearPending: false,
       // Written down for the rest of the run: this chamber is done, and
       // walking back through it later must not stand the pack up again.
       chamberHealth: { ...s.chamberHealth, [clearedIndex]: 0 },
@@ -376,6 +417,7 @@ export const useGameStore = create((set, get) => ({
       stageIndex: 0,
       enemyHealth: stageHealth(0),
       stageCleared: false,
+      clearPending: false,
       // A new trip is a new corridor: every chamber is stocked again.
       chamberHealth: {},
       runWins: 0,
@@ -439,6 +481,7 @@ export const useGameStore = create((set, get) => ({
       stageIndex: 0,
       enemyHealth: stageHealth(0),
       stageCleared: false,
+      clearPending: false,
       chamberHealth: {},
       // Walking out of the arena patches the dino up for the next run.
       playerHealth: MAX_PLAYER_HEALTH,
@@ -601,6 +644,7 @@ export const useGameStore = create((set, get) => ({
       stageIndex: 0,
       enemyHealth: stageHealth(0),
       stageCleared: false,
+      clearPending: false,
       chamberHealth: {},
       runWins: 0,
       playerHealth: MAX_PLAYER_HEALTH,
@@ -630,6 +674,7 @@ export const useGameStore = create((set, get) => ({
       stageIndex,
       enemyHealth: stageHealth(stageIndex),
       stageCleared: false,
+      clearPending: false,
       chamberHealth: {},
       dead: false,
       areaIndex: nextArea,

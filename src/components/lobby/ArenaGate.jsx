@@ -6,6 +6,7 @@ import {
   ARENA_GATE,
   ARENA_RAMP_ANGLE,
   ARENA_RAMP_TOP_Z,
+  ARENA_THRESHOLD_Z,
   LOBBY_PALETTE,
 } from '../../data/lobby.js'
 import {
@@ -117,10 +118,12 @@ export default function ArenaGate({ active = true, showPreview = true }) {
       // Coursed stone, tiled along the wall's length rather than square, so the
       // bricks stay brick-shaped on a face four times longer than it is tall.
       //
-      // Coloured to match LOBBY_PALETTE.wall — the same sandy stone HubApproach
-      // uses from the arena side — so crossing the scene boundary never changes
-      // the colour of the walls you are standing between.
-      wall: voxelMaterial(LOBBY_PALETTE.wall, {
+      // Dark slate, not the hub's pale terrace stone: these two walls are the
+      // doorway into Stage 1 and have to read as one from across the plaza.
+      // HubApproach paints the same walls from the arena side out of the same
+      // palette entry, so crossing the scene boundary never changes the colour
+      // of the walls you are standing between.
+      wall: voxelMaterial(LOBBY_PALETTE.gateWall, {
         pattern: 'studs',
         cells: 6,
         variance: 0.09,
@@ -128,7 +131,7 @@ export default function ArenaGate({ active = true, showPreview = true }) {
         repeat: [3, 2],
         seed: 17,
       }),
-      pillar: voxelMaterial(LOBBY_PALETTE.wall, {
+      pillar: voxelMaterial(LOBBY_PALETTE.gateWall, {
         pattern: 'studs',
         cells: 8,
         variance: 0.08,
@@ -136,7 +139,7 @@ export default function ArenaGate({ active = true, showPreview = true }) {
         repeat: [1, 3],
         seed: 19,
       }),
-      cap: flat(LOBBY_PALETTE.wallTop),
+      cap: flat(LOBBY_PALETTE.gateWallTop),
       tread: voxelMaterial('#c9d1d9', {
         pattern: 'studs',
         cells: 4,
@@ -270,16 +273,17 @@ export default function ArenaGate({ active = true, showPreview = true }) {
     a.phase += delta
 
     /*
-     * The handover is a *line* at the top of the ramp, not a circle part-way
-     * up it.
+     * The handover is a *line*, and it is the line the glass hangs on.
      *
      * A circle at z=-45 sat half-way up the climb, which is nowhere the arena
      * can put you - its ground does not reach back that far - so crossing there
-     * was always a jump. The top of the ramp is the one plane both scenes can
-     * stand you on, and stepping over it hands you to the arena at the same
-     * spot in its own numbers.
+     * was always a jump. A line at the top of the ramp fixed that and left a
+     * subtler version of the same fault: the ramp top is eight units short of
+     * the gateway, so the swap happened out on the approach with the doorway
+     * still ahead of you. Hung on the pane itself, the frame the world changes
+     * on is the frame you walk through the thing that says it will.
      */
-    const climbing = playerPosition.z <= ARENA_RAMP_TOP_Z
+    const climbing = playerPosition.z <= ARENA_THRESHOLD_Z
     const inGap = Math.abs(playerPosition.x) <= E.gapHalfWidth
 
     // The glow at the foot still reacts to you approaching it.
@@ -316,37 +320,46 @@ export default function ArenaGate({ active = true, showPreview = true }) {
       */}
       {[-1, 1].map((side) => (
         <group key={side} position={[side * WALL_CENTRE_X, 0, WALL_MID_Z]}>
-          {/* Unified slab wall */}
+          {/*
+            Unified slab wall.
+
+            It does not cast. Thirteen units of wall throws a shadow the length
+            of the room it opens onto, and because both walls are parallel and
+            the sun is not, what lands on Stage 1's floor is a hard-edged band
+            straight across it - a dark strip that reads as a step down, or a
+            bank, in a chamber that is flat. No other level has walls like
+            these, so no other level had the stripe, and Stage 1 looked like a
+            different kind of place because of it.
+
+            They still *receive*, so they are lit like everything else and the
+            gateway keeps its own shading; what they no longer do is paint a
+            false ledge across the ground you fight on.
+          */}
           <mesh
             material={materials.wall}
             position={[side * 0, WALL_TOTAL_HEIGHT / 2, 0]}
-            castShadow
             receiveShadow
           >
             <boxGeometry args={[E.wallWidth, WALL_TOTAL_HEIGHT, WALL_LENGTH]} />
           </mesh>
-          {/* Cap on top of wall */}
-          <mesh
-            material={materials.cap}
-            position={[side * 0, WALL_TOTAL_HEIGHT + 0.22, 0]}
-            castShadow
-          >
+          {/* Cap on top of wall - same reason, same answer. */}
+          <mesh material={materials.cap} position={[side * 0, WALL_TOTAL_HEIGHT + 0.22, 0]}>
             <boxGeometry args={[E.wallWidth + 0.5, 0.44, WALL_LENGTH + 0.5]} />
           </mesh>
         </group>
       ))}
 
-      {/* Grass shoulders running up to the walls */}
-      {[-1, 1].map((side) => (
-        <mesh
-          key={side}
-          material={groundMaterials}
-          position={[side * (WALL_CENTRE_X + E.wallWidth / 2 + 6), E.shoulderHeight / 2, WALL_MID_Z]}
-          receiveShadow
-        >
-          <boxGeometry args={[12, E.shoulderHeight, WALL_LENGTH + 6]} />
-        </mesh>
-      ))}
+      {/*
+        No grass shoulders.
+
+        Two twelve-metre banks of raised turf used to run the length of the
+        walls on the outside, so the approach was a slot cut through a mound
+        rather than two walls standing on the plaza. They put green right up
+        against the one dark thing in the hub, which is the pair of walls the
+        eye is supposed to find - and the ledge on top was somewhere you could
+        jump up onto and walk the length of the gateway, past the door instead
+        of through it. The plaza runs to the foot of the walls now.
+      */}
 
       {/* The ramp: one tilted slab under a carpet laid along it */}
       <InstancedBlocks

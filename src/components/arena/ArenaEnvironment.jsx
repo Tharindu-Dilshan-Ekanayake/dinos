@@ -288,11 +288,27 @@ export default function ArenaEnvironment() {
         intensity={1.85}
         castShadow
         shadow-mapSize={[shadowMapSize, shadowMapSize]}
-        shadow-camera-left={-20}
-        shadow-camera-right={20}
-        shadow-camera-top={20}
-        shadow-camera-bottom={-20}
-        shadow-camera-far={60}
+        /*
+         * Wide enough to cover the whole room, because its edge is visible.
+         *
+         * Outside a shadow camera's box three.js simply does not shadow, so the
+         * frustum boundary lands on the ground as a perfectly straight tonal
+         * seam - shaded on the inside, fully lit on the outside. At twenty it
+         * fell across the middle of a chamber, and on flat ground a hard
+         * straight line between two tones does not read as the edge of a shadow
+         * map, it reads as a step: Stage 1 looked like it had a bank across it.
+         *
+         * Thirty-eight clears `halfWidth` and the walls at both ends, so the
+         * seam now falls outside the room entirely. It costs sharpness - the
+         * same map stretched over a bigger box - which is the right trade: a
+         * slightly softer shadow is a shadow, and a straight line across the
+         * floor is a bug.
+         */
+        shadow-camera-left={-38}
+        shadow-camera-right={38}
+        shadow-camera-top={38}
+        shadow-camera-bottom={-38}
+        shadow-camera-far={110}
         shadow-bias={-0.0004}
       />
       <directionalLight position={[-8, 5, -6]} intensity={0.7} color="#9ec5ff" />

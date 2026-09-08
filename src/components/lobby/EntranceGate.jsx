@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { ARENA_ENTRANCE, ARENA_RAMP_TOP_Z } from '../../data/lobby.js'
+import { ARENA_ENTRANCE, ARENA_THRESHOLD_Z } from '../../data/lobby.js'
 import { formatNumber } from '../../data/progression.js'
 import { recommendedDamage } from '../../data/stages.js'
 import { useGameStore } from '../../store/useGameStore.js'
@@ -26,49 +26,70 @@ import MergedBoxes, { mergeBoxes } from '../MergedBoxes.jsx'
 
 const E = ARENA_ENTRANCE
 
-/** How tall the gate stands, and how thick its pillars are. */
-const HEIGHT = 8.4
-const PILLAR = 1.5
+/**
+ * How tall the gate stands: the full height of the walls it hangs between.
+ *
+ * Tied to them rather than to a number of its own, so raising the gateway
+ * raises the pane in it and the two can never come apart.
+ */
+const HEIGHT = E.wallHeight
 
-/** Where it stands: at the top of the walkway, where the arena takes over. */
-const GATE_Z = ARENA_RAMP_TOP_Z + 2.2
+/**
+ * Where it stands: half way along the two big walls, not in front of them.
+ *
+ * It used to be a free-standing arch of its own two metres short of the
+ * gateway - its own pillars, its own cap, its own lintel - which put *two*
+ * doorways on the same path: a little stone one you walked through, and then
+ * the real slot between the retaining walls with nothing in it. The eye read
+ * the arch as the entrance and the walls as scenery, and the actual threshold
+ * (the line that hands you to the arena) was neither of them.
+ *
+ * Set into the middle of the wall run there is one doorway. The walls are its
+ * jambs, the pane between them is the threshold, and the lettering is on the
+ * thing you actually walk through.
+ *
+ * The number lives in the layout because the handoff to the arena reads it too
+ * - see ARENA_THRESHOLD_Z. A pane in one place and a scene change in another
+ * is the one way this can go wrong.
+ */
+const GATE_Z = ARENA_THRESHOLD_Z
 
 /** Half the barrier's thickness, so its lettering sits clear of the face. */
 const FACE = 0.08
 
+/**
+ * The plaque lettered across the pane.
+ *
+ * Same block, same sizes, same gaps and same order as every gate in the arena -
+ * name, what it asks for, the figure in gold - because this is the door that
+ * teaches you to read those, and a first door lettered to its own scale teaches
+ * the wrong thing. The numbers are the ones measured off the reference art; see
+ * ExitGate, which sets them for the doorways this one is a rehearsal for.
+ */
+const PLAQUE_TOP = HEIGHT * 0.62
+const NAME_SIZE = 1.7
+const ASK_SIZE = NAME_SIZE * 0.36
+const FIGURE_SIZE = NAME_SIZE * 0.62
+
 /** The barrier's own blue. Nothing here is ever locked, so there is no red. */
 const OPEN = new THREE.Color('#4cc9f0')
 
-const FRAME = mergeBoxes([
-  ...[-1, 1].flatMap((side) => [
-    {
-      material: 'pillar',
-      position: [side * (E.gapHalfWidth + PILLAR / 2), HEIGHT / 2, 0],
-      size: [PILLAR, HEIGHT, 1.8],
-      shadow: true,
-    },
-    {
-      material: 'cap',
-      position: [side * (E.gapHalfWidth + PILLAR / 2), HEIGHT + 0.24, 0],
-      size: [PILLAR + 0.5, 0.48, 2.2],
-      shadow: true,
-    },
-    // A lamp facing into the gap, so the gateway is lit from both sides.
-    {
-      material: 'lamp',
-      position: [side * E.gapHalfWidth - side * 0.06, HEIGHT * 0.6, 0],
-      size: [0.14, 2, 1.2],
-    },
-  ]),
-
-  /*
-   * A lintel across the top, which the arena's gates deliberately do without -
-   * there, an arch would sit exactly where the next level shows through. Here
-   * there is no level to frame, only the hub behind you, so the doorway can be
-   * a doorway.
-   */
-  { material: 'cap', position: [0, HEIGHT + 0.24, 0], size: [E.gapHalfWidth * 2, 0.7, 2], shadow: true },
-])
+/*
+ * All that is left of the frame: a lit strip down the inner face of each wall.
+ *
+ * The pillars and the lintel went with the arch - the walls are doing that job
+ * now, and a stone post standing against a stone wall is just a lump on it.
+ * The lamps stay because they are the one part that was never structural: they
+ * are what tells you the slot is powered rather than empty, and they now light
+ * the wall faces they are set into.
+ */
+const FRAME = mergeBoxes(
+  [-1, 1].map((side) => ({
+    material: 'lamp',
+    position: [side * E.gapHalfWidth - side * 0.06, HEIGHT * 0.55, 0],
+    size: [0.14, HEIGHT * 0.5, 1.2],
+  }))
+)
 
 export default function EntranceGate() {
   const bestStage = useGameStore((s) => s.bestStage)
@@ -77,10 +98,6 @@ export default function EntranceGate() {
 
   const materials = useMemo(
     () => ({
-      // Sandy stone, matching ArenaGate's retaining walls and HubApproach, so
-      // the whole gateway reads as one structure from either side of the seam.
-      pillar: new THREE.MeshStandardMaterial({ color: '#cfc7a6', roughness: 0.75, flatShading: true }),
-      cap: new THREE.MeshStandardMaterial({ color: '#b5ad8c', roughness: 0.7, flatShading: true }),
       lamp: new THREE.MeshStandardMaterial({
         color: '#4cc9f0',
         roughness: 0.35,
@@ -105,7 +122,7 @@ export default function EntranceGate() {
     <group position={[0, 0, GATE_Z]}>
       <MergedBoxes groups={FRAME} materials={materials} />
 
-      {/* The threshold itself, hung between the pillars. */}
+      {/* The threshold itself, hung between the two walls. */}
       <mesh ref={barrier} position={[0, HEIGHT / 2, 0]}>
         <planeGeometry args={[E.gapHalfWidth * 2, HEIGHT]} />
         <meshBasicMaterial
@@ -127,16 +144,19 @@ export default function EntranceGate() {
       */}
       {[1, -1].map((facing) => (
         <group key={facing} position-z={facing * FACE} rotation-y={facing > 0 ? 0 : Math.PI}>
-          <HeadlineText size={0.92} y={HEIGHT * 0.6} color="#ffffff" shadow="#12100e">
+          <HeadlineText size={NAME_SIZE} y={PLAQUE_TOP} color="#ffffff" shadow="#12100e">
             Stage 1
           </HeadlineText>
-          <HeadlineText size={0.32} y={HEIGHT * 0.6 - 0.82} color="#e6ecff" shadow="#12100e">
-            Recommended Damage
+          <HeadlineText size={ASK_SIZE} y={PLAQUE_TOP - 1.51} color="#ffffff" shadow="#12100e">
+            Recommended
           </HeadlineText>
-          <HeadlineText size={0.7} y={HEIGHT * 0.6 - 1.58} color="#7ee06a" shadow="#12100e">
+          <HeadlineText size={ASK_SIZE} y={PLAQUE_TOP - 2.34} color="#ffffff" shadow="#12100e">
+            Damage:
+          </HeadlineText>
+          <HeadlineText size={FIGURE_SIZE} y={PLAQUE_TOP - 3.38} color="#ffd23f" shadow="#12100e">
             {formatNumber(recommendedDamage(0))}
           </HeadlineText>
-          <HeadlineText size={0.3} y={HEIGHT * 0.6 - 2.36} color="#ffe9f0" shadow="#12100e">
+          <HeadlineText size={0.46} y={PLAQUE_TOP - 4.48} color="#ffe9f0" shadow="#12100e">
             {`Best so far: Stage ${bestStage + 1}`}
           </HeadlineText>
         </group>

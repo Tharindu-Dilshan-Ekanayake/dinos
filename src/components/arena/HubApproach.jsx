@@ -75,7 +75,9 @@ export default function HubApproach() {
         repeat: [spanOf(ground, 0), spanOf(ground, 2)],
         seed: 23,
       }),
-      wall: voxelMaterial(p.wall, {
+      // The entrance gate's own dark slate - the same two walls ArenaGate
+      // builds from the hub side, seen from inside the mouth.
+      wall: voxelMaterial(p.gateWall, {
         pattern: 'studs',
         cells: 6,
         variance: 0.09,
@@ -84,7 +86,7 @@ export default function HubApproach() {
         seed: 17,
       }),
       wallTop: new THREE.MeshStandardMaterial({
-        color: p.wallTop,
+        color: p.gateWallTop,
         roughness: 0.92,
         flatShading: true,
       }),

@@ -32,6 +32,22 @@ const CACHE_LIMIT = 96
 
 const cache = new Map()
 
+/**
+ * How much of the grubbiness a caller asks for actually gets painted.
+ *
+ * Every surface in the game was individually reasonable and the world they
+ * added up to was not: cell-to-cell colour jitter on the grass, flecks in the
+ * soil, chips in the rock, all of it at full strength on every face at once.
+ * Nothing was dirty on its own; everything was slightly dirty together, which
+ * is what made a bright toy world read as muddy.
+ *
+ * Damping it in one place rather than at ninety call sites keeps the *ratios*
+ * every surface was tuned with - rock is still rougher than paving - and turns
+ * "how worn is this world" into one number you can move. 1 is the old look;
+ * lower is cleaner.
+ */
+const GRIT = 0.4
+
 /** Deterministic LCG - the same colour always paints the same texture. */
 function makeRandom(seed) {
   let state = seed % 4294967296
@@ -147,9 +163,10 @@ function paintTiles(ctx, rgb, rand, { cells, variance, fleckDepth, accent }) {
  */
 function paintStuds(ctx, rgb, rand, { cells, variance, fleckDepth, accent }) {
   const step = TEXTURE_SIZE / cells
-  const stud = Math.max(2, Math.round(step * 0.46))
-  const inset = Math.round((step - stud) / 2)
-  const edge = Math.max(1, Math.round(stud * 0.18))
+  const radius = step * 0.235
+  // How far the shadow and the highlight slide off centre. Small: a stud is a
+  // few millimetres proud of the brick, not a ball sitting on it.
+  const lift = Math.max(0.7, radius * 0.2)
   // With an accent the studs sit on a checker, which is how paving reads in
   // this kind of game: two tones of slab, every one of them moulded.
   const accentRgb = accent ? parseHex(accent) : null
@@ -162,17 +179,30 @@ function paintStuds(ctx, rgb, rand, { cells, variance, fleckDepth, accent }) {
       ctx.fillStyle = tone(base, (rand() - 0.5) * 2 * variance * 0.5)
       ctx.fillRect(x * step, y * step, step, step)
 
-      const sx = x * step + inset
-      const sy = y * step + inset
+      const cx = x * step + step / 2
+      const cy = y * step + step / 2
 
-      // Shadowed face first, then the stud, then its lit edge on top.
-      ctx.fillStyle = tone(base, -fleckDepth)
-      ctx.fillRect(sx, sy, stud, stud)
-      ctx.fillStyle = tone(base, -fleckDepth * 0.35)
-      ctx.fillRect(sx, sy, stud - edge, stud - edge)
-      ctx.fillStyle = tone(base, fleckDepth * 0.5)
-      ctx.fillRect(sx, sy, stud - edge, edge)
-      ctx.fillRect(sx, sy, edge, stud - edge)
+      const disc = (shade, ox, oy, r) => {
+        ctx.fillStyle = tone(base, shade)
+        ctx.beginPath()
+        ctx.arc(cx + ox, cy + oy, r, 0, Math.PI * 2)
+        ctx.fill()
+      }
+
+      /*
+       * A stud is a cylinder, so it is drawn as one: three discs.
+       *
+       * They were squares - a dark square, a lighter square inside it and two
+       * bright strips along its top and left - which at a distance is a grid of
+       * pixels and at close range is a tiled floor with squares printed on it.
+       * The whole read of this material is *moulded plastic*, and the one shape
+       * plastic is moulded into here is round. The shadow slips down, the
+       * highlight slips up and left, and between them the flat texture has a
+       * bump on it.
+       */
+      disc(-fleckDepth, 0, lift, radius)
+      disc(-fleckDepth * 0.3, 0, 0, radius)
+      disc(fleckDepth * 0.55, -lift * 0.5, -lift * 0.7, radius * 0.76)
     }
   }
 }
@@ -195,7 +225,18 @@ function paint(color, options) {
 
   ctx.fillStyle = tone(rgb, 0)
   ctx.fillRect(0, 0, TEXTURE_SIZE, TEXTURE_SIZE)
-  ;(PAINTERS[options.pattern] ?? paintCells)(ctx, rgb, rand, options)
+  /*
+   * The three knobs that make a surface look worn, all scaled together - so a
+   * painter still gets the shape it was written for (studs, courses, checker),
+   * just with less dirt rubbed into it. `cells` is deliberately untouched: it
+   * is the moulding, not the grime.
+   */
+  ;(PAINTERS[options.pattern] ?? paintCells)(ctx, rgb, rand, {
+    ...options,
+    variance: options.variance * GRIT,
+    fleck: options.fleck * GRIT,
+    fleckDepth: options.fleckDepth * GRIT,
+  })
 
   const texture = new THREE.CanvasTexture(canvas)
   texture.wrapS = THREE.RepeatWrapping

@@ -39,34 +39,56 @@ export const AREAS = [
       pad: '#57b843',
       reed: '#4faa39',
       glow: 0,
-      logs: 3,
-      pools: 3,
+      logs: 1,
+      pools: 2,
     },
     name: 'Jungle Hollow',
     fromStage: 1,
     toStage: 15,
     // Sky + atmosphere
-    skyTop: '#2f7fd4',
-    skyBottom: '#bde9ff',
-    fog: '#a9dcc0',
+    skyTop: '#3f95e6',
+    skyBottom: '#a9dcff',
+    /*
+     * Pale blue haze rather than green. Fog the colour of the ground turns
+     * distance into murk lying over the corridor; fog the colour of the sky
+     * just thins the far chambers out, which is what depth actually looks
+     * like. The hub carries the same value - crossing between them should not
+     * change the weather.
+     */
+    fog: '#d6ecfa',
     fogNear: 54,
     fogFar: 154,
-    // Voxel arena floor: checker tones, its edge ring, and its grass blades
-    floorA: '#79d152',
-    floorB: '#5cb63c',
-    floorEdge: '#3f8f2c',
-    tuft: '#a6e75c',
+    /*
+     * Voxel arena floor: checker tones, its edge ring, and its grass blades.
+     *
+     * A shade off the hub's own green on purpose. The lighting either side of
+     * the gateway is within a couple of per cent of identical, so what made a
+     * chamber floor glare was not exposure - it was that the hub spends its
+     * biggest surfaces on pale paving and only stripes the green in, while a
+     * chamber is one unbroken field of it from wall to wall. The same value
+     * that reads as bright grass in a lane reads as a lit screen at that size.
+     * Down twelve per cent and desaturated, it is still the brightest thing in
+     * the room without being the loudest.
+     */
+    floorA: '#7cc44b',
+    floorB: '#6bb340',
+    floorEdge: '#589e36',
+    tuft: '#93d158',
     flower: '#ffd93d',
-    // Terraced cliffs enclosing the arena
-    cliff: '#b08968',
-    cliffTop: '#79c94f',
-    cliffDark: '#8c6a4f',
+    /*
+     * Terraced cliffs enclosing the arena. Sunlit sandstone, not wet earth -
+     * the dark browns were the single heaviest thing in the frame, and with a
+     * bright floor in front of them they read as a pit rather than as a bowl.
+     */
+    cliff: '#c8cfc0',
+    cliffTop: '#7cc44b',
+    cliffDark: '#adb6a2',
     // The skyline this biome looks out on, and the rim scatter
     ridge: 'hills',
-    ridgeCap: '#3f8f2c',
+    ridgeCap: '#589e36',
     prop: 'tree',
-    propColor: '#4faa39',
-    propAccent: '#8a5a3b',
+    propColor: '#74d13c',
+    propAccent: '#c07a3e',
     // Glowing ground veins - off in a jungle
     glow: '#7cf7a0',
     glowStrength: 0,

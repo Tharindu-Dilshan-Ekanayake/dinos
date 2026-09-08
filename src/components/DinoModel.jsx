@@ -189,7 +189,7 @@ function useMergedGroups(boxes) {
 }
 
 /** Draws one part's merged geometries with the stage's materials. */
-function PartMeshes({ groups, materials }) {
+function PartMeshes({ groups, materials, castShadows }) {
   return (
     <>
       {groups.map((group) => (
@@ -197,7 +197,7 @@ function PartMeshes({ groups, materials }) {
           key={group.key}
           geometry={group.geometry}
           material={materials[group.key]}
-          castShadow={CASTS_SHADOW[group.key]}
+          castShadow={castShadows && CASTS_SHADOW[group.key]}
         />
       ))}
     </>
@@ -573,8 +573,14 @@ function armBoxes() {
 
 /**
  * Blocky dino, restyled per stage. Faces +X, feet on y = 0.
+ *
+ * `castShadows` defaults on for the dino whose shadow was actually part of the
+ * tuned budget - the local player, the arena fighter, the podium showcases.
+ * Lobby-mates opt out (see OtherPlayers.jsx): a full lobby is up to seven more
+ * of these on screen at once, and the shadow pass is the single most expensive
+ * thing a dino does (see quality.js) for a shadow nobody is looking at.
  */
-export function PrimitiveDino({ evolution, materials, rig }) {
+export function PrimitiveDino({ evolution, materials, rig, castShadows = true }) {
   const build = useMemo(() => buildFor(evolution), [evolution])
   const stance = useMemo(() => stanceFor(evolution), [evolution])
   const quad = stance.quad
@@ -627,33 +633,33 @@ export function PrimitiveDino({ evolution, materials, rig }) {
   return (
     <group position-y={stance.offset}>
       <group ref={assign('body')}>
-        <PartMeshes groups={torso} materials={materials} />
+        <PartMeshes groups={torso} materials={materials} castShadows={castShadows} />
 
         <group ref={assign('head')} position={headOrigin} scale={build.headSize}>
-          <PartMeshes groups={head} materials={materials} />
+          <PartMeshes groups={head} materials={materials} castShadows={castShadows} />
 
           {/* Held open by however much of a mouth this animal is about. */}
           <group ref={assign('jaw')} position={JAW_HINGE} rotation-z={-build.jaw}>
-            <PartMeshes groups={jaw} materials={materials} />
+            <PartMeshes groups={jaw} materials={materials} castShadows={castShadows} />
           </group>
         </group>
 
         <group ref={assign('tail')} position={tailOrigin}>
-          <PartMeshes groups={tail} materials={materials} />
+          <PartMeshes groups={tail} materials={materials} castShadows={castShadows} />
         </group>
 
         <group ref={assign('legFrontL')} position={[frontHip[0], frontHip[1], -frontHip[2]]}>
-          <PartMeshes groups={front} materials={materials} />
+          <PartMeshes groups={front} materials={materials} castShadows={castShadows} />
         </group>
         <group ref={assign('legFrontR')} position={frontHip}>
-          <PartMeshes groups={front} materials={materials} />
+          <PartMeshes groups={front} materials={materials} castShadows={castShadows} />
         </group>
 
         <group ref={assign('legBackL')} position={[backHip[0], backHip[1], -backHip[2]]}>
-          <PartMeshes groups={back} materials={materials} />
+          <PartMeshes groups={back} materials={materials} castShadows={castShadows} />
         </group>
         <group ref={assign('legBackR')} position={backHip}>
-          <PartMeshes groups={back} materials={materials} />
+          <PartMeshes groups={back} materials={materials} castShadows={castShadows} />
         </group>
       </group>
     </group>
@@ -663,18 +669,19 @@ export function PrimitiveDino({ evolution, materials, rig }) {
 /* ------------------------------------------------------------------ GLB */
 
 /** Real asset path, used once a stage has a `model` in data/evolutions.js. */
-function GltfDino({ url }) {
+function GltfDino({ url, castShadows }) {
   const { scene } = useGLTF(url)
   const model = useMemo(() => {
     const copy = scene.clone(true)
     copy.traverse((child) => {
       if (child.isMesh) {
-        child.castShadow = true
+        child.castShadow = castShadows
         child.receiveShadow = true
       }
     })
     return copy
-  }, [scene])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scene, castShadows])
   return <primitive object={model} />
 }
 
@@ -682,16 +689,21 @@ function GltfDino({ url }) {
  * Picks the GLB when a stage has one and falls back to the blocky dino
  * otherwise - including when the GLB fails to load, so a bad asset path never
  * blanks the scene.
+ *
+ * `castShadows` (default on) is the one thing worth turning off for a dino
+ * that isn't the tuned budget's own player - see PrimitiveDino.
  */
-export default function DinoModel({ evolution, materials, rig }) {
-  const fallback = <PrimitiveDino evolution={evolution} materials={materials} rig={rig} />
+export default function DinoModel({ evolution, materials, rig, castShadows = true }) {
+  const fallback = (
+    <PrimitiveDino evolution={evolution} materials={materials} rig={rig} castShadows={castShadows} />
+  )
 
   if (!evolution.model) return fallback
 
   return (
     <ModelFallback resetKey={evolution.id} fallback={fallback}>
       <Suspense fallback={fallback}>
-        <GltfDino url={evolution.model} />
+        <GltfDino url={evolution.model} castShadows={castShadows} />
       </Suspense>
     </ModelFallback>
   )

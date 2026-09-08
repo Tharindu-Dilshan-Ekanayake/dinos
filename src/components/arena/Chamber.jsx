@@ -78,8 +78,17 @@ export default function Chamber({ palette, origin, stage = 0 }) {
    * machines run out of first.
    */
   const { detail } = useQuality()
+  /*
+   * Thinned hard from where it started.
+   *
+   * Forty-four props on the rim and forty-six clumps of grass on the floor
+   * covered every square metre of a chamber in *something*, and a fight read
+   * as happening in a thicket. The dressing is meant to say the room is a
+   * place, which takes a handful of pieces with clear floor between them - the
+   * rest was noise you had to look past to find a dino.
+   */
   const props = useMemo(
-    () => buildArenaProps(blocks, stage, detailCount(44, detail)),
+    () => buildArenaProps(blocks, stage, detailCount(18, detail)),
     [blocks, stage, detail]
   )
 
@@ -87,7 +96,7 @@ export default function Chamber({ palette, origin, stage = 0 }) {
   // them does not.
   const details = useMemo(() => buildCliffDetails(blocks, stage), [blocks, stage])
   const scatter = useMemo(
-    () => buildGroundScatter(stage, detailCount(46, detail), detailCount(18, detail)),
+    () => buildGroundScatter(stage, detailCount(20, detail), detailCount(7, detail)),
     [stage, detail]
   )
 
@@ -378,26 +387,35 @@ export default function Chamber({ palette, origin, stage = 0 }) {
         castShadow
       />
 
-      {/* Terraces: dirt at the fighting floor, stone stepping away behind it. */}
+      {/*
+        The end walls: dirt at the fighting floor, stone stepping away behind.
+
+        None of them casts. A wall eight units tall throws a shadow the length
+        of the room it stands at the end of, and with the sun where it is that
+        landed as a hard-edged band straight across the floor - dark in front of
+        the doorway, bright beyond it. On flat ground a straight tonal seam does
+        not read as shade, it reads as a *step*, and Stage 1 in particular
+        looked like it had a bank across its middle that you ought to be able to
+        climb. They still receive, so the walls themselves are lit and shaded
+        like everything else; what they no longer do is draw a false ledge on
+        ground you fight on.
+      */}
       <InstancedBlocks
         items={tiers.near}
         geometry={geometries.block}
         material={materials.dirt}
-        castShadow
         receiveShadow
       />
       <InstancedBlocks
         items={tiers.far}
         geometry={geometries.block}
         material={materials.stone}
-        castShadow
         receiveShadow
       />
       <InstancedBlocks
         items={tiers.caps}
         geometry={geometries.block}
         material={materials.cap}
-        castShadow
         receiveShadow
       />
       <InstancedBlocks

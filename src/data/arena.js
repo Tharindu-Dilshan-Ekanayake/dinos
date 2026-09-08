@@ -28,8 +28,17 @@ import {
  */
 
 export const ARENA = {
-  /** Distance from the centre line to the inner face of the side walls. */
-  halfWidth: 13,
+  /**
+   * Distance from the centre line to where the floor stops being the fight.
+   *
+   * It was the inner face of a pair of side walls; there are no side walls any
+   * more (see buildArenaBlocks), so it is now simply how wide the room plays -
+   * the clamp on your own movement, the spread a pack forms across, and how far
+   * out the dressing is allowed to stand. Widened with the walls gone: hemmed
+   * in by rock, thirteen was a corridor you fought along, and opened up it is a
+   * field you fight across.
+   */
+  halfWidth: 17,
   /** Inner face of the back wall. */
   backZ: -16,
   /** Where the side walls stop, behind the camera. */
@@ -45,11 +54,17 @@ export const ARENA = {
 /**
  * Terrace steps. Each tier sits further out and higher than the last, which is
  * what gives the walls their layered, carved-out look.
+ *
+ * Two courses, not three. The old first step was a knee-high green bank ringing
+ * the whole floor at the fighting line: it never took a metre of walkable
+ * ground away - the floor is clear to `halfWidth` either way - but it drew a
+ * hard green kerb round every shot, so a chamber read as a pit you had been
+ * dropped into rather than as a field with cliffs behind it. Starting at the
+ * old middle course, the floor runs out flat to a wall that is properly a wall.
  */
 export const TIERS = [
-  { inset: 0, height: 2.4, depth: 4 },
-  { inset: 3.5, height: 5.2, depth: 4 },
-  { inset: 6, height: 8.6, depth: 4 },
+  { inset: 1.0, height: 5.2, depth: 4 },
+  { inset: 3.5, height: 8.6, depth: 4 },
 ]
 
 /** Deterministic LCG so the arena is identical on every load. */
@@ -74,9 +89,9 @@ export function buildArenaBlocks() {
 
   TIERS.forEach((tier, tierIndex) => {
     const offset = ARENA.halfWidth + tier.inset
-    const centreOffset = offset + tier.depth / 2
 
     // --- Side walls, running the length of the arena ---
+    const centreOffset = offset + tier.depth / 2
     const sideSpan = ARENA.frontZ - (ARENA.backZ - tier.inset)
     // Smaller blocks, more of them: a terrace should look assembled out of
     // pieces rather than extruded as one slab. They are instanced, so twice as
@@ -1249,12 +1264,13 @@ export const EXIT_SIGN_Z = ARENA.backZ + 1.6
  * Return pads flanking the exit.
  *
  * Stepping on one banks the Wins you are carrying and sends you back to the
- * hub. They only appear once the chamber is clear, which is what makes the
+ * hub. They stand here the whole fight through - red and inert until the
+ * chamber is actually clear, then blue and live - which is what makes the
  * end of a level a decision - cash out, or push through the gate for more.
  */
 export const RETURN_PADS = [
-  { id: 'left', position: [-ARENA.gapHalfWidth - 2.6, 0, ARENA.backZ + 3.4] },
-  { id: 'right', position: [ARENA.gapHalfWidth + 2.6, 0, ARENA.backZ + 3.4] },
+  { id: 'left', position: [-ARENA.gapHalfWidth - 2, 0, ARENA.backZ + 3.4] },
+  { id: 'right', position: [ARENA.gapHalfWidth + 2, 0, ARENA.backZ + 3.4] },
 ]
 
 export const RETURN_PAD_RADIUS = 1.5

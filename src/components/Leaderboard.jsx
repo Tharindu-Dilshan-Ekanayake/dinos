@@ -48,14 +48,21 @@ export default function Leaderboard({ open, onToggle }) {
       <button
         type="button"
         aria-label="Leaderboard"
-        className="arcade arcade-yellow h-11 gap-2 px-3 text-sm"
+        className="tile arcade-pink h-[5.2rem] w-full"
         onPointerDown={(e) => {
           e.stopPropagation()
           onToggle(!open)
         }}
       >
-        <span className={`h-2 w-2 rounded-full ${STATUS_STYLES[board.status] ?? STATUS_STYLES.offline}`} />
-        🏆
+        <span className="tile-icon pb-4 text-4xl">🏆</span>
+        <span className="tile-label text-[0.82rem]">Ranks</span>
+        {/* The connection light. It is status, not decoration, so it stays -
+            moved to the corner where the tile keeps its badges. */}
+        <span
+          className={`absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full border-2 border-[#1e1b16] ${
+            STATUS_STYLES[board.status] ?? STATUS_STYLES.offline
+          }`}
+        />
       </button>
 
       {open && (

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
-import { AREAS, areaProgress } from '../data/areas.js'
 import { REBIRTH_WINS_REQUIRED, formatNumber, rebirthMultiplier } from '../data/progression.js'
-import { MAX_STAGES } from '../data/stages.js'
+import { UPGRADE_LIST, upgradeCost } from '../data/upgrades.js'
 import { useGameStore } from '../store/useGameStore.js'
 import { EVENTS, on } from '../systems/events.js'
 import ArenaControls from './ArenaControls.jsx'
@@ -9,9 +8,7 @@ import DeathReturn from './DeathReturn.jsx'
 import EvolutionTrack from './EvolutionTrack.jsx'
 import FloatingTexts from './FloatingTexts.jsx'
 import BottomDetails from './BottomDetails.jsx'
-import HealthBar from './HealthBar.jsx'
 import InteractPrompt from './InteractPrompt.jsx'
-import PlayerHealthBar from './PlayerHealthBar.jsx'
 import Leaderboard from './Leaderboard.jsx'
 import LevelSelect from './LevelSelect.jsx'
 import LobbyHUD from './LobbyHUD.jsx'
@@ -21,16 +18,46 @@ import SettingsMenu from './SettingsMenu.jsx'
 import StageHeadline from './StageHeadline.jsx'
 import UpgradePanel from './UpgradePanel.jsx'
 
-/** Colourful stat plaque. */
-function Chip({ label, value, color = 'arcade-slate', icon }) {
+/**
+ * A count of something you hold.
+ *
+ * It was a plaque with a caption over a number - "WINS" in 8px above "50K" -
+ * which is a spreadsheet cell with a border on it. A trophy hung off the end of
+ * a dark lozenge says the same thing without a word in it, reads at arm's
+ * length, and survives being shrunk onto a phone, because the icon *is* the
+ * label. The caption survives as the tooltip for anyone who wants it spelled
+ * out.
+ */
+function CoinBar({ icon, value, title }) {
   return (
-    <div className={`arcade ${color} flex-col px-2 py-0.5 leading-none sm:px-3 sm:py-1`}>
-      <div className="text-[8px] tracking-[0.14em] opacity-90 sm:text-[9px]">{label}</div>
-      <div className="arcade-value flex items-center gap-1 text-sm sm:text-lg">
-        {icon && <span className="text-[11px] sm:text-sm">{icon}</span>}
-        {value}
-      </div>
+    <div className="coin-bar" title={title}>
+      <span className="coin-bar-icon">{icon}</span>
+      <span className="arcade-value text-xl leading-none">{value}</span>
     </div>
+  )
+}
+
+/**
+ * One of the big square menu buttons.
+ *
+ * A picture filling it, its name lettered across the foot, and an optional
+ * badge in the corner for anything that wants your attention.
+ */
+function Tile({ icon, label, color, badge, onPress, className = '' }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onPointerDown={(e) => {
+        e.stopPropagation()
+        onPress()
+      }}
+      className={`tile ${color} pointer-events-auto w-full ${className || 'h-[5.2rem]'}`}
+    >
+      <span className="tile-icon pb-4 text-4xl">{icon}</span>
+      <span className="tile-label text-[0.82rem]">{label}</span>
+      {badge != null && <span className="tile-badge">{badge}</span>}
+    </button>
   )
 }
 
@@ -48,45 +75,20 @@ function TopStats() {
   const scene = useGameStore((s) => s.scene)
 
   return (
-    <div className="flex flex-wrap gap-1.5 sm:gap-2">
-      <Chip label="Wins" value={formatNumber(wins)} color="arcade-yellow" icon="🏆" />
+    <div className="flex flex-col items-start gap-1.5">
+      <CoinBar icon="🏆" value={formatNumber(wins)} title="Wins" />
+      <CoinBar icon="💪" value={damage} title="Damage per click" />
       {scene === 'arena' && (
-        <Chip label="Carried" value={formatNumber(runWins)} color="arcade-pink" icon="🎒" />
+        <CoinBar icon="🎒" value={formatNumber(runWins)} title="Wins carried this run" />
       )}
-      <Chip label="Damage" value={damage} color="arcade-red" icon="💪" />
-      {idle && <Chip label="Idle" value={`${idle}/s`} color="arcade-blue" icon="🌀" />}
       {rebirths > 0 && (
-        <Chip
-          label="Rebirth"
-          value={`x${rebirthMultiplier(rebirths).toFixed(1)}`}
-          color="arcade-purple"
+        <CoinBar
           icon="♻️"
+          value={`x${rebirthMultiplier(rebirths).toFixed(1)}`}
+          title="Rebirth multiplier"
         />
       )}
-    </div>
-  )
-}
-
-function AreaProgress() {
-  const stageIndex = useGameStore((s) => s.stageIndex)
-  const areaIndex = useGameStore((s) => s.areaIndex)
-  const area = AREAS[areaIndex] ?? AREAS[0]
-  const progress = areaProgress(stageIndex)
-
-  return (
-    <div className="arcade-panel px-3 py-1.5 text-center">
-      <div className="text-[9px] font-black uppercase tracking-[0.14em]" style={{ color: area.enemyAccent }}>
-        {area.name}
-      </div>
-      <div className="arcade-value text-xs">
-        Stage {stageIndex + 1} / {MAX_STAGES}
-      </div>
-      <div className="mt-1 h-1.5 w-28 overflow-hidden rounded-full border border-black/50 bg-slate-900">
-        <div
-          className="h-full rounded-full bg-gradient-to-r from-yellow-300 to-amber-500 transition-[width] duration-500"
-          style={{ width: `${progress * 100}%` }}
-        />
-      </div>
+      {idle && <CoinBar icon="🌀" value={`${idle}/s`} title="Idle damage" />}
     </div>
   )
 }
@@ -124,26 +126,20 @@ function RebirthBar({ onOpen }) {
   )
 }
 
-/**
- * Stage progress, parked under the headline.
+/*
+ * There is no stage-progress plaque, and no area panel.
  *
- * Each enemy carries its own bar in the world now, so this is the whole
- * stage at a glance rather than a single opponent's health.
+ * Between them they put four readouts in two corners: the pack's health, your
+ * health, the biome's name and how far through the seventy-five levels you
+ * were. Every one of them is true and none of them is *looked at* - during a
+ * fight the eye is on the dino you are hitting, and between fights it is on the
+ * gate. The pack already carries a bar over each enemy's head, the stage number
+ * is lettered across the gate you are walking to, and your own health has moved
+ * into the block at the bottom where the rest of your state already lives.
+ *
+ * What the corners buy by being empty is the thing the reference has and this
+ * did not: you can see the game.
  */
-function StageProgress() {
-  return (
-    <div className="pointer-events-none absolute left-3 top-[16.5rem] z-10 w-44 sm:top-[15.5rem]">
-      <div className="arcade-panel px-3 py-1.5">
-        <HealthBar />
-      </div>
-      {/* Your own health sits directly under the pack's, so both sides of the
-          fight read as one readout. */}
-      <div className="arcade-panel mt-1.5 px-3 py-1.5">
-        <PlayerHealthBar />
-      </div>
-    </div>
-  )
-}
 
 /** Shop sheet, opened from the header so it never fights the joystick. */
 function ShopSheet({ open, onClose, onRebirth }) {
@@ -208,54 +204,84 @@ export default function UIOverlay() {
   const inLobby = scene === 'lobby'
   const setScene = useGameStore((s) => s.setScene)
 
+  /*
+   * The red dot on Store, and the percentage on Rebirth.
+   *
+   * Both are selected as the finished value - a boolean and a whole number -
+   * rather than as the wins behind them, so a HUD that sits over a fight does
+   * not re-render on every point of damage that lands.
+   */
+  const canBuy = useGameStore((s) =>
+    UPGRADE_LIST.some((u) => s.wins >= upgradeCost(u.id, s.upgradeLevels[u.id] ?? 0))
+  )
+  const rebirthPercent = useGameStore((s) =>
+    Math.min(100, Math.floor((s.totalWins / REBIRTH_WINS_REQUIRED) * 100))
+  )
+
   return (
     <>
       <FloatingTexts />
       <ScreenFlash />
-      {!inLobby && <StageHeadline />}
 
       <div className="pointer-events-none absolute inset-0 z-10 flex flex-col justify-between">
         <header className="safe-top flex items-start justify-between gap-2 px-3">
-          <TopStats />
-          <div className="flex flex-col items-end gap-2">
-            <div className="flex flex-wrap items-start justify-end gap-2">
+          {/*
+            The counts, and under them what you are fighting.
+
+            The headline used to be parked at a fixed `top-28`, which is a
+            number that was true of a HUD with three small chips in it. Grown
+            into full-size coin bars, the column reached past that line and the
+            headline came down on top of it. Both live in the same flex column
+            now, so the one can never land on the other whatever either is
+            carrying.
+          */}
+          <div className="flex flex-col items-start gap-2">
+            <TopStats />
+            {!inLobby && <StageHeadline />}
+          </div>
+          {/*
+            The menu block: one wide tile leading it, a grid of squares under.
+
+            Laid out the way a shelf of toys is rather than as a row of pills -
+            Store first and biggest because it is where everything is bought,
+            then the four things you dip into mid-run. On a phone every one of
+            them is a thumb-sized square with a picture on it, which is the
+            whole reason to build a HUD this way.
+          */}
+          <div className="flex w-[11.5rem] flex-col items-end gap-2">
+            <Tile
+              icon="🛒"
+              label="Store"
+              color="arcade-yellow"
+              className="h-[5.8rem]"
+              badge={canBuy ? '!' : null}
+              onPress={() => setShopOpen((v) => !v)}
+            />
+
+            <div className="grid w-full grid-cols-2 gap-2">
+              <Tile
+                icon="♻️"
+                label="Rebirth"
+                color="arcade-blue"
+                badge={`${rebirthPercent}%`}
+                onPress={() => setRebirthOpen(true)}
+              />
               {!inLobby && (
-                <button
-                  type="button"
-                  aria-label="Hub"
-                  className="arcade arcade-green pointer-events-auto h-11 px-3 text-xs"
-                  onPointerDown={(e) => {
-                    e.stopPropagation()
-                    setScene('lobby')
-                  }}
-                >
-                  Hub
-                </button>
+                <Tile
+                  icon="🗺️"
+                  label="Levels"
+                  color="arcade-purple"
+                  onPress={() => setLevelsOpen((v) => !v)}
+                />
               )}
               {!inLobby && (
-                <button
-                  type="button"
-                  aria-label="Levels"
-                  className="arcade arcade-yellow pointer-events-auto h-11 px-3 text-xs"
-                  onPointerDown={(e) => {
-                    e.stopPropagation()
-                    setLevelsOpen((v) => !v)
-                  }}
-                >
-                  Levels
-                </button>
+                <Tile
+                  icon="🏠"
+                  label="Hub"
+                  color="arcade-green"
+                  onPress={() => setScene('lobby')}
+                />
               )}
-              <button
-                type="button"
-                aria-label="Shop"
-                className="arcade arcade-yellow pointer-events-auto h-11 w-11 text-lg"
-                onPointerDown={(e) => {
-                  e.stopPropagation()
-                  setShopOpen((v) => !v)
-                }}
-              >
-                🛒
-              </button>
               <Leaderboard
                 open={boardOpen}
                 onToggle={(next) => {
@@ -271,25 +297,13 @@ export default function UIOverlay() {
                 }}
               />
             </div>
-            {!inLobby && (
-              <div className="hidden sm:block">
-                <AreaProgress />
-              </div>
-            )}
           </div>
         </header>
 
         <div />
       </div>
 
-      {inLobby ? (
-        <LobbyHUD />
-      ) : (
-        <>
-          <StageProgress />
-          <ArenaControls />
-        </>
-      )}
+      {inLobby ? <LobbyHUD /> : <ArenaControls />}
 
       {/* Both scenes now ask for a keypress: the hub for a podium, the arena
           for the Return pad that ends a run. Same panel, same key. */}

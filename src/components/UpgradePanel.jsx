@@ -27,7 +27,7 @@ function UpgradeButton({ upgrade, wins, level, onBuy, onBuyMax }) {
         <span className="text-[10px] font-semibold text-white/40">{level}</span>
       </div>
 
-      <div className="mt-1 flex gap-1">
+      <div className="flex gap-1 mt-1">
         <button
           type="button"
           onPointerDown={(e) => {
