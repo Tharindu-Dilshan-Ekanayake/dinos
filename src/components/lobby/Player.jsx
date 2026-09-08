@@ -21,6 +21,7 @@ import {
   playerMotion,
   playerPosition,
 } from '../../systems/playerState.js'
+import { playerWorld } from '../../systems/playerWorld.js'
 import DinoModel, { animateDinoRig, useDinoMaterials, useDinoRig } from '../DinoModel.jsx'
 
 /**
@@ -102,7 +103,28 @@ export default function Player({ active = true, worldOffset = [0, 0, 0] }) {
   }, [])
 
   useFrame((_, rawDelta) => {
-    if (!active) return
+    /*
+     * Not driving - but still standing exactly where the player is.
+     *
+     * Both halves of the game keep a dino mounted the whole time and show one
+     * of them, and this used to bail out of the frame entirely while hidden.
+     * So the one that was about to be shown sat wherever it had last been left
+     * - the arena's at its spawn point, the hub's at the gate - and on the
+     * frame the scene flipped it was made visible *there*, jumped to the player
+     * on the frame after, and read as the dino blinking out and reappearing.
+     *
+     * Parking it on the player's world position every frame costs one vector
+     * write while hidden and means the swap has nothing left to show: the dino
+     * that appears is already standing where the dino that vanished was.
+     */
+    if (!active) {
+      if (root.current) {
+        const parked = playerWorld()
+        root.current.position.set(parked.x, parked.y, parked.z)
+        root.current.rotation.y = playerFacing.angle
+      }
+      return
+    }
     const delta = Math.min(rawDelta, 0.05)
     const { moving } = stepPlayer(delta, CONFIG)
 

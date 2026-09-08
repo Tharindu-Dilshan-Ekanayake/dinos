@@ -20,6 +20,7 @@ import { createStepper } from '../../systems/footsteps.js'
 import { installInput } from '../../systems/input.js'
 import { stepPlayer, turnToward } from '../../systems/playerMovement.js'
 import { placePlayer, playerFacing, playerMotion, playerPosition } from '../../systems/playerState.js'
+import { playerWorld } from '../../systems/playerWorld.js'
 import { enemySlots, packState } from '../../systems/arenaEnemies.js'
 import { getTimeScale } from '../../systems/timeScale.js'
 import DinoModel, { animateDinoRig, useDinoMaterials, useDinoRig } from '../DinoModel.jsx'
@@ -128,7 +129,30 @@ export default function ArenaPlayer({ active = true }) {
   }, [])
 
   useFrame((_, rawDelta) => {
-    if (!active) return
+    /*
+     * Not driving - but still standing exactly where the player is.
+     *
+     * Both halves of the game keep a dino mounted the whole time and show one
+     * of them, and this used to bail out of the frame entirely while hidden.
+     * So the one that was about to be shown sat wherever it had last been left
+     * - the arena's at its spawn point, the hub's at the gate - and on the
+     * frame the scene flipped it was made visible *there*, jumped to the player
+     * on the frame after, and read as the dino blinking out and reappearing.
+     *
+     * Parking it on the player's world position every frame costs one vector
+     * write while hidden and means the swap has nothing left to show: the dino
+     * that appears is already standing where the dino that vanished was.
+     */
+    if (!active) {
+      if (root.current) {
+        const parked = playerWorld()
+        root.current.position.set(parked.x, parked.y, parked.z)
+        // Upright, too: a run that ended in a death left this one lying on its
+        // side, and that is the pose it would have come back in.
+        root.current.rotation.set(0, playerFacing.angle, 0)
+      }
+      return
+    }
     const a = anim.current
     const delta = Math.min(rawDelta, 0.05)
     const scaled = delta * getTimeScale()

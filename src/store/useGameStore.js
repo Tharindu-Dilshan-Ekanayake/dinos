@@ -29,7 +29,10 @@ import { areaIndexForStage } from '../data/areas.js'
 import { MIN_HITS_TO_CLEAR, enemyCountForStage } from '../data/arena.js'
 import { EVENTS, emit } from '../systems/events.js'
 import { loadSave } from '../systems/persistence.js'
-import { HUB_ARRIVAL } from '../data/lobby.js'
+import {
+  HUB_ARRIVAL,
+  HUB_RETURN,
+} from '../data/lobby.js'
 import { placePlayer, playerFacing, playerPosition } from '../systems/playerState.js'
 import { SEAM_MARGIN, arenaToHubPoint, hubToArena } from '../data/arena.js'
 
@@ -761,6 +764,23 @@ export const useGameStore = create((set, get) => ({
     if (scene !== 'lobby' && scene !== 'arena') return
     if (get().scene === scene) return
     set({ scene })
+
+    /*
+     * Switching by button is a *teleport*, and a teleport has to be landed.
+     *
+     * This used to flip the flag and nothing else, which is a real bug and not
+     * a cosmetic one: the two halves of the world are the same axes slid sixty
+     * three units apart, so the position you were standing at in a chamber went
+     * on being used unchanged and was now read as a hub coordinate. You did not
+     * arrive anywhere - you were simply re-interpreted, sixty three units off,
+     * and whatever the plaza clamp made of that is where you turned up.
+     *
+     * Walking between the two is handled elsewhere and converts properly (see
+     * enterArena and the claim path); this is the case where there is no walk
+     * to convert, so it gets a defined place to arrive.
+     */
+    if (scene === 'lobby') placePlayer(HUB_RETURN.position, HUB_RETURN.angle)
+
     emit(EVENTS.SCENE_CHANGE, { scene })
   },
 

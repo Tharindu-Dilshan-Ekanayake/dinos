@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { playerPosition } from '../systems/playerState.js'
+import { playerWorld } from '../systems/playerWorld.js'
 
 /**
  * Birds circling high over the level.
@@ -117,15 +117,20 @@ export default function Birds({ color = '#3d4657', hidden = false }) {
     wings.visible = true
     material.opacity = 0.85 * shown.current
 
+    // The world position, not the scene-local one: a flock centred on the
+    // latter jumps the length of the corridor the moment you cross into Stage
+    // 1, which is the one frame it must not move on. See playerWorld.js.
+    const player = playerWorld()
+
     for (let i = 0; i < COUNT; i++) {
       const bird = flock[i]
       const angle = bird.phase + (time / ORBIT_SECONDS) * Math.PI * 2 - bird.trail
 
       scratch.position.set(
-        playerPosition.x + Math.cos(angle) * bird.radius,
+        player.x + Math.cos(angle) * bird.radius,
         // A slow rise and fall over the circuit, so the flock is not on rails.
         bird.height + Math.sin(angle * 2 + bird.phase) * 3,
-        playerPosition.z + Math.sin(angle) * bird.radius
+        player.z + Math.sin(angle) * bird.radius
       )
       // Nose along the direction of travel.
       scratch.euler.set(0, -angle + Math.PI / 2, 0)
@@ -141,9 +146,9 @@ export default function Birds({ color = '#3d4657', hidden = false }) {
         scratch.quaternion.setFromEuler(scratch.euler)
         // Hung off the body's shoulder, so the beat pivots at the root.
         scratch.position.set(
-          playerPosition.x + Math.cos(angle) * bird.radius,
+          player.x + Math.cos(angle) * bird.radius,
           bird.height + Math.sin(angle * 2 + bird.phase) * 3,
-          playerPosition.z + Math.sin(angle) * bird.radius
+          player.z + Math.sin(angle) * bird.radius
         )
         scratch.matrix.compose(scratch.position, scratch.quaternion, scratch.scale)
         // Offset the wing along its own local Z once the rotation is applied.

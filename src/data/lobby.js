@@ -379,6 +379,24 @@ export const HUB_ARRIVAL = {
   angle: -Math.PI / 2,
 }
 
+/**
+ * Where the Hub button puts you: the middle of the plaza, facing the arena.
+ *
+ * Distinct from HUB_ARRIVAL, which is where you come out of the gateway on
+ * foot and therefore stands at the arena end with the ramp at your back. The
+ * button is not a walk - it is a jump from wherever you happen to be standing
+ * in a chamber - so it lands you in the middle of the hub, where everything
+ * the hub is for is within sight: podiums down one side, training pads down
+ * the other, the way back in ahead of you.
+ *
+ * Measured off the plaza rather than written down, so moving the plaza's ends
+ * moves this with them.
+ */
+export const HUB_RETURN = {
+  position: [0, 0, (PLAZA.from + PLAZA.to) / 2],
+  angle: Math.PI / 2,
+}
+
 /** Z of the top of the ramp, where it meets the arena's landing. */
 export const ARENA_RAMP_TOP_Z = ARENA_ENTRANCE.rampFromZ - ARENA_ENTRANCE.rampRun
 
