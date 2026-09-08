@@ -714,3 +714,41 @@ VITE_LEADERBOARD_URL=ws://localhost:8787 npm run dev
 
 Scores are self-reported, so this is a friendly scoreboard rather than an
 authoritative ranking; anything stricter needs server-side simulation.
+
+## Matchmaking (optional)
+
+The game shards every player into a lobby of up to 8 the moment it loads -
+there's no queue screen to opt into. It joins automatically using whatever
+name is set in Settings, or a generated guest tag otherwise, so nobody has to
+stop and type anything first; once 8 are in, a lobby closes to new joins and
+the next player starts a fresh one. Everyone sharing your lobby shows up as a
+real dino walking around with you, with their name floating above - live
+position and facing stream over the socket at 10Hz
+(`player_move`/`player_moved`), smoothed client-side, so lobby-mates actually
+move rather than standing still (`OtherPlayers.jsx`).
+
+This works across the whole game, not just the Hub: the Hub and the stage
+corridor are one continuous world (`LOBBY_Z_OFFSET` / `chamberOrigin`), so
+each position update is tagged `inLobby` to say which coordinate space it was
+sent in, and a lobby-mate is rendered wherever they actually are - hub or a
+stage chamber - snapping instead of sliding across a scene crossing. Height is
+synced too, so a jump is visible to everyone else, not just the ground track.
+
+Each lobby-mate's real evolution tier rides along in the same `player_move`
+payload, so they show up as the actual dino they're equipped with - a
+Magma Tyrant looks like a Magma Tyrant to everyone else, not a generic
+Hatchling. The index is clamped server-side before being relayed, since every
+other client uses it directly as an array index into their own evolutions
+list. Nothing about their actual run (stats, upgrades, wins) is synced -
+appearance, position, facing, and movement are the whole of it.
+
+Talks to the Socket.IO backend in the sibling `server/` project. Defaults to
+`http://localhost:3000`; point it elsewhere with an env var.
+
+```bash
+cd ../server && npm start
+VITE_MATCHMAKING_URL=http://localhost:3000 npm run dev
+```
+
+This only carries the player through matchmaking - what happens after
+`game_start` (actual synced gameplay) isn't wired up on the client yet.

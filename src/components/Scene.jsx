@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import ArenaScene from './ArenaScene.jsx'
 import LobbyScene from './lobby/LobbyScene.jsx'
 import ArenaPlayer from './arena/ArenaPlayer.jsx'
+import OtherPlayers from './OtherPlayers.jsx'
 import Player from './lobby/Player.jsx'
 import LobbyCamera from './lobby/LobbyCamera.jsx'
 import { useGameStore } from '../store/useGameStore.js'
@@ -83,6 +84,7 @@ export default function Scene() {
           worldPosition={[0, 0, LOBBY_Z_OFFSET]}
         />
         <Player active={inLobby} worldOffset={[0, 0, LOBBY_Z_OFFSET]} />
+        <OtherPlayers worldOffset={[0, 0, LOBBY_Z_OFFSET]} />
         <ArenaPlayer active={!inLobby} />
       </Suspense>
     </>
