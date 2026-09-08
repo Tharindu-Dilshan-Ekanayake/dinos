@@ -562,65 +562,6 @@ export function lobbyTufts(clusters = 150) {
   return items
 }
 
-/**
- * The individual stones of a wall face.
- *
- * A brick *texture* on one big slab reads as a photograph of a wall; real
- * blocks standing a few centimetres proud of it read as a wall. This lays a
- * grid of them over a face, courses offset like real masonry, each one nudged
- * so the surface is never perfectly flat.
- *
- * `axis` says which way the face runs: 'z' for the long flanks either side of
- * the plaza, 'x' for the ends. Returns items ready for InstancedBlocks.
- */
-export function wallStones({
-  axis = 'z',
-  from,
-  to,
-  faceAt,
-  baseY = 0,
-  height,
-  block = 2.2,
-  depth = 0.32,
-  seed = 11,
-}) {
-  let state = seed * 2654435761 % 4294967296
-  const rand = () => {
-    state = (state * 1664525 + 1013904223) % 4294967296
-    return state / 4294967296
-  }
-
-  const items = []
-  const rows = Math.max(1, Math.round(height / block))
-  const rowHeight = height / rows
-  const span = Math.abs(to - from)
-  const start = Math.min(from, to)
-
-  for (let row = 0; row < rows; row++) {
-    // Every other course steps half a block along, the way stone is laid.
-    const offset = row % 2 === 0 ? 0 : block / 2
-    const columns = Math.max(1, Math.ceil((span - offset) / block))
-    const width = (span - offset) / columns
-
-    for (let col = 0; col < columns; col++) {
-      const along = start + offset + width * (col + 0.5)
-      const y = baseY + rowHeight * (row + 0.5)
-      // A hair of variation in how far each stone stands out.
-      const proud = depth * (0.75 + rand() * 0.5)
-
-      items.push({
-        position:
-          axis === 'z' ? [faceAt, y, along] : [along, y, faceAt],
-        scale:
-          axis === 'z'
-            ? [proud * 2, rowHeight * 0.9, width * 0.92]
-            : [width * 0.92, rowHeight * 0.9, proud * 2],
-      })
-    }
-  }
-
-  return items
-}
 
 /**
  * Bright toy blocks stacked around the hub's edges.

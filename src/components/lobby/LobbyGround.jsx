@@ -10,7 +10,6 @@ import {
   lobbyBlocks,
   lobbyTufts,
   treeLayout,
-  wallStones,
 } from '../../data/lobby.js'
 import { treeBoxes } from '../../data/foliage.js'
 import { mergeBoxesByMaterial } from '../../systems/mergeBoxes.js'
@@ -196,6 +195,21 @@ function useLobbyMaterials() {
   return bundle
 }
 
+/**
+ * How far each half of the back terrace reaches in from its outer end.
+ *
+ * The one number to move if you want more clear ground beside the way into
+ * Stage 1. Lower it and the wall's inner edge slides *away* from the doorway;
+ * the outer corner does not move. Clamped at the corridor's own half-width, so
+ * however small it gets it can never grow back across the gateway it is split
+ * around.
+ *
+ * 48.8 is the length the two halves have always had - outer edge at
+ * `PLAZA.halfWidth + 20`, inner edge hard against the gateway - so this is the
+ * old shape written as a length rather than as two edges.
+ */
+const BACK_TERRACE_LENGTH = 44.8
+
 /** Half-width of the ground the arena entrance occupies: gap plus both walls. */
 const ENTRANCE_HALF_SPAN = ARENA_ENTRANCE.gapHalfWidth + ARENA_ENTRANCE.wallWidth
 
@@ -290,7 +304,7 @@ function Trees({ materials }) {
 }
 
 /** The high garden wall directly behind the rebirth pedestals. */
-function RearGardenWall({ materials, wallMaterials, terrainMaterials, stoneMaterial }) {
+function RearGardenWall({ materials, wallMaterials, terrainMaterials }) {
   const terraces = useMemo(
     () => [
       // Each ledge steps upward away from the plaza, like the reference hub.
@@ -318,13 +332,7 @@ function RearGardenWall({ materials, wallMaterials, terrainMaterials, stoneMater
   )
 
   const groups = useMemo(() => mergeBoxesByMaterial(treeBoxes({ seed: 41 })), [])
-  const stoneItems = useMemo(
-    () => wallStones({ axis: 'x', from: -41, to: 41, faceAt: 34.45, height: 10.6, seed: 121 }),
-    []
-  )
-  const stoneGeometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
   useEffect(() => () => groups.forEach((group) => group.geometry.dispose()), [groups])
-  useEffect(() => () => stoneGeometry.dispose(), [stoneGeometry])
 
   const tint = {
     trunk: materials.trunk,
@@ -339,13 +347,6 @@ function RearGardenWall({ materials, wallMaterials, terrainMaterials, stoneMater
           <boxGeometry args={terrace.size} />
         </mesh>
       ))}
-      <InstancedBlocks
-        items={stoneItems}
-        geometry={stoneGeometry}
-        material={stoneMaterial}
-        castShadow
-        receiveShadow
-      />
       {groups.map((group) => (
         <InstancedBlocks
           key={`back-${group.key}`}
@@ -364,7 +365,7 @@ function RearGardenWall({ materials, wallMaterials, terrainMaterials, stoneMater
  * enclosure. The only break is the arena approach, so the lobby still has a
  * natural way out while every normal camera angle lands on stone and trees.
  */
-function PerimeterGardenWall({ materials, wallMaterials, stoneMaterial }) {
+function PerimeterGardenWall({ materials, wallMaterials }) {
   const walls = useMemo(
     () => [
       // Straight flanks stop early, then kick inward into garden-like corners.
@@ -403,8 +404,8 @@ function PerimeterGardenWall({ materials, wallMaterials, stoneMaterial }) {
         [-53, 8.8, -73, 1.48, 1.9],
         [-39, 8.8, -73, 1.2, 2.7],
         [-25, 8.8, -73, 1.55, 1.1],
-        [-14, 8.8, -73, 1.08, 2.4],
-        [14, 8.8, -73, 1.42, 0.3],
+       
+        
         [27, 8.8, -73, 1.16, 1.5],
         [41, 8.8, -73, 1.52, 2.8],
         [54, 8.8, -73, 1.1, 0.9],
@@ -417,20 +418,8 @@ function PerimeterGardenWall({ materials, wallMaterials, stoneMaterial }) {
     []
   )
 
-  const stoneItems = useMemo(
-    () => [
-      ...wallStones({ axis: 'z', from: -71, to: 11, faceAt: -70.9, height: 8.8, seed: 211 }),
-      ...wallStones({ axis: 'z', from: -71, to: 11, faceAt: 70.9, height: 8.8, seed: 223 }),
-      ...wallStones({ axis: 'x', from: -71, to: -11, faceAt: -70.9, height: 8.8, seed: 227 }),
-      ...wallStones({ axis: 'x', from: 11, to: 71, faceAt: -70.9, height: 8.8, seed: 229 }),
-    ],
-    []
-  )
-
   const treeGroups = useMemo(() => mergeBoxesByMaterial(treeBoxes({ seed: 67 })), [])
-  const stoneGeometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
   useEffect(() => () => treeGroups.forEach((group) => group.geometry.dispose()), [treeGroups])
-  useEffect(() => () => stoneGeometry.dispose(), [stoneGeometry])
 
   const tint = {
     trunk: materials.trunk,
@@ -452,13 +441,6 @@ function PerimeterGardenWall({ materials, wallMaterials, stoneMaterial }) {
           <boxGeometry args={wall.size} />
         </mesh>
       ))}
-      <InstancedBlocks
-        items={stoneItems}
-        geometry={stoneGeometry}
-        material={stoneMaterial}
-        castShadow
-        receiveShadow
-      />
       {treeGroups.map((group) => (
         <InstancedBlocks
           key={group.key}
@@ -469,49 +451,6 @@ function PerimeterGardenWall({ materials, wallMaterials, stoneMaterial }) {
         />
       ))}
     </group>
-  )
-}
-
-/**
- * Real stones standing proud of the raised tier's faces.
- *
- * The tier is a nine-by-thirty-nine metre slab, and no amount of brick texture
- * stops something that size reading as one poured lump. These are separate
- * blocks with gaps between them, so the light catches every course.
- */
-function TierStones({ material }) {
-  const items = useMemo(() => {
-    const height = LEFT_TIER.height
-    const out = []
-    // The long flank that faces the plaza, and the near end you walk past.
-    out.push(
-      ...wallStones({
-        axis: 'z',
-        from: LEFT_TIER.minZ,
-        to: LEFT_TIER.maxZ,
-        faceAt: LEFT_TIER.maxX,
-        height,
-        seed: 21,
-      })
-    )
-    out.push(
-      ...wallStones({
-        axis: 'x',
-        from: LEFT_TIER.minX,
-        to: LEFT_TIER.maxX,
-        faceAt: LEFT_TIER.maxZ,
-        height,
-        seed: 33,
-      })
-    )
-    return out
-  }, [])
-
-  const geometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
-  useEffect(() => () => geometry.dispose(), [geometry])
-
-  return (
-    <InstancedBlocks items={items} geometry={geometry} material={material} castShadow receiveShadow />
   )
 }
 
@@ -812,8 +751,19 @@ export default function LobbyGround() {
         between the entrance walls was this, and nothing else.
       */}
       {[-1, 1].map((side) => {
-        const inner = ARENA_ENTRANCE.gapHalfWidth
+        /*
+         * Pinned at the outer end, trimmed from the doorway.
+         *
+         * It used to be spanned the other way round - a fixed inner edge at the
+         * gateway and an outer edge you set - so shortening it pulled the far
+         * corner in toward the middle of the plaza and left the doorway exactly
+         * as walled-in as before, which is the one end there is ever a reason
+         * to open up. Written this way the number does what it looks like it
+         * does: make it smaller and the ground either side of the entrance
+         * clears, while the far corner stays where it was put.
+         */
         const outer = half + 35
+        const inner = Math.max(ARENA_ENTRANCE.gapHalfWidth, outer - BACK_TERRACE_LENGTH)
         return (
           <mesh
             key={side}
@@ -854,20 +804,14 @@ export default function LobbyGround() {
         />
       ))}
 
-      <TierStones material={materials.stoneNarrow} />
       <Tufts materials={materials} />
       <ToyBlocks />
       <Trees materials={materials} />
-      <PerimeterGardenWall
-        materials={materials}
-        wallMaterials={backMaterials}
-        stoneMaterial={materials.stoneNarrow}
-      />
+      <PerimeterGardenWall materials={materials} wallMaterials={backMaterials} />
       <RearGardenWall
         materials={materials}
         wallMaterials={backMaterials}
         terrainMaterials={terraceMaterials[1]}
-        stoneMaterial={materials.stoneNarrow}
       />
     </group>
   )
