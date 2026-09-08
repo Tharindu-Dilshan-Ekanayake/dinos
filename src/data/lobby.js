@@ -50,13 +50,28 @@ export const PLAYER_SPAWN = [0, 0, 18]
  * to show.
  */
 export const LOBBY_PALETTE = {
-  skyTop: '#2f7fd4',
-  skyBottom: '#bde9ff',
-  fog: '#a9dcc0',
+  skyTop: '#3f95e6',
+  skyBottom: '#a9dcff',
+  /*
+   * Air, not soup.
+   *
+   * The old fog was a green the same weight as the grass, so distance did not
+   * get paler, it got *greener* - and the far end of the hub read as a haze
+   * lying on the field rather than as sky between you and it. Pale blue is what
+   * the sky is already doing, so the two agree and the far trees simply thin
+   * out.
+   */
+  fog: '#d6ecfa',
   fogNear: 54,
   fogFar: 420,
-  grass: '#6ecb3f',
-  grassDark: '#57ab31',
+  /*
+   * Grass a shade or two up from where it was. A toy world is lit like a toy
+   * advert - the greens are bright and the shadows are shallow - and the hub
+   * was carrying a forest green that made every clean surface next to it look
+   * grey by comparison.
+   */
+  grass: '#8ee04a',
+  grassDark: '#76cc39',
   /** Paving either side of the walkway. */
   path: '#b9c2cd',
   /** The lighter walkway running down the middle. */
@@ -70,8 +85,20 @@ export const LOBBY_PALETTE = {
    * colour as the paving, which is what makes the whole bowl read as one
    * structure rather than as scenery dropped round a floor.
    */
-  wall: '#cfc7a6',
-  wallTop: '#b5ad8c',
+  wall: '#c8cfc0',
+  wallTop: '#adb6a2',
+  /*
+   * The two walls flanking the way into Stage 1 are the exception: dark slate,
+   * not the pale stone everything else is built from.
+   *
+   * They are retaining walls in the same bowl, so matching them to it was the
+   * obvious call and it is why the entrance vanished - a pale gateway set in a
+   * pale terrace under a pale sky has no silhouette at all. Dark, they cut a
+   * hard-edged slot out of a bright hub, and the eye goes to the one place the
+   * game actually wants you to walk.
+   */
+  gateWall: '#4a5464',
+  gateWallTop: '#38404d',
   key: '#fff6e0',
   ambient: '#cfe8ff',
 }
@@ -108,17 +135,6 @@ export const LEFT_STAIRS = {
 export function groundHeightAt(x, z) {
   const ramp = rampHeightAt(x, z)
   if (ramp !== null) return ramp
-
-  // The grass ledges either side of the entrance, one mirrored onto the other.
-  const shoulder = ENTRANCE_SHOULDERS
-  if (
-    Math.abs(x) >= shoulder.minX &&
-    Math.abs(x) <= shoulder.maxX &&
-    z >= shoulder.minZ &&
-    z <= shoulder.maxZ
-  ) {
-    return shoulder.height
-  }
 
   if (x >= LEFT_TIER.minX && x <= LEFT_TIER.maxX) {
     if (z >= LEFT_TIER.minZ && z <= LEFT_TIER.maxZ) return LEFT_TIER.height
@@ -306,8 +322,17 @@ export const ARENA_ENTRANCE = {
   /** Half-width of the walkable corridor between the walls. */
   gapHalfWidth: 5.2,
   wallWidth: 6,
-  /** Tall stone gate walls, scaled to frame the hub's main approach. */
-  wallHeight: 8,
+  /**
+   * Tall stone gate walls, scaled to frame the hub's main approach.
+   *
+   * Eight units was head-height on a dino and no more: from the plaza the two
+   * walls read as a low kerb either side of a hole, and the way into Stage 1 -
+   * the one door every run goes through - looked like a gap in a fence. At
+   * thirteen they run off the top of the frame from anywhere on the concourse,
+   * so the approach is a canyon you walk down and the doorway at the end of it
+   * is the brightest thing in the shot.
+   */
+  wallHeight: 13,
   /** Walls run from the plaza end (near) to well past the stair top (far). */
   wallFromZ: -46,
   wallToZ: -58,
@@ -354,44 +379,47 @@ export const HUB_ARRIVAL = {
   angle: -Math.PI / 2,
 }
 
-/**
- * The two grass ledges flanking the entrance, as a footprint.
- *
- * The mesh for these lives in the ArenaGate component, but the surface has to
- * be known here: the player used to walk straight through them, standing at
- * plaza level inside a block of raised grass.
- */
-export const ENTRANCE_SHOULDERS = (() => {
-  const e = ARENA_ENTRANCE
-  const centre = e.gapHalfWidth + e.wallWidth / 2 + e.wallWidth / 2 + 6
-  const midZ = (e.wallFromZ + e.wallToZ) / 2
-  const depth = e.wallFromZ - e.wallToZ + 6
-  return {
-    minX: centre - 6,
-    maxX: centre + 6,
-    minZ: midZ - depth / 2,
-    maxZ: midZ + depth / 2,
-    height: e.shoulderHeight,
-  }
-})()
-
 /** Z of the top of the ramp, where it meets the arena's landing. */
 export const ARENA_RAMP_TOP_Z = ARENA_ENTRANCE.rampFromZ - ARENA_ENTRANCE.rampRun
 
 /**
+ * The line where the hub stops being the hub: the middle of the gateway.
+ *
+ * There are two thresholds at this end of the plaza and they have to be the
+ * same one. There is the one you can *see* - the lit pane hung between the two
+ * walls, with Stage 1 lettered across it - and there is the one the game acts
+ * on, where it stops drawing the hub and starts drawing the arena. They were
+ * eight units apart: the handoff sat at the top of the ramp, two units before
+ * the walls even begin, so you were handed to the arena out on the open
+ * approach and then walked the whole length of the gateway, and through the
+ * pane, already on the other side. What that looks like is the ground and the
+ * walls around you being redrawn by a different set of components mid-stride -
+ * the world blinking and coming back - a few paces short of the door.
+ *
+ * Both of them read this now. Crossing the glass *is* the crossing, which is
+ * the only arrangement in which nothing visibly happens at all.
+ */
+export const ARENA_THRESHOLD_Z = (ARENA_ENTRANCE.wallFromZ + ARENA_ENTRANCE.wallToZ) / 2
+
+/**
  * Keeps the player inside the plaza without needing collision meshes.
  *
- * `minZ` reaches past the plaza's own end and up the ramp to where the arena
- * takes over. It used to stop at the paving, which is nine metres short of the
- * top of the climb - so once the handover moved to the top of the ramp there
- * was no way to reach it and Stage 1 became unenterable. Walking down there is
- * only possible inside the gateway: the controller squeezes X to the gap the
- * moment you leave the plaza. See Player.jsx.
+ * `minZ` has to reach past the handover, or Stage 1 cannot be entered at all:
+ * you walk to the end of your leash and stop, a few paces short of a line that
+ * never fires. That has now happened twice - once when the handover moved from
+ * a circle half-way up the ramp to the top of it, and again when it moved from
+ * the top of the ramp to the pane hung between the walls - so it is written
+ * against ARENA_THRESHOLD_Z itself rather than against whatever landmark the
+ * handover happens to be standing on this month. Wherever the threshold goes,
+ * the leash goes a metre further.
+ *
+ * Walking down there is only possible inside the gateway: the controller
+ * squeezes X to the gap the moment you leave the plaza. See Player.jsx.
  */
 export const PLAYER_BOUNDS = {
   minX: -PLAZA.halfWidth + 1.2,
   maxX: PLAZA.halfWidth - 1.2,
-  minZ: ARENA_RAMP_TOP_Z - 1,
+  minZ: ARENA_THRESHOLD_Z - 1,
   maxZ: PLAZA.from - 2,
 }
 
@@ -490,7 +518,7 @@ export function clampToPlaza(point, margin = 1.2) {
  * the tree scatter so trees always stand on a step rather than floating.
  */
 export const TERRACES = [
-  { offset: PLAZA.halfWidth + 6, height: 1.6, width: 12 },
+  { offset: PLAZA.halfWidth + 61, height: 1.6, width: 12 },
   { offset: PLAZA.halfWidth + 17, height: 3.4, width: 12 },
   { offset: PLAZA.halfWidth + 28, height: 5.6, width: 14 },
 ]
@@ -642,8 +670,14 @@ export function lobbyBlocks(stacks = 46, tones = 5) {
   return items
 }
 
-/** Blocky pines on the terraces, laid out deterministically. */
-export function treeLayout(count = 46) {
+/**
+ * Blocky pines on the terraces, laid out deterministically.
+ *
+ * A screenful of trees is a forest, and the hub is not a forest - it is a
+ * bright yard with trees standing round the edge of it. Thinned to where you
+ * can see the terrace they are planted on.
+ */
+export function treeLayout(count = 26) {
   const trees = []
   let seed = 20240904
   const rand = () => {

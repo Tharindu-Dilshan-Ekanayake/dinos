@@ -98,13 +98,13 @@ function useLobbyMaterials() {
     return {
       // Lids: the terraces run along Z, the back one along X, so their repeats
       // are transposed.
-      field: grass('#6fca52', [48, 52], 11),
+      field: grass('#8ee04a', [48, 52], 11),
       terraceTops: [
         grass(LOBBY_PALETTE.grass, [2, 20], 23),
-        grass('#54ad3e', [2, 20], 29),
+        grass('#76cc39', [2, 20], 29),
         grass(LOBBY_PALETTE.grassDark, [2, 20], 31),
       ],
-      backTop: grass('#54ad3e', [20, 2], 43),
+      backTop: grass('#76cc39', [20, 2], 43),
       // Faces: dirt, cut away under the grass.
       soil: voxelMaterial(LOBBY_PALETTE.wall, {
         cells: 8,
@@ -129,22 +129,54 @@ function useLobbyMaterials() {
        * painted on top of that again. Two stacked overlays need two different
        * biases or they fight each other instead of the thing underneath.
        */
-      concourse: paving('#e4ecf5', '#c6d4e4', [PLAZA.halfWidth / 2, plazaLength / 4], 83, DECAL),
+      /*
+       * Big pale slabs, close in tone.
+       *
+       * The plaza checkered in two greys a shade apart at four squares to the
+       * repeat, which at walking height is a bathroom floor: a fine grid that
+       * shimmers as you move and gives the eye nothing to hold. The reference
+       * lays a *slab* - each tile is about a dino wide, near-white against pale
+       * blue-grey, with the seam doing the work rather than the contrast. Same
+       * two-tone checker, a third as many tiles, twice as bright - and every
+       * slab moulded with the same round studs the buttons wear, because in
+       * this world there is one material and the plaza is made of it too.
+       */
+      /*
+       * `repeat` is how many times the texture tiles across the mesh, so it
+       * runs *backwards* from the thing you are trying to set: a bigger divisor
+       * is fewer repeats is bigger slabs. Each repeat carries a four-by-four
+       * checker, so the slab you actually see is one sixteenth of one tiling -
+       * about two and a half units here, which is a dino across.
+       */
+      concourse: paving('#eef4fb', '#d2dfee', [PLAZA.halfWidth / 5, plazaLength / 10], 83, DECAL),
       tierSurface: paving(
-        '#e4ecf5',
-        '#c6d4e4',
-        [(LEFT_TIER.maxX - LEFT_TIER.minX) / 4, (LEFT_TIER.maxZ - LEFT_TIER.minZ) / 4],
+        '#eef4fb',
+        '#d2dfee',
+        [(LEFT_TIER.maxX - LEFT_TIER.minX) / 10, (LEFT_TIER.maxZ - LEFT_TIER.minZ) / 10],
         89,
         DECAL
       ),
-      lane: paving('#8ce85f', '#6ad04a', [1.6, plazaLength / 4], 97, DECAL_ABOVE),
+      /*
+       * The grass lanes tile at the concourse's scale, not their own.
+       *
+       * They were laid at two and a half times the density, so a floor that is
+       * one surface came out as big pale slabs with a strip of fine green
+       * gingham running down either side of it. Two tile sizes on one floor is
+       * the seam you notice.
+       */
+      lane: paving('#8ce85f', '#6ad04a', [0.64, plazaLength / 10], 97, DECAL_ABOVE),
       kerb: make(LOBBY_PALETTE.pathEdge),
       post: make('#a9713f'),
       rail: make('#c98a4b'),
-      trunk: studded('#7a5230', 91),
-      leaf: studded('#4fc25e', 93),
-      leafMid: studded('#3a9c48', 95),
-      leafDark: studded('#2f8a41', 97),
+      // Warm orange bark, the way a toy tree is moulded - the old cocoa brown
+      // was the same value as the shadow under the canopy, so trunk and shade
+      // ran together into one dark shape.
+      trunk: studded('#c07a3e', 91),
+      // Three greens up a shade each, and closer together: the old set ran
+      // from mid-green to near-black, so a canopy read as a hole in the sky.
+      leaf: studded('#7bd63f', 93),
+      leafMid: studded('#68c435', 95),
+      leafDark: studded('#57ad2c', 97),
       tuft: make('#a6e75c', { roughness: 0.85 }),
     }
   }, [])
@@ -220,7 +252,7 @@ function Fence({ materials, from, to, x, axis = 'z' }) {
 function Trees({ materials }) {
   const trees = useMemo(
     () =>
-      treeLayout(46).map((tree) => ({
+      treeLayout(26).map((tree) => ({
         position: [tree.position[0], tree.terraceHeight ?? 0, tree.position[2]],
         rotation: tree.rotation,
         scale: tree.scale,
@@ -341,10 +373,10 @@ function PerimeterGardenWall({ materials, wallMaterials, stoneMaterial }) {
       { position: [-65.5, 4.4, 23.25], size: [4, 8.8, 30.5], rotation: 0.515 },
       { position: [65.5, 4.4, 23.25], size: [4, 8.8, 30.5], rotation: -0.515 },
       // Arena-side wall, split around the gateway.
-      { position: [-42, 4.4, -73], size: [62, 8.8, 4] },
-      { position: [42, 4.4, -73], size: [62, 8.8, 4] },
+      { position: [-52, 4.4, -73], size: [62, 8.8, 4] },
+      { position: [52, 4.4, -73], size: [62, 8.8, 4] },
       // Wings connecting the tall rear garden to the outer sides.
-      { position: [-57.5, 4.4, 36.5], size: [31, 8.8, 4] },
+      { position: [-57.5, 4.4, 136.5], size: [31, 8.8, 4] },
       { position: [57.5, 4.4, 36.5], size: [31, 8.8, 4] },
     ],
     []

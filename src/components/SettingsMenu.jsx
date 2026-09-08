@@ -31,29 +31,31 @@ export default function SettingsMenu({ open, onToggle }) {
   }
 
   return (
-    <div className="pointer-events-auto relative">
-      <div className="flex gap-2">
+    <div className="pointer-events-auto relative col-span-2">
+      <div className="grid grid-cols-2 gap-2">
         <button
           type="button"
           aria-label={muted ? 'Unmute' : 'Mute'}
-          className="arcade arcade-blue h-11 w-11 text-lg"
+          className="tile arcade-green h-[5.2rem] w-full"
           onPointerDown={(e) => {
             e.stopPropagation()
             toggleMute()
           }}
         >
-          {muted ? '🔇' : '🔊'}
+          <span className="tile-icon pb-4 text-4xl">{muted ? '🔇' : '🔊'}</span>
+          <span className="tile-label text-[0.82rem]">Sound</span>
         </button>
         <button
           type="button"
           aria-label="Settings"
-          className="arcade arcade-slate h-11 w-11 text-lg"
+          className="tile arcade-slate h-[5.2rem] w-full"
           onPointerDown={(e) => {
             e.stopPropagation()
             onToggle(!open)
           }}
         >
-          ⚙️
+          <span className="tile-icon pb-4 text-4xl">⚙️</span>
+          <span className="tile-label text-[0.82rem]">Settings</span>
         </button>
       </div>
 

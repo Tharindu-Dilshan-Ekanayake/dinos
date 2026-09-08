@@ -306,9 +306,21 @@
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
-  border: 3px solid #1e1b16;
-  border-radius: 0.85rem;
-  box-shadow: 0 4px 0 #1e1b16;
+  border: 2px solid #1e1b16;
+  border-radius: 0.3rem;
+  /*
+   * Rim thin, relief deep.
+   *
+   * A four-pixel outline on a button the size of a thumb is a *frame*, and
+   * it was eating the colour it was supposed to be containing. What made
+   * these read as objects was never the thickness of the line round them -
+   * it is the hard shadow under them and the bevel inside them, so the line
+   * comes down and both of those go up.
+   */
+  box-shadow:
+    0 4px 0 #1e1b16,
+    inset 0 3px 0 rgba(255, 255, 255, 0.42),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.22);
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.03em;
@@ -335,7 +347,10 @@
 
 .arcade:active:not(:disabled) {
   transform: translateY(4px);
-  box-shadow: 0 0 0 #1e1b16;
+  box-shadow:
+    0 0 0 #1e1b16,
+    inset 0 3px 0 rgba(255, 255, 255, 0.42),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.22);
 }
 
 /* Keyboard users get the same affordance the mouse does. */
@@ -359,7 +374,7 @@
   position: absolute;
   inset: 3px 3px auto 3px;
   height: 38%;
-  border-radius: 0.55rem 0.55rem 0.9rem 0.9rem;
+  border-radius: 0.18rem;
   background: linear-gradient(to bottom, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0));
   pointer-events: none;
 }
@@ -374,9 +389,11 @@
 
 /* Panel sharing the button's outline, for stat plaques and shop rows. */
 .arcade-panel {
-  border: 3px solid #1e1b16;
-  border-radius: 0.9rem;
-  box-shadow: 0 4px 0 #1e1b16;
+  border: 2px solid #1e1b16;
+  border-radius: 0.35rem;
+  box-shadow:
+    0 4px 0 #1e1b16,
+    inset 0 2px 0 rgba(255, 255, 255, 0.12);
   background: linear-gradient(to bottom, rgba(30, 41, 59, 0.94), rgba(15, 23, 42, 0.94));
 }
 
@@ -389,4 +406,295 @@
     1.5px -1.5px 0 rgba(24, 20, 16, 0.9),
     -1.5px 1.5px 0 rgba(24, 20, 16, 0.9),
     1.5px 1.5px 0 rgba(24, 20, 16, 0.9);
+}
+
+/* ----------------------------------------------------------- menu tiles */
+
+/*
+ * The big square menu buttons, and the currency bars that sit under them.
+ *
+ * The HUD used to be a row of small pill buttons with a word on each - which is
+ * a *toolbar*, and a toolbar is what a settings screen has. A game like this
+ * names its menus the way a shelf of toys does: one big square per thing, a
+ * picture filling it, and the word lettered across the foot in the same heavy
+ * outline everything else in the world wears. You find "Pets" by its shape and
+ * its colour long before you read it, which is the whole point on a phone.
+ *
+ * Same rim, same hard shadow and same gloss as `.arcade`, so a tile and a
+ * button are visibly the same material at two sizes. Colour comes from the
+ * `arcade-*` classes, which set nothing but a background.
+ */
+.tile {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #1e1b16;
+  border-radius: 0.35rem;
+  /* Same trade as the buttons: less outline, more relief. */
+  box-shadow:
+    0 6px 0 #1e1b16,
+    0 10px 15px rgba(10, 6, 20, 0.3),
+    inset 0 4px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -5px 0 rgba(0, 0, 0, 0.24);
+  color: #fff;
+  transition:
+    transform 0.06s ease,
+    box-shadow 0.06s ease,
+    filter 0.12s ease;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+.tile:active:not(:disabled) {
+  transform: translateY(6px);
+  box-shadow:
+    0 0 0 #1e1b16,
+    0 2px 6px rgba(10, 6, 20, 0.3),
+    inset 0 4px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -5px 0 rgba(0, 0, 0, 0.24);
+}
+
+.tile:focus-visible {
+  outline: 3px solid #fff8d6;
+  outline-offset: 3px;
+}
+
+.tile:disabled {
+  filter: grayscale(0.75) brightness(0.65);
+  cursor: not-allowed;
+}
+
+/* The gloss that makes it moulded plastic rather than a painted rectangle. */
+.tile::after {
+  content: '';
+  position: absolute;
+  inset: 3px 3px auto 3px;
+  height: 44%;
+  border-radius: 0.2rem;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+
+/*
+ * The moulding.
+ *
+ * Every surface in the world is a brick with studs on it, and the buttons were
+ * the one place that was smooth - which is exactly what made them read as web
+ * UI parked on top of a toy. A faint grid ruled across the fill costs nothing
+ * and puts them in the same material as the ground they float over.
+ */
+.tile::before,
+.arcade::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  /*
+   * Round studs, not a ruled grid.
+   *
+   * A grid of straight lines is graph paper; what a moulded brick actually has
+   * is a field of little cylinders, and you know they are cylinders because
+   * each one is lit along its top edge and shadowed along its bottom. Three
+   * stacked radials do exactly that in one element: a white crescent, a dark
+   * crescent under it, and a soft ring round both to seat the stud in the
+   * surface.
+   */
+  background-image:
+    radial-gradient(circle at 50% 41%, rgba(255, 255, 255, 0.55) 0 2.3px, transparent 2.8px),
+    radial-gradient(circle at 50% 59%, rgba(0, 0, 0, 0.26) 0 2.5px, transparent 3px),
+    radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0.11) 0 3.5px, transparent 4.1px);
+  background-size: 15px 15px;
+  /*
+   * How loud the moulding is, as one number.
+   *
+   * The three radials are tuned against each other - highlight, shadow, seat -
+   * and dimming them individually pulls that apart, so the whole field fades
+   * together instead. At full strength the studs competed with the icon they
+   * were behind; at half they do what texture is for, which is to be noticed
+   * only when you look for it.
+   */
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* The picture. Lifted off the fill by a hard shadow, like a sticker on it. */
+.tile-icon {
+  position: relative;
+  line-height: 1;
+  filter: drop-shadow(0 2px 0 rgba(24, 20, 16, 0.4));
+}
+
+/*
+ * The name, lettered across the foot of the tile rather than captioned under
+ * it: a label outside the button is a list item, a label *on* it is a toy.
+ */
+.tile-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0.1rem;
+  font-weight: 900;
+  text-align: center;
+  color: #fff;
+  -webkit-text-stroke: 2.5px #1e1b16;
+  paint-order: stroke fill;
+  text-shadow: 0 2px 0 rgba(24, 20, 16, 0.45);
+  pointer-events: none;
+}
+
+/* Corner badge: the red "!" that says there is something new in there. */
+.tile-badge {
+  position: absolute;
+  top: -0.45rem;
+  right: -0.45rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6rem;
+  height: 1.6rem;
+  padding: 0 0.36rem;
+  border: 2px solid #1e1b16;
+  border-radius: 0.25rem;
+  background: linear-gradient(to bottom, #ff8a75, #dc2626);
+  font-size: 0.68rem;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+}
+
+/* --------------------------------------------------------- currency bar */
+
+/*
+ * A count of something you hold: a dark lozenge with its coin hung off the
+ * left end, overlapping the rim so the icon reads as an object sitting on the
+ * bar rather than as an emoji printed inside it.
+ */
+.coin-bar {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 2.9rem;
+  padding: 0 1.2rem 0 3.1rem;
+  border: 2px solid #1e1b16;
+  border-radius: 0.35rem;
+  background: linear-gradient(to bottom, #3d4759, #222835);
+  box-shadow:
+    0 4px 0 #1e1b16,
+    inset 0 3px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.28);
+}
+
+.coin-bar-icon {
+  position: absolute;
+  left: -0.7rem;
+  font-size: 2.35rem;
+  line-height: 1;
+  filter: drop-shadow(0 2px 1px rgba(0, 0, 0, 0.45));
+}
+
+/* ------------------------------------------------------------ level bar */
+
+/*
+ * The tier bar under the damage readout.
+ *
+ * Built out of the buttons' own parts - the same 3px rim, the same hard drop
+ * shadow, the same candy highlight down the top edge - so it reads as one more
+ * piece of the set rather than as a progress bar borrowed from a settings
+ * screen. It is deliberately tall: the writing lives *inside* it, which is what
+ * lets the level and the count sit on one line instead of needing a caption
+ * above the bar and stealing another row of screen from the game.
+ */
+.level-bar {
+  position: relative;
+  height: 2.8rem;
+  border: 2px solid #1e1b16;
+  border-radius: 0.35rem;
+  box-shadow:
+    0 5px 0 #1e1b16,
+    inset 0 -4px 0 rgba(0, 0, 0, 0.3);
+  background: linear-gradient(to bottom, #2f3849, #1b212c);
+  overflow: hidden;
+}
+
+.level-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: linear-gradient(to bottom, #ffd96b 0%, #ffb01f 45%, #f07d16 100%);
+  transition: width 0.25s ease;
+}
+
+.level-bar-fill::after {
+  content: '';
+  position: absolute;
+  inset: 2px 2px auto 2px;
+  height: 42%;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+
+/*
+ * The health bar under it: the same bar, a size down.
+ *
+ * Deliberately not the same height. Two identical bars stacked read as one
+ * control with a seam in it; a slimmer one reads as what it is - the level bar
+ * is the thing you are working toward, and this is a state that happens to you.
+ */
+.level-bar-slim {
+  height: 1.95rem;
+  box-shadow:
+    0 4px 0 #1e1b16,
+    inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+}
+
+.level-bar-slim .level-bar-label {
+  font-size: 0.8rem;
+}
+
+/*
+ * The same moulding the buttons wear, ruled across the whole bar.
+ *
+ * As `::after` rather than `::before`, because it has to lie over the fill -
+ * a bar studded only where it is empty is a bar with a seam across it. The
+ * lettering is lifted above both.
+ */
+.level-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 50% 41%, rgba(255, 255, 255, 0.4) 0 2.3px, transparent 2.8px),
+    radial-gradient(circle at 50% 59%, rgba(0, 0, 0, 0.28) 0 2.5px, transparent 3px),
+    radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0.12) 0 3.5px, transparent 4.1px);
+  background-size: 15px 15px;
+  /* Quieter still than the buttons: this one has writing across it. */
+  opacity: 0.42;
+  pointer-events: none;
+}
+
+/*
+ * Lettered over the fill, not beside it, so it stays legible whether the bar
+ * behind it is empty dark or full orange.
+ */
+.level-bar-label {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0.95rem;
+  font-size: 1rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #fff;
+  text-shadow:
+    -1.5px -1.5px 0 rgba(24, 20, 16, 0.95),
+    1.5px -1.5px 0 rgba(24, 20, 16, 0.95),
+    -1.5px 1.5px 0 rgba(24, 20, 16, 0.95),
+    1.5px 1.5px 0 rgba(24, 20, 16, 0.95);
 }

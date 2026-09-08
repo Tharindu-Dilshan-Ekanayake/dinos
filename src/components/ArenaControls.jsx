@@ -28,7 +28,7 @@ function AutoFightButton({ on, onToggle }) {
         onToggle()
       }}
       aria-pressed={on}
-      className={`arcade pointer-events-auto h-11 flex-col px-4 leading-none ${
+      className={`arcade pointer-events-auto h-16 w-[200px] flex-col px-4 leading-none ${
         on ? 'arcade-green' : 'arcade-slate'
       }`}
     >

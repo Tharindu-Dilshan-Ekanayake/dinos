@@ -42,13 +42,25 @@ const OPEN_OPACITY = 0.12
 const FACE = 0.06
 
 /**
- * The top of the plaque lettered across the barrier.
+ * The plaque lettered across the barrier, measured off the reference art.
  *
- * High enough to clear a dino standing at the gate - about two thirds of the
- * way up the pane - and low enough that the whole block, name to number, is
- * still inside the opening rather than running off the top of it.
+ * Sizes and gaps are ratios taken from the doorway in the reference rather
+ * than numbers that looked about right: the level's name runs a little over two
+ * thirds of the opening's width, what it asks for is a third of that name, and
+ * the figure itself is just under two thirds. Held to those, the block reads
+ * the same at any gate width - and it was the *name* that was wrong before,
+ * set small enough that the doorway looked like a sign rather than the sign
+ * looking like a doorway.
+ *
+ * The one place it departs from the art is the top: the reference's gateway is
+ * nearly square and this one is half again as wide as it is tall, so the block
+ * starts higher than a straight scaling would put it, to keep the number clear
+ * of the floor.
  */
-const PLAQUE_TOP = HEIGHT * 0.62
+const PLAQUE_TOP = HEIGHT * 0.736
+const NAME_SIZE = 1.7
+const ASK_SIZE = NAME_SIZE * 0.36
+const FIGURE_SIZE = NAME_SIZE * 0.62
 
 /**
  * The way to the next level.
@@ -74,6 +86,23 @@ export default function ExitGate({ stage, active = true, sealed }) {
   // A boolean, not the number: this is a 3D component and re-reconciling it on
   // every click would be paid for in the frame budget.
   const strongEnough = useGameStore((s) => s.clickPower >= requiredDamage(stage + 1))
+
+  /*
+   * Only the gate you are at, and the one you just came through, say anything.
+   *
+   * Every mounted chamber has a gate, they stand dead in line down the
+   * corridor, and each one lettered its own plaque - so looking forward you
+   * read "Stage 2" over "Stage 3" over "Stage 4", three sets of type at three
+   * sizes stacked in the middle of the screen, none of them legible and none of
+   * them about the doorway you are actually walking to. At the small type it
+   * was merely busy; at the size the reference letters these, it is a wall of
+   * words.
+   *
+   * The one behind you keeps its lettering because you may be walking back out
+   * through it - that is the whole reason the plaque is painted on both faces.
+   */
+  const stageIndex = useGameStore((s) => s.stageIndex)
+  const lettered = active || stage === stageIndex - 1
 
   const nextIndex = stage + 1
   const atEnd = nextIndex >= MAX_STAGES
@@ -182,6 +211,7 @@ export default function ExitGate({ stage, active = true, sealed }) {
           your shoulder from the level beyond.
         */}
         {!atEnd &&
+          lettered &&
           [1, -1].map((facing) => (
             <group
               key={facing}
@@ -199,13 +229,13 @@ export default function ExitGate({ stage, active = true, sealed }) {
                 gateway, which fought the stage name above it for the eye;
                 broken, the whole plaque sits inside the width of the number.
               */}
-              <HeadlineText size={1.24} y={PLAQUE_TOP} color="#ffffff">
+              <HeadlineText size={NAME_SIZE} y={PLAQUE_TOP} color="#ffffff">
                 {`Stage ${nextIndex + 1}`}
               </HeadlineText>
-              <HeadlineText size={0.44} y={PLAQUE_TOP - 1.06} color="#f2f6ff">
+              <HeadlineText size={ASK_SIZE} y={PLAQUE_TOP - 1.51} color="#ffffff">
                 Recommended
               </HeadlineText>
-              <HeadlineText size={0.44} y={PLAQUE_TOP - 1.58} color="#f2f6ff">
+              <HeadlineText size={ASK_SIZE} y={PLAQUE_TOP - 2.34} color="#ffffff">
                 Damage:
               </HeadlineText>
               {/*
@@ -214,8 +244,8 @@ export default function ExitGate({ stage, active = true, sealed }) {
                 glance at the colour is the whole survivability check.
               */}
               <HeadlineText
-                size={0.92}
-                y={PLAQUE_TOP - 2.44}
+                size={FIGURE_SIZE}
+                y={PLAQUE_TOP - 3.38}
                 color={survivable ? '#ffd23f' : '#ff9f9f'}
               >
                 {formatNumber(recommended)}

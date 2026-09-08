@@ -33,7 +33,7 @@ export default function StageHeadline() {
   const boss = isBoss(stageIndex)
 
   return (
-    <div className="pointer-events-none absolute left-3 top-28 z-10 w-44 sm:top-24">
+    <div className="pointer-events-none w-44">
       <div className="arcade-panel px-3 py-2">
         <div
           className="text-[9px] font-black uppercase tracking-[0.2em]"

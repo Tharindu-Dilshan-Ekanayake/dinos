@@ -3,7 +3,14 @@ import { MAX_PLAYER_HEALTH } from '../data/combat.js'
 import { useGameStore } from '../store/useGameStore.js'
 
 /**
- * Your own health, in the arena.
+ * Your own health, under the level bar.
+ *
+ * It used to hang in a plaque on the left of the screen with the enemy pack's
+ * bar above it - two readouts in a corner nobody looks at during a fight, in a
+ * place the reference keeps empty. Wearing the level bar's own chrome and
+ * sitting directly beneath it, the bottom of the screen becomes one block you
+ * read in a single glance: what you hit for, how far up the tiers you are, and
+ * how much of you is left.
  *
  * Read from an rAF loop and written straight to the DOM rather than subscribed
  * through React: health moves on every bite and continuously while it
@@ -64,19 +71,21 @@ export default function PlayerHealthBar() {
   }, [])
 
   return (
-    <div ref={panel}>
-      <div className="flex items-center justify-between text-[0.6rem] font-black uppercase tracking-wider text-white/60">
-        <span>Your Health</span>
-        <span ref={label} className="text-white/80">
-          100%
-        </span>
-      </div>
-      <div className="mt-1 h-2.5 overflow-hidden rounded-full bg-slate-900/80">
-        <div
-          ref={fill}
-          className="h-full w-full origin-left rounded-full"
-          style={{ backgroundColor: '#4ade80', transform: 'scaleX(1)' }}
-        />
+    <div ref={panel} className="level-bar level-bar-slim mt-2">
+      {/*
+        The fill is scaled rather than resized, so a bite lands on the same
+        frame it is dealt instead of waiting on a layout pass - and its colour
+        is driven from the loop above, which is why the gradient the level bar
+        wears is switched off here.
+      */}
+      <div
+        ref={fill}
+        className="level-bar-fill w-full origin-left"
+        style={{ backgroundColor: '#4ade80', backgroundImage: 'none', transform: 'scaleX(1)' }}
+      />
+      <div className="level-bar-label">
+        <span>Health</span>
+        <span ref={label}>100%</span>
       </div>
     </div>
   )
