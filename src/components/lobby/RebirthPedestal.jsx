@@ -6,7 +6,7 @@ import * as THREE from 'three'
 import { REBIRTH_WINS_REQUIRED, formatNumber } from '../../data/progression.js'
 import { INTERACT_RADIUS } from '../../data/lobby.js'
 import { useGameStore } from '../../store/useGameStore.js'
-import { playerPosition } from '../../systems/playerState.js'
+import { playerHub } from '../../systems/playerState.js'
 import { flatToonMaterial, voxelMaterial } from '../../systems/voxelTexture.js'
 import { DECAL } from '../../systems/decal.js'
 import GlowSprite from '../GlowSprite.jsx'
@@ -34,8 +34,9 @@ export default function RebirthPedestal({ pedestal, position, onOpen }) {
     const a = anim.current
     a.phase += delta
 
-    const dx = playerPosition.x - position[0]
-    const dz = playerPosition.z - position[2]
+    const player = playerHub()
+    const dx = player.x - position[0]
+    const dz = player.z - position[2]
     const inRange = dx * dx + dz * dz < INTERACT_RADIUS * INTERACT_RADIUS
     a.near += ((inRange ? 1 : 0) - a.near) * Math.min(1, delta * 9)
 

@@ -11,7 +11,7 @@ import {
   PODIUM_DINO_SCALE,
 } from '../../data/lobby.js'
 import { useGameStore } from '../../store/useGameStore.js'
-import { playerPosition } from '../../systems/playerState.js'
+import { playerHub } from '../../systems/playerState.js'
 import { flatToonMaterial, voxelMaterial } from '../../systems/voxelTexture.js'
 import DinoModel, { animateDinoRig, useDinoMaterials, useDinoRig } from '../DinoModel.jsx'
 import { DECAL } from '../../systems/decal.js'
@@ -105,8 +105,9 @@ export default function Podium({ podium }) {
     const a = anim.current
     a.phase += delta
 
-    const dx = playerPosition.x - podium.position[0]
-    const dz = playerPosition.z - podium.position[2]
+    const player = playerHub()
+    const dx = player.x - podium.position[0]
+    const dz = player.z - podium.position[2]
     const inRange = dx * dx + dz * dz < INTERACT_RADIUS * INTERACT_RADIUS
 
     // Ease the highlight so walking past a podium pulses rather than snaps.

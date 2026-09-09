@@ -1,10 +1,6 @@
-import { Suspense, useCallback } from 'react'
+import { Suspense } from 'react'
 import { Physics } from '@react-three/rapier'
-import { ARENA, chamberOrigin, clampToCorridor } from '../data/arena.js'
-import { useGameStore } from '../store/useGameStore.js'
-import { playerPosition } from '../systems/playerState.js'
 import ArenaEnvironment from './arena/ArenaEnvironment.jsx'
-import ArenaPlayer from './arena/ArenaPlayer.jsx'
 import ArenaCombat from './arena/ArenaCombat.jsx'
 import ArenaFightCatcher from './arena/ArenaFightCatcher.jsx'
 import ArenaTravel from './arena/ArenaTravel.jsx'
@@ -13,7 +9,6 @@ import EnemyPack from './arena/EnemyPack.jsx'
 import GateHeadline from './arena/GateHeadline.jsx'
 import Gates from './arena/Gates.jsx'
 import ReturnPads from './arena/ReturnPads.jsx'
-import LobbyCamera from './lobby/LobbyCamera.jsx'
 import DebrisField from './DebrisField.jsx'
 import HitParticles from './HitParticles.jsx'
 import IdleDamage from './IdleDamage.jsx'
@@ -25,24 +20,9 @@ import IdleDamage from './IdleDamage.jsx'
  * fight. The camera, controller and input are the same ones the hub uses, so
  * moving between the two never changes how the dino handles.
  */
-export default function ArenaScene({ includePlayer = true, includeCamera = true, active = true }) {
-  // Where the open space is depends on where the dino is standing, so the
-  // camera's clamp is handed the live player position rather than importing it
-  // into the layout data.
-  const clampCamera = useCallback((point) => {
-    // Only a *sealed* gate holds the camera back; once the chamber is clear
-    // the corridor is one continuous space and the camera may follow you
-    // through it.
-    const { stageIndex, stageCleared } = useGameStore.getState()
-    const sealedZ = stageCleared
-      ? null
-      : chamberOrigin(stageIndex) + ARENA.backZ + 1.5
-    return clampToCorridor(point, playerPosition, sealedZ)
-  }, [])
-
+export default function ArenaScene({ active = true }) {
   return (
     <>
-      {includeCamera && <LobbyCamera clamp={clampCamera} />}
       <ArenaEnvironment />
       <Gates />
 
@@ -85,7 +65,6 @@ export default function ArenaScene({ includePlayer = true, includeCamera = true,
       <IdleDamage />
       <ArenaFightCatcher />
       <ArenaTravel />
-      {includePlayer && <ArenaPlayer />}
       <EnemyAttacks />
       <ReturnPads />
       <ArenaCombat />

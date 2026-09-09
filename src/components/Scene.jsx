@@ -2,9 +2,8 @@ import { Suspense, useCallback, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import ArenaScene from './ArenaScene.jsx'
 import LobbyScene from './lobby/LobbyScene.jsx'
-import ArenaPlayer from './arena/ArenaPlayer.jsx'
 import OtherPlayers from './OtherPlayers.jsx'
-import Player from './lobby/Player.jsx'
+import Player from './Player.jsx'
 import LobbyCamera from './lobby/LobbyCamera.jsx'
 import { useGameStore } from '../store/useGameStore.js'
 import {
@@ -15,7 +14,7 @@ import {
   clampToCorridor,
 } from '../data/arena.js'
 import { clampToPlaza } from '../data/lobby.js'
-import { playerWorld } from '../systems/playerWorld.js'
+import { playerPosition } from '../systems/playerState.js'
 import { updateTimeScale } from '../systems/timeScale.js'
 import { EVENTS, emit } from '../systems/events.js'
 
@@ -49,10 +48,15 @@ function TimeStepper() {
 }
 
 /**
- * The world half swaps at the gate, but the camera does not. Keeping one orbit
- * rig mounted means its position and smoothing survive the coordinate handoff,
- * so walking into Stage 1 reads as continuing forward instead of a new view
- * appearing around the player.
+ * The whole world: the hub, the corridor of chambers, and one dino walking
+ * between them.
+ *
+ * Nothing here swaps. Both halves are mounted the entire time, laid out end to
+ * end in one coordinate space - the hub is simply the arena's world slid
+ * `LOBBY_Z_OFFSET` down the corridor, drawn inside a group at that offset so
+ * its own layout can go on being written in its own numbers. One camera, one
+ * player, one set of coordinates. What the gateway changes is which walls are
+ * being clamped against and whether a fight is running, not what exists.
  */
 export default function Scene() {
   const scene = useGameStore((s) => s.scene)
@@ -72,14 +76,12 @@ export default function Scene() {
    * same gap.
    */
   const clampCamera = useCallback((point) => {
-    // World space, because the point is: `playerPosition` is whichever half's
-    // coordinates the dino is currently written in, and these are not that.
-    const player = playerWorld()
-
     if (point.z > MOUTH_EXIT_Z) {
+      // The plaza's rules are written in the hub's own numbers, so drop into
+      // them for the length of the call and come back out.
       point.z -= LOBBY_Z_OFFSET
-      player.z -= LOBBY_Z_OFFSET
-      clampToPlaza(point, undefined, player)
+      const hubPlayerZ = playerPosition.z - LOBBY_Z_OFFSET
+      clampToPlaza(point, undefined, { x: playerPosition.x, y: playerPosition.y, z: hubPlayerZ })
       point.z += LOBBY_Z_OFFSET
       return point
     }
@@ -88,7 +90,7 @@ export default function Scene() {
     const sealedZ = state.stageCleared
       ? null
       : chamberOrigin(state.stageIndex) + ARENA.backZ + 1.5
-    return clampToCorridor(point, player, sealedZ)
+    return clampToCorridor(point, playerPosition, sealedZ)
   }, [])
 
   return (
@@ -97,7 +99,6 @@ export default function Scene() {
       <Suspense fallback={null}>
         <LobbyCamera
           clamp={clampCamera}
-          worldOffset={inLobby ? [0, 0, LOBBY_Z_OFFSET] : [0, 0, 0]}
           /*
            * One ceiling for the whole world, not one per half.
            *
@@ -119,18 +120,15 @@ export default function Scene() {
            */
           maxLookDown={1.2}
         />
-        <ArenaScene includePlayer={false} includeCamera={false} active={!inLobby} />
+        <ArenaScene active={!inLobby} />
         <LobbyScene
-          includePlayer={false}
-          includeCamera={false}
           includeEnvironment={false}
           includeGameplay={inLobby}
           includeArenaPreview={false}
           worldPosition={[0, 0, LOBBY_Z_OFFSET]}
         />
-        <Player active={inLobby} worldOffset={[0, 0, LOBBY_Z_OFFSET]} />
-        <OtherPlayers worldOffset={[0, 0, LOBBY_Z_OFFSET]} />
-        <ArenaPlayer active={!inLobby} />
+        <Player />
+        <OtherPlayers />
       </Suspense>
     </>
   )

@@ -2,7 +2,7 @@ import { useLayoutEffect, useMemo, useRef } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { LOBBY_PALETTE, PLAZA } from '../../data/lobby.js'
-import { playerPosition } from '../../systems/playerState.js'
+import { playerHub } from '../../systems/playerState.js'
 import Birds from '../Birds.jsx'
 import GradientSky from '../GradientSky.jsx'
 import SkyBody from '../SkyBody.jsx'
@@ -33,7 +33,12 @@ export default function LobbyEnvironment() {
    * gets clipped away - which shows as a hole punched in the sky.
    */
   useFrame(() => {
-    if (skyRef.current) skyRef.current.position.set(playerPosition.x, 0, playerPosition.z)
+    if (skyRef.current) {
+      // Drawn inside the hub's own offset group, so it follows the hub-local
+      // player rather than the world one.
+      const player = playerHub()
+      skyRef.current.position.set(player.x, 0, player.z)
+    }
   })
 
   const colors = useMemo(

@@ -26,12 +26,15 @@ import {
   upgradeCost,
 } from '../data/upgrades.js'
 import { areaIndexForStage } from '../data/areas.js'
-import { MIN_HITS_TO_CLEAR, enemyCountForStage } from '../data/arena.js'
+import {
+  HUB_ARRIVAL_WORLD,
+  MIN_HITS_TO_CLEAR,
+  chamberSpawn,
+  enemyCountForStage,
+} from '../data/arena.js'
 import { EVENTS, emit } from '../systems/events.js'
 import { loadSave } from '../systems/persistence.js'
-import { HUB_ARRIVAL } from '../data/lobby.js'
-import { placePlayer, playerFacing, playerPosition } from '../systems/playerState.js'
-import { SEAM_MARGIN, arenaToHubPoint, hubToArena } from '../data/arena.js'
+import { placePlayer } from '../systems/playerState.js'
 
 const COMBO_WINDOW_MS = 900
 const MAX_COMBO = 8
@@ -451,16 +454,11 @@ export const useGameStore = create((set, get) => ({
       areaIndex: 0,
     })
     /*
-     * Put down where you already are, in the arena's own numbers.
-     *
-     * You walk in over the top of the hub's ramp, which is the same physical
-     * spot as the far edge of the arena's landing - so converting the position
-     * rather than spawning you in the middle of the chamber is the whole
-     * difference between stepping through a doorway and being teleported.
+     * The dino is not moved at all. It is standing in the gateway, and the
+     * gateway is one continuous floor that the corridor carries on from - so
+     * there is nothing to convert and nowhere to put it down. All that changes
+     * here is that a run has started.
      */
-    const [ax, az] = hubToArena(playerPosition.x, playerPosition.z)
-    // A step inside, so the arena's own way-out trigger is behind you.
-    placePlayer([ax, 0, az - SEAM_MARGIN], playerFacing.angle, { markTeleport: false })
 
     if (s.areaIndex !== 0) emit(EVENTS.AREA_CHANGE, { from: s.areaIndex, to: 0 })
     emit(EVENTS.SCENE_CHANGE, { scene: 'arena' })
@@ -515,29 +513,12 @@ export const useGameStore = create((set, get) => ({
     })
 
     /*
-     * Put down at the arena's doorway, not left wherever the arena's own
-     * coordinates happened to fall. Walking out of Stage 1 leaves you around
-     * z=+10 in arena space, which is *inside* the hub's bounds - so the hub's
-     * own "are you lost?" check saw nothing wrong and you simply appeared
-     * standing in the middle of the plaza.
+     * Walking out moves nothing: you are already standing in the gateway, and
+     * the plaza carries on from it. The only thing that puts the dino anywhere
+     * is a Return pad, which cashes you out from deep in the corridor - that
+     * one *is* a jump home, and is the only one that should cut the camera.
      */
-    if (walked) {
-      const [hx, hz] = arenaToHubPoint(playerPosition.x, playerPosition.z)
-      /*
-       * Likewise: a step down the ramp, clear of the hub's way-in trigger.
-       *
-       * And explicitly *not* a teleport, exactly as walking in is not one. The
-       * position changes which coordinate system it is written in, not where it
-       * describes - the dino is standing on the same slab of ground either side
-       * of this line. Left to mark a teleport, it cut the camera on the way out
-       * while the way in eased: you walked up the ramp and the shot jumped, for
-       * no better reason than which of two identical numbers was being stored.
-       */
-      placePlayer([hx, 0, hz + SEAM_MARGIN], playerFacing.angle, { markTeleport: false })
-    } else {
-      // A pad cashed you out from deep in the corridor. That *is* a jump home.
-      placePlayer(HUB_ARRIVAL.position, HUB_ARRIVAL.angle)
-    }
+    if (!walked) placePlayer(HUB_ARRIVAL_WORLD.position, HUB_ARRIVAL_WORLD.angle)
 
     emit(EVENTS.CLAIM_WINS, { wins: carried })
     emit(EVENTS.SCENE_CHANGE, { scene: 'lobby' })
@@ -686,7 +667,7 @@ export const useGameStore = create((set, get) => ({
       areaIndex: 0,
     })
     // Dying puts you at the same doorway a finished run does.
-    placePlayer(HUB_ARRIVAL.position, HUB_ARRIVAL.angle)
+    placePlayer(HUB_ARRIVAL_WORLD.position, HUB_ARRIVAL_WORLD.angle)
     emit(EVENTS.RESPAWN)
     emit(EVENTS.SCENE_CHANGE, { scene: 'lobby' })
   },
@@ -715,6 +696,15 @@ export const useGameStore = create((set, get) => ({
       areaIndex: nextArea,
       scene: 'arena',
     })
+
+    /*
+     * The level menu skips the walk, so it has to land the dino somewhere. It
+     * is the one way into a chamber that is not a walk, and without this the
+     * game believed you were in a level you were not standing anywhere near -
+     * the corridor's own clamp would eventually snap you into it, but only
+     * once you happened to press a key.
+     */
+    placePlayer(chamberSpawn(stageIndex), Math.PI / 2)
 
     if (nextArea !== s.areaIndex) {
       emit(EVENTS.AREA_CHANGE, { from: s.areaIndex, to: nextArea })
@@ -807,7 +797,7 @@ export const useGameStore = create((set, get) => ({
      * arrive anywhere - you were simply re-interpreted, sixty three units off,
      * and whatever the plaza clamp made of that is where you turned up.
      *
-     * Landed at the doorway (`HUB_ARRIVAL`), the same spot a walked-out run
+     * Landed at the doorway (`HUB_ARRIVAL_WORLD`), the same spot a walked-out run
      * ends at - not the middle of the plaza. It used to be its own separate
      * point out in the open, so the one button that skips the walk was also
      * the one arrival that didn't look like one: everything else about
@@ -815,11 +805,12 @@ export const useGameStore = create((set, get) => ({
      * button dropping you in the middle of the concourse instead read as a
      * jump cut rather than as coming home.
      *
-     * Walking between the two is handled elsewhere and converts properly (see
-     * enterArena and the claim path); this is the case where there is no walk
-     * to convert, so it gets a defined place to arrive.
+     * Walking between the two moves nothing at all - the hub and the corridor
+     * are one floor and one coordinate space, so a crossing is a step. This is
+     * the case where there is no walk, so it gets a defined place to arrive.
      */
-    if (scene === 'lobby') placePlayer(HUB_ARRIVAL.position, HUB_ARRIVAL.angle)
+    if (scene === 'lobby') placePlayer(HUB_ARRIVAL_WORLD.position, HUB_ARRIVAL_WORLD.angle)
+    else placePlayer(chamberSpawn(get().stageIndex), Math.PI / 2)
 
     emit(EVENTS.SCENE_CHANGE, { scene })
   },

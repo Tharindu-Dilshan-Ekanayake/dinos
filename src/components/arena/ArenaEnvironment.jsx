@@ -15,7 +15,7 @@ import {
   weatherForStage,
 } from '../../data/weather.js'
 import { useGameStore } from '../../store/useGameStore.js'
-import { playerWorld } from '../../systems/playerWorld.js'
+import { playerPosition } from '../../systems/playerState.js'
 import Birds from '../Birds.jsx'
 import GradientSky from '../GradientSky.jsx'
 import InstancedBlocks from '../InstancedBlocks.jsx'
@@ -238,10 +238,10 @@ export default function ArenaEnvironment() {
 
     /*
      * Everything below follows the player in *world* space, so it reads the
-     * world position rather than the scene-local one - see playerWorld.js.
+     * world position, which is the only kind there is.
      * Read once here: it is a shared scratch, and one frame wants one value.
      */
-    const player = playerWorld()
+    const player = playerPosition
 
     if (keyLightRef.current) {
       keyLightRef.current.color.copy(live.key)

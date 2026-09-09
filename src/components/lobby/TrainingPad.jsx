@@ -6,7 +6,7 @@ import * as THREE from 'three'
 import { buildPadDecor, onBelt, padRate, padUnlocked } from '../../data/training.js'
 import { formatNumber } from '../../data/progression.js'
 import { useGameStore } from '../../store/useGameStore.js'
-import { playerPosition } from '../../systems/playerState.js'
+import { playerHub } from '../../systems/playerState.js'
 import { voxelTexture } from '../../systems/voxelTexture.js'
 import InstancedBlocks from '../InstancedBlocks.jsx'
 import { DECAL } from '../../systems/decal.js'
@@ -162,8 +162,9 @@ export default function TrainingPad({ pad, position }) {
     const a = anim.current
     a.phase += delta
 
-    const dx = playerPosition.x - position[0]
-    const dz = playerPosition.z - position[2]
+    const player = playerHub()
+    const dx = player.x - position[0]
+    const dz = player.z - position[2]
     const standing = unlocked && onBelt(dx, dz)
 
     a.active += ((standing ? 1 : 0) - a.active) * Math.min(1, delta * 8)

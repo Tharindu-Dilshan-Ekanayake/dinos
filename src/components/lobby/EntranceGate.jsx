@@ -147,9 +147,8 @@ export default function EntranceGate() {
     if (glow.current) glow.current.scale.setScalar(6 + Math.sin(t * 1.8) * 0.4)
 
     // Distance from the *camera*, not the dino: it is the camera's closing in
-    // that grows the sign, so that is what the shrink has to track. World
-    // space, not `playerPosition` - that reads hub-local while you are in the
-    // hub and arena-local once you cross into it (see playerWorld.js).
+    // that grows the sign, so that is what the shrink has to track. The camera
+    // is in world space and this gate is drawn in the hub's, so lift it.
     const gateWorldZ = GATE_Z + LOBBY_Z_OFFSET
 
     if (plaque.current) {

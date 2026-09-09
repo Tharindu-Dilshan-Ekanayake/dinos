@@ -17,7 +17,7 @@ import {
   enemySlots,
   packState,
 } from '../../systems/arenaEnemies.js'
-import { playerWorld } from '../../systems/playerWorld.js'
+import { playerPosition } from '../../systems/playerState.js'
 import EnemyDino from './EnemyDino.jsx'
 
 /**
@@ -72,7 +72,7 @@ function ChamberPack({ stage }) {
     if (root.current) {
       const mouth = chamberOrigin(stage) + ARENA.frontZ
       root.current.visible =
-        store.scene === 'arena' || playerWorld().z <= mouth + REVEAL_MARGIN
+        store.scene === 'arena' || playerPosition.z <= mouth + REVEAL_MARGIN
     }
 
     /*
@@ -105,7 +105,7 @@ function ChamberPack({ stage }) {
      * scene-local position it would read as sixty-three units closer than it
      * is, and a pack you are still walking toward would count itself in range.
      */
-    const player = playerWorld()
+    const player = playerPosition
     const target = enemySlots[targetSlot]
     const distance = Math.hypot(player.x - target.x, player.z - target.z)
     packState.targetDistance = distance

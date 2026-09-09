@@ -21,7 +21,7 @@ import { paletteForStage } from '../../data/areas.js'
 import { formatNumber } from '../../data/progression.js'
 import { MAX_STAGES, damageRating, recommendedDamage } from '../../data/stages.js'
 import { useGameStore } from '../../store/useGameStore.js'
-import { playerPosition } from '../../systems/playerState.js'
+import { playerHub } from '../../systems/playerState.js'
 import { flatToonMaterial, voxelMaterial } from '../../systems/voxelTexture.js'
 import { outlineMaterial } from '../../systems/outline.js'
 import GlowSprite from '../GlowSprite.jsx'
@@ -124,7 +124,7 @@ export default function ArenaGate({ active = true, showPreview = true }) {
       //
       // Dark slate, not the hub's pale terrace stone: these two walls are the
       // doorway into Stage 1 and have to read as one from across the plaza.
-      // HubApproach paints the same walls from the arena side out of the same
+      // The arena side sees these very walls, out of the same
       // palette entry, so crossing the scene boundary never changes the colour
       // of the walls you are standing between.
       wall: voxelMaterial(LOBBY_PALETTE.gateWall, {
@@ -291,13 +291,15 @@ export default function ArenaGate({ active = true, showPreview = true }) {
      * still ahead of you. Hung on the pane itself, the frame the world changes
      * on is the frame you walk through the thing that says it will.
      */
-    const climbing = playerPosition.z <= ARENA_THRESHOLD_Z
-    const inGap = Math.abs(playerPosition.x) <= E.gapHalfWidth
+    // This gate and its threshold are written in the hub's own numbers.
+    const player = playerHub()
+    const climbing = player.z <= ARENA_THRESHOLD_Z
+    const inGap = Math.abs(player.x) <= E.gapHalfWidth
 
     // The glow at the foot still reacts to you approaching it.
     const toFoot = Math.hypot(
-      playerPosition.x - ARENA_GATE.position[0],
-      playerPosition.z - ARENA_GATE.position[2]
+      player.x - ARENA_GATE.position[0],
+      player.z - ARENA_GATE.position[2]
     )
     a.near += ((toFoot < 6 ? 1 : 0) - a.near) * Math.min(1, delta * 8)
 

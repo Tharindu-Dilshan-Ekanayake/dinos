@@ -5,7 +5,6 @@ import { EVENTS, on } from '../systems/events.js'
 import { getTimeScale } from '../systems/timeScale.js'
 import { lastImpact } from '../systems/arenaEnemies.js'
 import { playerPosition } from '../systems/playerState.js'
-import { playerWorld } from '../systems/playerWorld.js'
 import { useGameStore } from '../store/useGameStore.js'
 
 /**
@@ -124,7 +123,7 @@ export default function HitParticles() {
          * away. Outside the arena, burst at the player instead.
          */
         const origin =
-          point ?? (useGameStore.getState().scene === 'arena' ? lastImpact : playerWorld())
+          point ?? (useGameStore.getState().scene === 'arena' ? lastImpact : playerPosition)
         const share = maxHealth > 0 ? Math.min(1, damage / maxHealth) : 0.2
         burst(origin, {
           count: crit ? 18 : 9 + Math.round(share * 8),

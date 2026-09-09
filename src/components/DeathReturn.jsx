@@ -11,7 +11,7 @@ import { useGameStore } from '../store/useGameStore.js'
  * that asks most of you. What it lost you is thrown up as a floating number
  * like every other number in this game; the hub is where you land.
  *
- * The wait is the death animation, not a pause for reading: ArenaPlayer takes
+ * The wait is the death animation, not a pause for reading: Player takes
  * 0.9s to topple and sink, and cutting away mid-fall would leave you in the hub
  * with no idea what happened.
  */
