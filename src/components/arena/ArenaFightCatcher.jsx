@@ -27,6 +27,11 @@ export default function ArenaFightCatcher() {
       position={[0, 8, chamberOrigin(stageIndex) + ARENA.backZ - 24]}
       onPointerDown={(e) => {
         if (e.nativeEvent.button !== 0) return
+        // Mounted permanently now (see ArenaScene.jsx), so a click that lands
+        // here while you are still in the hub - the backdrop is enormous and
+        // sits behind everything - must not queue a swing at a chamber you
+        // have not walked into yet.
+        if (useGameStore.getState().scene !== 'arena') return
         e.stopPropagation()
         queueAttack()
       }}

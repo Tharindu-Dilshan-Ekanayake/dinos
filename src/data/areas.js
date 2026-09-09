@@ -1,14 +1,18 @@
 /**
- * Areas group stages into themed worlds.
+ * Areas are themed worlds a stage can draw from.
  *
  * Each area owns the whole look of the battle arena: sky gradient, fog, the
  * checkered floor, the terraced cliff walls that enclose the fight, which prop
  * is scattered around the rim, and whether glowing veins (lava, crystal) run
- * through the ground. Crossing a boundary lerps every colour over
- * AREA_TRANSITION_SECONDS, so the world melts from one biome into the next.
+ * through the ground. Crossing into a stage with a different area lerps every
+ * colour over AREA_TRANSITION_SECONDS, so the world melts from one biome into
+ * the next.
  *
- * `fromStage` / `toStage` are 1-indexed and inclusive, matching the labels the
- * player sees in the HUD.
+ * `fromStage` / `toStage` are 1-indexed and inclusive - the fifteen-stage
+ * block each biome was originally built as, kept as a label. Which area a
+ * given stage actually draws is decided separately, by `areaForStage` /
+ * `areaIndexForStage` below, which now rotate through all five one stage at a
+ * time - see `SHUFFLE_ORDER`.
  */
 export const AREA_TRANSITION_SECONDS = 1.4
 
@@ -274,26 +278,36 @@ export const AREAS = [
   },
 ]
 
-/** Area containing a 0-indexed stage (clamped to the last area). */
-export function areaForStage(stageIndex) {
-  const stage = stageIndex + 1
-  return (
-    AREAS.find((a) => stage >= a.fromStage && stage <= a.toStage) ?? AREAS[AREAS.length - 1]
-  )
-}
+/**
+ * The order biomes cycle through, one per stage rather than one per block.
+ *
+ * `fromStage`/`toStage` above are what each biome was originally a fifteen-
+ * stage block of, and stay on the data as a label - but the corridor no
+ * longer walks through one biome for fifteen chambers before the next: every
+ * single gate is a different world than the one behind it, cycling through
+ * all five before repeating. Stage 1 is Jungle Hollow, Stage 2 is Toxic
+ * Marsh, Stage 3 is Cosmic Rift, Stage 4 is Ember Caldera, Stage 5 is Frost
+ * Hollow, Stage 6 is Jungle Hollow again, and so on.
+ */
+const SHUFFLE_ORDER = ['jungle', 'marsh', 'cosmic', 'volcano', 'ice']
+const SHUFFLE_INDEXES = SHUFFLE_ORDER.map((id) => AREAS.findIndex((a) => a.id === id))
 
-/** Index of the area containing a 0-indexed stage. */
+/** Index of the area a 0-indexed stage cycles to. */
 export function areaIndexForStage(stageIndex) {
-  const area = areaForStage(stageIndex)
-  return AREAS.indexOf(area)
+  const cycle = SHUFFLE_INDEXES.length
+  return SHUFFLE_INDEXES[((stageIndex % cycle) + cycle) % cycle]
 }
 
-/** 0-1 progress through the current area, for the HUD progress bar. */
+/** Area a 0-indexed stage cycles to. */
+export function areaForStage(stageIndex) {
+  return AREAS[areaIndexForStage(stageIndex)]
+}
+
+/** 0-1 progress through the current five-stage rotation, for the HUD progress bar. */
 export function areaProgress(stageIndex) {
-  const area = areaForStage(stageIndex)
-  const span = area.toStage - area.fromStage + 1
-  const done = stageIndex + 1 - area.fromStage
-  return Math.min(1, Math.max(0, done / span))
+  const cycle = SHUFFLE_INDEXES.length
+  const done = (((stageIndex % cycle) + cycle) % cycle) + 1
+  return Math.min(1, done / cycle)
 }
 
 /* --------------------------------------------------- per-level variation */

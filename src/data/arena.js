@@ -1004,6 +1004,27 @@ export function chamberWindow(stageIndex, maxStages = Infinity) {
   return out
 }
 
+/**
+ * How many levels keep a pack standing in them, either side of the one you
+ * are in.
+ *
+ * One each way rather than the chamber window's three. Every enemy is a rigged
+ * model that casts a shadow, so a pack in all seven mounted chambers is seven
+ * times the dinos to draw for six packs nobody is fighting - while the pop the
+ * packs exist to avoid only happens where you can actually see it happen: in
+ * the level you are walking into, straight ahead through the open gate.
+ */
+export const PACKS_EITHER_SIDE = 1
+
+/** The levels whose packs are standing. */
+export function packWindow(stageIndex, maxStages = Infinity) {
+  const out = []
+  for (let k = stageIndex - PACKS_EITHER_SIDE; k <= stageIndex + PACKS_EITHER_SIDE; k++) {
+    if (k >= 0 && k < maxStages) out.push(k)
+  }
+  return out
+}
+
 /** Half-width of the passage through the back wall between two chambers. */
 export const PASSAGE_HALF_WIDTH = ARENA.gapHalfWidth - 0.8
 

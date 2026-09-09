@@ -47,34 +47,49 @@ export default function ArenaScene({ includePlayer = true, includeCamera = true,
       <Gates />
 
       {/*
-        The pack is mounted always but only shown once `active` - hidden with
-        `visible`, not left unmounted.
+        The pack is mounted always but only shown once you are near the
+        doorway - hidden with `visible`, not left unmounted. See
+        `REVEAL_MARGIN` in EnemyPack.jsx for why that reveal is a few steps
+        earlier than the scene actually flips to `active`, rather than tied
+        to `active` directly.
 
         Mounting always means the enemy models are built at startup rather
         than at the doorway, so there is no stutter the frame you cross the
-        threshold. Hiding until `active` means the hub does not show you a
-        chamber's dinos before you have actually walked into it. Everything
-        that *does* something - the attacks, the damage, the travel trigger,
-        the pads' keypress - waits for `active` too, same as the pack's
-        visibility.
+        threshold.
       */}
-      <group visible={active}>
-        <EnemyPack />
-      </group>
+      <EnemyPack />
       <HitParticles />
 
-      {active && (
-        <>
-          <IdleDamage />
-          <ArenaFightCatcher />
-          <ArenaTravel />
-          {includePlayer && <ArenaPlayer />}
-          <EnemyAttacks />
-          <GateHeadline />
-          <ReturnPads />
-          <ArenaCombat />
-        </>
-      )}
+      {/*
+        Everything below used to wait for `active` at the React level, mounted
+        and unmounted as one block the instant the scene flipped - eight
+        components (materials, event subscriptions, memoized buffers) coming
+        into or out of existence on the single frame you stepped through the
+        gate, on top of whatever React itself has to do to reconcile a
+        subtree that size. That is a second, independent source of the same
+        "it teleported" hitch the pack and the physics world were already
+        fixed for above.
+
+        Each of these now guards itself instead - `if (store.scene !==
+        'arena') return` at the top of its own frame, or nothing at all where
+        it already read live state and never depended on being freshly
+        mounted (ArenaTravel, EnemyAttacks). Mounted permanently, there is
+        nothing left to construct or tear down at the doorway - the swap is
+        just a flag flipping on components already running.
+
+        GateHeadline is the one exception, left conditional: it is a plain
+        `return null` component with no `useFrame` of its own to gate inside,
+        and its only mount cost is one event subscription - not worth the
+        same treatment.
+      */}
+      <IdleDamage />
+      <ArenaFightCatcher />
+      <ArenaTravel />
+      {includePlayer && <ArenaPlayer />}
+      <EnemyAttacks />
+      <ReturnPads />
+      <ArenaCombat />
+      {active && <GateHeadline />}
 
       {/*
         The physics world is built once, not at the doorway.

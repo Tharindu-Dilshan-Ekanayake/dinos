@@ -29,10 +29,7 @@ import { areaIndexForStage } from '../data/areas.js'
 import { MIN_HITS_TO_CLEAR, enemyCountForStage } from '../data/arena.js'
 import { EVENTS, emit } from '../systems/events.js'
 import { loadSave } from '../systems/persistence.js'
-import {
-  HUB_ARRIVAL,
-  HUB_RETURN,
-} from '../data/lobby.js'
+import { HUB_ARRIVAL } from '../data/lobby.js'
 import { placePlayer, playerFacing, playerPosition } from '../systems/playerState.js'
 import { SEAM_MARGIN, arenaToHubPoint, hubToArena } from '../data/arena.js'
 
@@ -526,9 +523,19 @@ export const useGameStore = create((set, get) => ({
      */
     if (walked) {
       const [hx, hz] = arenaToHubPoint(playerPosition.x, playerPosition.z)
-      // Likewise: a step down the ramp, clear of the hub's way-in trigger.
-      placePlayer([hx, 0, hz + SEAM_MARGIN], playerFacing.angle)
+      /*
+       * Likewise: a step down the ramp, clear of the hub's way-in trigger.
+       *
+       * And explicitly *not* a teleport, exactly as walking in is not one. The
+       * position changes which coordinate system it is written in, not where it
+       * describes - the dino is standing on the same slab of ground either side
+       * of this line. Left to mark a teleport, it cut the camera on the way out
+       * while the way in eased: you walked up the ramp and the shot jumped, for
+       * no better reason than which of two identical numbers was being stored.
+       */
+      placePlayer([hx, 0, hz + SEAM_MARGIN], playerFacing.angle, { markTeleport: false })
     } else {
+      // A pad cashed you out from deep in the corridor. That *is* a jump home.
       placePlayer(HUB_ARRIVAL.position, HUB_ARRIVAL.angle)
     }
 
@@ -800,11 +807,19 @@ export const useGameStore = create((set, get) => ({
      * arrive anywhere - you were simply re-interpreted, sixty three units off,
      * and whatever the plaza clamp made of that is where you turned up.
      *
+     * Landed at the doorway (`HUB_ARRIVAL`), the same spot a walked-out run
+     * ends at - not the middle of the plaza. It used to be its own separate
+     * point out in the open, so the one button that skips the walk was also
+     * the one arrival that didn't look like one: everything else about
+     * leaving the arena drops you at the gate you left through, and the Hub
+     * button dropping you in the middle of the concourse instead read as a
+     * jump cut rather than as coming home.
+     *
      * Walking between the two is handled elsewhere and converts properly (see
      * enterArena and the claim path); this is the case where there is no walk
      * to convert, so it gets a defined place to arrive.
      */
-    if (scene === 'lobby') placePlayer(HUB_RETURN.position, HUB_RETURN.angle)
+    if (scene === 'lobby') placePlayer(HUB_ARRIVAL.position, HUB_ARRIVAL.angle)
 
     emit(EVENTS.SCENE_CHANGE, { scene })
   },

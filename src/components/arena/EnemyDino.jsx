@@ -13,13 +13,17 @@ import {
   ATTACK_WINDUP_SECONDS,
   enemyAttackStyle,
 } from '../../data/enemies.js'
-import { stageHealth } from '../../data/stages.js'
 import { useGameStore } from '../../store/useGameStore.js'
 import { EVENTS, on } from '../../systems/events.js'
 import { createStepper } from '../../systems/footsteps.js'
 import { getTimeScale } from '../../systems/timeScale.js'
 import { playerPosition } from '../../systems/playerState.js'
-import { enemySlots, packState, slotHealthRatio } from '../../systems/arenaEnemies.js'
+import {
+  chamberRatio,
+  enemySlots,
+  packState,
+  slotHealthRatio,
+} from '../../systems/arenaEnemies.js'
 import DinoModel, { animateDinoRig, useDinoMaterials, useDinoRig } from '../DinoModel.jsx'
 
 const BAR_WIDTH = 1.9
@@ -87,15 +91,21 @@ function strikeCurve(p) {
 }
 
 /**
- * One enemy dino.
+ * One enemy dino, in one chamber.
  *
- * Its health is a band of the stage's shared pool rather than its own number,
- * so the whole pack stays in step with the store without any extra state to
- * keep in sync. Everything below - alive/dead, the bar, the chase - is derived
- * each frame from that one ratio and written straight to the objects, so a
- * fast fight never re-renders React.
+ * Its health is a band of that chamber's shared pool rather than its own
+ * number, so the whole pack stays in step with the store without any extra
+ * state to keep in sync. Everything below - alive/dead, the bar, the chase -
+ * is derived each frame from that one ratio and written straight to the
+ * objects, so a fast fight never re-renders React.
+ *
+ * `stage` is fixed for the life of the component: a dino belongs to the level
+ * it stands in and never moves to another one. Whether it is the level being
+ * fought in is read from the store each frame instead of taken as a prop, so
+ * crossing a boundary changes what this dino *does* without React having to
+ * re-render it into a different chamber first.
  */
-export default function EnemyDino({ slot, appearance, home, boss }) {
+export default function EnemyDino({ slot, stage, slotCount, appearance, home, boss }) {
   const materials = useDinoMaterials(appearance)
   const rig = useDinoRig()
 
@@ -130,38 +140,27 @@ export default function EnemyDino({ slot, appearance, home, boss }) {
     [appearance.scale]
   )
 
-  // A fresh pack marches back to its posts whenever the stage changes.
-  const stageIndex = useGameStore((s) => s.stageIndex)
-  useEffect(() => {
-    const a = anim.current
-    a.x = home[0]
-    a.z = home[2]
-    a.death = 0
-    a.wasAlive = null
-    a.facing = -Math.PI / 2
-  }, [stageIndex, home])
-
   // The tell. Fired a beat before the blow lands, so the animal is already
   // moving when the damage arrives - see ATTACK_WINDUP_SECONDS.
   useEffect(
     () =>
       on(EVENTS.ENEMY_WINDUP, ({ slot: which, tell }) => {
-        if (which !== slot) return
+        if (which !== slot || useGameStore.getState().stageIndex !== stage) return
         anim.current.attack = ATTACK_ANIM_SECONDS
         anim.current.pose = POSES[tell] ?? POSES.lunge
       }),
-    [slot]
+    [slot, stage]
   )
 
   useEffect(
     () =>
       on(EVENTS.HIT, ({ source }) => {
         // Only the enemy actually being hit should react.
-        if (packState.targetSlot !== slot) return
+        if (packState.targetSlot !== slot || useGameStore.getState().stageIndex !== stage) return
         anim.current.flash = 1
         anim.current.hurt = source === 'click' ? 1 : 0.3
       }),
-    [slot]
+    [slot, stage]
   )
 
   useFrame((_, rawDelta) => {
@@ -169,9 +168,15 @@ export default function EnemyDino({ slot, appearance, home, boss }) {
     const delta = Math.min(rawDelta, 0.05)
     const scaled = delta * getTimeScale()
 
-    const { enemyHealth, stageIndex: currentStage } = useGameStore.getState()
-    const ratio = Math.max(0, Math.min(1, enemyHealth / stageHealth(currentStage)))
-    const own = slotHealthRatio(ratio, slot, packState.slotCount)
+    const store = useGameStore.getState()
+    /*
+     * Whether this is the level being fought in. Every chamber in the window
+     * keeps its pack standing, so most of them are simply holding their ground
+     * in a room the player is not in - see EnemyPack.
+     */
+    const fighting = store.stageIndex === stage
+    const ratio = chamberRatio(store, stage)
+    const own = slotHealthRatio(ratio, slot, slotCount)
     const alive = own > 0
 
     /*
@@ -204,37 +209,56 @@ export default function EnemyDino({ slot, appearance, home, boss }) {
 
     const dead = !alive && a.death <= 0
     if (root.current) root.current.visible = !dead
-    if (barGroup.current) barGroup.current.visible = alive
+    // A health bar belongs to the fight in progress. Hung over every pack in
+    // the corridor they read as map markers strung out into the fog.
+    if (barGroup.current) barGroup.current.visible = alive && fighting
     if (dead) return
 
     // --- movement ---
-    const isTarget = packState.targetSlot === slot
+    const isTarget = fighting && packState.targetSlot === slot
     let moving = 0
     const wasX = a.x
     const wasZ = a.z
 
     if (alive) {
-      /*
-       * The whole pack comes for you, not just the one you happen to be
-       * hitting. Each takes its own post on a ring around the player - spaced
-       * by slot, at slightly different stand-off distances - so five of them
-       * surround you rather than stacking into one dino-shaped column.
-       *
-       * The one you are actually fighting pushes in closest, which keeps the
-       * target readable in the middle of a scrum - but that spacing is only a
-       * preference. A post is pulled in until it is inside that enemy's own
-       * reach, because a dino standing where it cannot attack is just scenery.
-       */
-      const spacing = (isTarget ? ENEMY_STOP_DISTANCE : ENEMY_STOP_DISTANCE + 0.9) +
-        (slot % 3) * 0.45
-      const reach = ENEMY_ATTACK_RANGE * enemyAttackStyle(currentStage, slot, boss).reach
-      const ring = Math.max(MIN_POST, Math.min(spacing, reach * POST_WITHIN_REACH))
-      const spread = (slot / Math.max(1, packState.slotCount)) * Math.PI * 2
-      const aimX = playerPosition.x + Math.cos(spread) * ring
-      const aimZ = playerPosition.z + Math.sin(spread) * ring
+      let aimX
+      let aimZ
+      let desired
 
-      const dx = playerPosition.x - a.x
-      const dz = playerPosition.z - a.z
+      if (fighting) {
+        /*
+         * The whole pack comes for you, not just the one you happen to be
+         * hitting. Each takes its own post on a ring around the player - spaced
+         * by slot, at slightly different stand-off distances - so five of them
+         * surround you rather than stacking into one dino-shaped column.
+         *
+         * The one you are actually fighting pushes in closest, which keeps the
+         * target readable in the middle of a scrum - but that spacing is only a
+         * preference. A post is pulled in until it is inside that enemy's own
+         * reach, because a dino standing where it cannot attack is just scenery.
+         */
+        const spacing = (isTarget ? ENEMY_STOP_DISTANCE : ENEMY_STOP_DISTANCE + 0.9) +
+          (slot % 3) * 0.45
+        const reach = ENEMY_ATTACK_RANGE * enemyAttackStyle(stage, slot, boss).reach
+        const ring = Math.max(MIN_POST, Math.min(spacing, reach * POST_WITHIN_REACH))
+        const spread = (slot / Math.max(1, slotCount)) * Math.PI * 2
+        aimX = playerPosition.x + Math.cos(spread) * ring
+        aimZ = playerPosition.z + Math.sin(spread) * ring
+
+        // Always glare at the player. The rig faces +X, so this is atan2(-dz, dx).
+        desired = Math.atan2(-(playerPosition.z - a.z), playerPosition.x - a.x)
+      } else {
+        /*
+         * A level you are not in holds its ground: back to its post, facing the
+         * way you would come in. Break off a fight and walk back out and the
+         * pack you left re-forms behind you rather than standing wherever it
+         * last had you cornered - and is standing there, in formation, if you
+         * change your mind and come back through the gate.
+         */
+        aimX = home[0]
+        aimZ = home[2]
+        desired = -Math.PI / 2
+      }
 
       const ax = aimX - a.x
       const az = aimZ - a.z
@@ -247,8 +271,6 @@ export default function EnemyDino({ slot, appearance, home, boss }) {
         moving = Math.min(1, toPost / 2)
       }
 
-      // Always glare at the player. The rig faces +X, so this is atan2(-dz, dx).
-      const desired = Math.atan2(-dz, dx)
       let diff = desired - a.facing
       while (diff > Math.PI) diff -= Math.PI * 2
       while (diff < -Math.PI) diff += Math.PI * 2
@@ -262,7 +284,7 @@ export default function EnemyDino({ slot, appearance, home, boss }) {
      * boundary, inside the next level's terrace wall. Breaking off and walking
      * back is meant to work; this is what makes it an escape.
      */
-    const origin = chamberOrigin(currentStage)
+    const origin = chamberOrigin(stage)
     const localZ = a.z - origin
     if (localZ < ARENA_BOUNDS.minZ) a.z = origin + ARENA_BOUNDS.minZ
     else if (localZ > ARENA_BOUNDS.maxZ) a.z = origin + ARENA_BOUNDS.maxZ
@@ -276,7 +298,9 @@ export default function EnemyDino({ slot, appearance, home, boss }) {
     a.speed += (moving - a.speed) * Math.min(1, delta * 10)
     a.stride += delta * (2.2 + a.speed * 8)
     animateDinoRig(rig.current, a.speed, a.stride)
-    if (alive) step(a.stride, a.speed, { x: a.x, z: a.z })
+    // Only the fight you are in is audible: a pack re-forming two chambers
+    // away is a room you are not in, and its footfalls belong to that room.
+    if (alive && fighting) step(a.stride, a.speed, { x: a.x, z: a.z })
 
     /*
      * The attack, laid on top of the walk cycle rather than replacing it, so a
@@ -302,7 +326,8 @@ export default function EnemyDino({ slot, appearance, home, boss }) {
     }
 
     // Publish position so the combat system can measure range against it.
-    enemySlots[slot]?.set(a.x, 0, a.z)
+    // One pack owns those slots at a time - the one you are in the room with.
+    if (fighting) enemySlots[slot]?.set(a.x, 0, a.z)
 
     const hurt = a.hurt * a.hurt
     const dying = a.death > 0 ? a.death : 0

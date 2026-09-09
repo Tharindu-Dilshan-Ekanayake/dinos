@@ -3,8 +3,12 @@ import { AREAS } from '../data/areas.js'
 import { EVENTS, on } from '../systems/events.js'
 
 /**
- * Sweeping title card when the player crosses into a new area. Mounts a keyed
- * element so the CSS animation replays even on back-to-back transitions.
+ * Sweeping title card when the player crosses into a new area.
+ *
+ * Areas now rotate one per stage rather than one per fifteen-stage block (see
+ * data/areas.js), so this fires on nearly every gate instead of every few
+ * levels - a keyed element so the CSS animation replays even on those
+ * back-to-back transitions.
  */
 export default function AreaBanner() {
   const [banner, setBanner] = useState(null)
@@ -35,9 +39,6 @@ export default function AreaBanner() {
           style={{ color: banner.area.enemyAccent }}
         >
           {banner.area.name}
-        </div>
-        <div className="mt-1 text-sm font-semibold text-white/60">
-          Stages {banner.area.fromStage} - {banner.area.toStage}
         </div>
       </div>
     </div>

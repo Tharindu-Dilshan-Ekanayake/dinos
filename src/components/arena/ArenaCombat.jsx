@@ -56,6 +56,10 @@ export default function ArenaCombat() {
   useFrame((_, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05)
     const state = useGameStore.getState()
+    // Mounted permanently now (see ArenaScene.jsx), so this has to say for
+    // itself that a swing - manual or auto-fight - only ever lands while you
+    // are actually standing in the arena, not on your way up to the gate.
+    if (state.scene !== 'arena') return
 
     const targetSlot = packState.targetSlot
     const hasTarget = targetSlot >= 0

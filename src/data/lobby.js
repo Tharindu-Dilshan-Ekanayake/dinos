@@ -274,11 +274,16 @@ export const TRAINING_ROW = {
    * grass shoulder. The row used to run to z=-35.6 with the shoulder beginning
    * at -35, so the deepest treadmill was buried in a bank of grass.
    *
-   * Closed up from 5.6 when the machines were rebuilt long and narrow: a deck
-   * three metres across the row instead of four and a half leaves room for a
-   * tenth machine in less space than nine used to take.
+   * Each machine's base slab - the outermost of its three stacked layers, see
+   * `PAD_WIDTH + 0.5` in TrainingPad.jsx - runs 4.5 wide along the row, half a
+   * metre proud of the deck itself. Closing the gap to match the *deck*
+   * exactly (4) left that base layer overlapping its neighbour's by the same
+   * half metre - two machines' shadows and rims fighting for the same strip
+   * of floor. Set to clear the base slab with real paving between them: close
+   * enough to read as one row, open enough that every machine reads as its
+   * own separate platform rather than a seam in a longer one.
    */
-  spacing: -4.6,
+  spacing: -6,
 }
 
 export const TRAINING_POSITIONS = TRAINING_PADS.map((_, i) => [
@@ -395,28 +400,16 @@ export const ARENA_ENTRANCE = {
  * the hub's bounds, so nothing repositioned you at all and you simply appeared
  * standing in the middle of the plaza with the entrance a long way behind you.
  */
+/**
+ * Also where the Hub button lands you - see `setScene` in useGameStore.js.
+ * That button skips the walk, but it still arrives at the same door: a jump
+ * that woke you up in the middle of the concourse instead read as a cut away
+ * from the fight rather than as coming home.
+ */
 export const HUB_ARRIVAL = {
   position: [0, 0, ARENA_ENTRANCE.rampFromZ + 3],
   /** Facing +Z: up the plaza, with the ramp at your back. */
   angle: -Math.PI / 2,
-}
-
-/**
- * Where the Hub button puts you: the middle of the plaza, facing the arena.
- *
- * Distinct from HUB_ARRIVAL, which is where you come out of the gateway on
- * foot and therefore stands at the arena end with the ramp at your back. The
- * button is not a walk - it is a jump from wherever you happen to be standing
- * in a chamber - so it lands you in the middle of the hub, where everything
- * the hub is for is within sight: podiums down one side, training pads down
- * the other, the way back in ahead of you.
- *
- * Measured off the plaza rather than written down, so moving the plaza's ends
- * moves this with them.
- */
-export const HUB_RETURN = {
-  position: [0, 0, (PLAZA.from + PLAZA.to) / 2],
-  angle: Math.PI / 2,
 }
 
 /** Z of the top of the ramp, where it meets the arena's landing. */
@@ -536,10 +529,50 @@ export const OBSTACLES = [
  *
  * Mutates and returns the vector.
  */
-export function clampToPlaza(point, margin = 1.2) {
+export function clampToPlaza(point, margin = 1.2, player = null) {
   const halfWidth = PLAZA.halfWidth - margin
   if (point.x > halfWidth) point.x = halfWidth
   else if (point.x < -halfWidth) point.x = -halfWidth
+
+  /*
+   * The plaza's near end - behind the spawn, away from the arena - is where
+   * the ground simply stops. Widening how far back and how steeply down the
+   * camera is allowed to sit (see MAX_DISTANCE / maxLookDown) meant an orbit
+   * pulled far enough behind the player now reached past that edge on its
+   * own, with nothing built past it to see - a grey wall of backdrop
+   * scenery seen from behind, filling half the shot.
+   *
+   * Pulled straight back toward the player along the same ray, not just
+   * dropped onto the boundary Z: clamping Z alone leaves height untouched, so
+   * near the boundary - which spawn sits close enough to that the *default*
+   * view could trip it - the shot lost reach but kept its height and came out
+   * far steeper than the pitch actually asked for, an accidental near-vertical
+   * view standing in for whatever angle the player had chosen. Scaling the
+   * whole offset keeps the angle the camera was actually given; the setback
+   * is a squeeze, the same as the X clamp above, not a re-aim.
+   *
+   * The scale itself is floored, not left to run to zero. Standing right up
+   * against the boundary - which `PLAYER_BOUNDS.maxZ` allows, only a hair
+   * short of it - leaves almost no room on the ray at all, and an unfloored
+   * scale collapsed the camera down onto the dino's own head: eye height,
+   * looking straight up, the plaza gone and the whole shot just sky over a
+   * sliver of ground. A floor of a third keeps the camera a third of its
+   * normal reach out even at the worst of it - closer than usual, and no
+   * longer the exact angle asked for, but still a shot of the plaza rather
+   * than of the inside of the dino's own nose.
+   */
+  const zLimit = PLAZA.from - margin
+  if (point.z > zLimit) {
+    if (player) {
+      const dz = point.z - player.z
+      if (dz > 1e-4) {
+        const scale = Math.max(0.34, (zLimit - player.z) / dz)
+        point.x = player.x + (point.x - player.x) * scale
+        point.y = player.y + (point.y - player.y) * scale
+      }
+    }
+    point.z = zLimit
+  }
 
   // Past the plaza's far end the only open ground is the gateway itself.
   if (point.z < ARENA_ENTRANCE.wallFromZ) {
