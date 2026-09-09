@@ -11,6 +11,8 @@ let ctx = null
 let master = null
 let muted = false
 let noiseBuffer = null
+/** 0..1, multiplying the hardcoded 0.5 ceiling below - see setVolume(). */
+let volume = 1
 
 function ensureContext() {
   if (ctx) return ctx
@@ -18,7 +20,7 @@ function ensureContext() {
   if (!AudioCtx) return null
   ctx = new AudioCtx()
   master = ctx.createGain()
-  master.gain.value = muted ? 0 : 0.5
+  master.gain.value = muted ? 0 : 0.5 * volume
   master.connect(ctx.destination)
   return ctx
 }
@@ -33,12 +35,26 @@ export function setMuted(next) {
   muted = next
   if (master && ctx) {
     master.gain.cancelScheduledValues(ctx.currentTime)
-    master.gain.setTargetAtTime(next ? 0 : 0.5, ctx.currentTime, 0.02)
+    master.gain.setTargetAtTime(next ? 0 : 0.5 * volume, ctx.currentTime, 0.02)
   }
 }
 
 export function isMuted() {
   return muted
+}
+
+/**
+ * A 0-100 volume, as driven by the Bloxity portal's `master_volume` setting
+ * (systems/bloxity.js) - scales the same 0.5 ceiling `setMuted` targets,
+ * rather than replacing the mute flag: `muted` still hard-mutes first, this
+ * only affects the unmuted case.
+ */
+export function setVolume(percent) {
+  volume = Math.min(1, Math.max(0, Number(percent) || 0) / 100)
+  if (master && ctx) {
+    master.gain.cancelScheduledValues(ctx.currentTime)
+    master.gain.setTargetAtTime(muted ? 0 : 0.5 * volume, ctx.currentTime, 0.02)
+  }
 }
 
 function getNoiseBuffer(c) {

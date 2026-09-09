@@ -148,6 +148,20 @@ const initial = (() => {
      */
     quality: 'auto',
     playerName: '',
+    /*
+     * Settings the Bloxity portal can drive (systems/bloxity.js), additive
+     * to the fields above rather than replacing them - the in-game Settings
+     * menu keeps working exactly as it does today either way.
+     */
+    masterVolume: 100,
+    showFps: false,
+    cameraSensitivity: 1,
+    chatEnabled: true,
+    // Transient like `dead`/`comboCount` below: replaying a stored `true` on
+    // reload can't actually enter fullscreen without a fresh user gesture, so
+    // persisting it would just create a misleading "should be fullscreen but
+    // isn't" state. Always starts false.
+    fullscreen: false,
     scene: 'lobby',
     // Death is transient: you always come back at the hub.
     dead: false,
@@ -166,6 +180,14 @@ const initial = (() => {
     base.muted = Boolean(save.muted)
     base.autoFight = Boolean(save.autoFight)
     if (typeof save.quality === 'string') base.quality = save.quality
+    if (Number.isFinite(Number(save.masterVolume))) {
+      base.masterVolume = Math.min(100, Math.max(0, Number(save.masterVolume)))
+    }
+    base.showFps = Boolean(save.showFps)
+    if (Number.isFinite(Number(save.cameraSensitivity))) {
+      base.cameraSensitivity = Math.min(5, Math.max(0.1, Number(save.cameraSensitivity)))
+    }
+    base.chatEnabled = save.chatEnabled !== false
     if (!save.migrated) {
       base.wins = Number(save.wins) || 0
       base.totalWins = Number(save.totalWins) || 0
@@ -272,8 +294,11 @@ export const useGameStore = create((set, get) => ({
     const s = get()
     // A cleared chamber sits at zero health, and a pending one is already on
     // its way there. Without this guard any further hit would fall straight
-    // through to _clearStage and pay out again.
-    const blocked = s.stageCleared || s.clearPending || s.dead
+    // through to _clearStage and pay out again. The scene check belongs here
+    // too: the hub's own click-to-swing (FightCatcher.jsx) reuses this same
+    // pipeline for its animation and training gain, and without it a click in
+    // the lobby was landing real damage on whatever stage was last entered.
+    const blocked = s.stageCleared || s.clearPending || s.dead || s.scene !== 'arena'
 
     /*
      * A click still swings even here - the animation, the hit particles, the
@@ -821,6 +846,31 @@ export const useGameStore = create((set, get) => ({
 
   setPlayerName(playerName) {
     set({ playerName: String(playerName).slice(0, 16) })
+  },
+
+  /*
+   * The Bloxity portal's own settings (systems/bloxity.js) land here too,
+   * through the same actions the in-game Settings menu calls - one field,
+   * two ways to set it, rather than a parallel copy of the state.
+   */
+  setMasterVolume(volume) {
+    set({ masterVolume: Math.min(100, Math.max(0, Number(volume) || 0)) })
+  },
+
+  setShowFps(show) {
+    set({ showFps: Boolean(show) })
+  },
+
+  setCameraSensitivity(mult) {
+    set({ cameraSensitivity: Math.min(5, Math.max(0.1, Number(mult) || 1)) })
+  },
+
+  setChatEnabled(enabled) {
+    set({ chatEnabled: Boolean(enabled) })
+  },
+
+  setFullscreen(fullscreen) {
+    set({ fullscreen: Boolean(fullscreen) })
   },
 
   /** Wipe everything, including permanent rebirths. */

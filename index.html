@@ -11,6 +11,14 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>+1 Dino Evolution</title>
+    <!--
+      Bloxity's Legion SDK, loaded `async` on purpose: a bare or `defer`
+      script here can stall the page (or hold up main.jsx's module script)
+      if sdk.bloxity.io is ever unreachable. `async` runs whenever it loads,
+      independent of everything else - see systems/bloxity.js's bounded poll
+      for how the app copes with it loading late or never.
+    -->
+    <script src="https://sdk.bloxity.io/legion-sdk.min.js" async></script>
   </head>
   <body>
     <div id="root"></div>

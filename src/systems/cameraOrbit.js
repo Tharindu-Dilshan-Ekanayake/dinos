@@ -15,30 +15,47 @@
 export const orbit = {
   yaw: 0,
   pitch: 0.42,
-  distance: 21,
+  distance: 27,
 }
 
 const YAW_SENSITIVITY = 0.006
 const PITCH_SENSITIVITY = 0.004
+/**
+ * A multiplier on both sensitivities above, driven by the Bloxity portal's
+ * `camera_sensitivity` setting (systems/bloxity.js) - see setSensitivity().
+ */
+let sensitivity = 1
+export function setSensitivity(mult) {
+  sensitivity = Math.min(5, Math.max(0.1, Number(mult) || 1))
+}
 /** Keep the camera above the ground and below straight-down. */
 const MIN_PITCH = 0.14
-const MAX_PITCH = 1.05
+/**
+ * Steepest angle the mouse/wheel can pitch the camera to.
+ *
+ * Raised from 1.05 (~60°) to leave room for a proper overhead view of a
+ * chamber - the whole gate-to-gate layout at once, not just the fight in
+ * front of you - while staying short of pi/2, where cos(pitch) collapses to
+ * zero and the horizontal orbit math degenerates.
+ */
+const MAX_PITCH = 1.3
 export const MIN_DISTANCE = 10
 /**
  * How far back the wheel will let you sit.
  *
  * It stopped at 38, which is close enough that the hub's podium row runs off
  * both sides of the screen and an arena chamber never quite fits in frame.
+ * Raised again to 70 so a fully pitched-down shot can still fit a chamber's
+ * whole width, gate to gate, rather than cropping the side walls.
  *
  * What stops this going further is the fog, not the far plane. Fog is measured
  * from the camera, so a camera further from the player than the biome's fog
  * near plane starts hazing over the player's own dino - which reads as a broken
- * renderer rather than as distance. The marsh's fog starts closest, at 42, and
- * 52 leaves the dino about a tenth hazed there and clear everywhere else. The
- * alternative was pushing the marsh's fog back, and a marsh that is not murky
- * near you is not a marsh.
+ * renderer rather than as distance. The marsh's fog starts closest, at 42, so
+ * the far end of this range leaves the dino visibly hazed there while staying
+ * clear everywhere else - the trade-off for the reach the overhead view needs.
  */
-export const MAX_DISTANCE = 52
+export const MAX_DISTANCE = 70
 
 /**
  * Zoom is proportional, not additive.
@@ -90,10 +107,10 @@ export function installCameraOrbit(canvas) {
     travelled += Math.abs(dx) + Math.abs(dy)
     if (travelled < DRAG_THRESHOLD) return
 
-    orbit.yaw -= dx * YAW_SENSITIVITY
+    orbit.yaw -= dx * YAW_SENSITIVITY * sensitivity
     orbit.pitch = Math.min(
       MAX_PITCH,
-      Math.max(MIN_PITCH, orbit.pitch + dy * PITCH_SENSITIVITY)
+      Math.max(MIN_PITCH, orbit.pitch + dy * PITCH_SENSITIVITY * sensitivity)
     )
   }
 

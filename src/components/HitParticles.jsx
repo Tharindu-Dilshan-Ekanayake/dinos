@@ -5,6 +5,8 @@ import { EVENTS, on } from '../systems/events.js'
 import { getTimeScale } from '../systems/timeScale.js'
 import { lastImpact } from '../systems/arenaEnemies.js'
 import { playerPosition } from '../systems/playerState.js'
+import { playerWorld } from '../systems/playerWorld.js'
+import { useGameStore } from '../store/useGameStore.js'
 
 /**
  * Fixed-capacity instanced particle system.
@@ -114,7 +116,15 @@ export default function HitParticles() {
     const unsubscribers = [
       on(EVENTS.HIT, ({ crit, source, point, damage, maxHealth }) => {
         if (source !== 'click') return
-        const origin = point ?? lastImpact
+        /*
+         * No target means no impact point - the arena falls back to wherever
+         * the last real hit landed, but the hub has no fight to remember, so a
+         * click there used this same stale arena spot: a swing thrown in the
+         * lobby burst at Stage 1's last kill, three chambers and an offset
+         * away. Outside the arena, burst at the player instead.
+         */
+        const origin =
+          point ?? (useGameStore.getState().scene === 'arena' ? lastImpact : playerWorld())
         const share = maxHealth > 0 ? Math.min(1, damage / maxHealth) : 0.2
         burst(origin, {
           count: crit ? 18 : 9 + Math.round(share * 8),

@@ -74,19 +74,18 @@ export default function Scene() {
           clamp={clampCamera}
           worldOffset={inLobby ? [0, 0, LOBBY_Z_OFFSET] : [0, 0, 0]}
           /*
-           * The lobby gets a steeper top-down ceiling than the arena does.
+           * Both halves get a steep top-down ceiling; the lobby's is a touch
+           * higher because it has more open room to earn it.
            *
-           * `LobbyCamera`'s default is tuned for the corridor's worst case - a
-           * side-on camera squeezed to a few metres of reach by the walls -
-           * and that squeeze can happen in the hub too, right at the arena
-           * gateway. Everywhere else the plaza is wide open, and the extra
-           * range is what lets a player actually look down at the cliffs and
-           * the road rather than staying locked to a driving-height view of
-           * a world that is now built to be seen from above as much as from
-           * the side. Left at the default outside the lobby, so the arena's
-           * corridor frames exactly as it did before.
+           * `LobbyCamera`'s own default (0.62) is tuned for the corridor's
+           * worst case - a side-on camera squeezed to a few metres of reach by
+           * the walls - and that squeeze can happen in the hub too, right at
+           * the arena gateway. Everywhere else, in either scene, a chamber or
+           * the plaza is wide open floor, and the extra range is what lets a
+           * player look straight down at the whole layout - gate to gate -
+           * rather than staying locked to a driving-height view.
            */
-          maxLookDown={inLobby ? 0.8 : undefined}
+          maxLookDown={inLobby ? 1.2 : 1.1}
         />
         <ArenaScene includePlayer={false} includeCamera={false} active={!inLobby} />
         <LobbyScene

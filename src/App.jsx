@@ -6,6 +6,12 @@ import LoadingVeil from './components/LoadingVeil.jsx'
 import { unlockAudio } from './systems/audio.js'
 import { useQuality } from './systems/useQuality.js'
 import { useGameStore } from './store/useGameStore.js'
+import {
+  bloxityExitFullscreen,
+  bloxityRequestFullscreen,
+  bloxityShowMenu,
+  isBloxityEmbedded,
+} from './systems/bloxity.js'
 
 export default function App() {
   /*
@@ -15,6 +21,7 @@ export default function App() {
    * the game adjusts on its own mid-play.
    */
   const quality = useQuality()
+  const fullscreen = useGameStore((s) => s.fullscreen)
 
   // Browsers only allow an AudioContext to start from a real user gesture.
   useEffect(() => {
@@ -25,6 +32,35 @@ export default function App() {
       window.removeEventListener('pointerdown', unlock)
       window.removeEventListener('keydown', unlock)
     }
+  }, [])
+
+  /*
+   * The Bloxity portal's `fullscreen` setting, mirrored onto both the real
+   * Fullscreen API and the portal's own request (systems/bloxity.js). Note:
+   * browsers refuse requestFullscreen() outside a live user gesture, so a
+   * setting pushed from the portal alone can silently fail to do anything in
+   * standalone mode - a known, accepted gap rather than something worth
+   * fighting the browser over.
+   */
+  useEffect(() => {
+    if (fullscreen) {
+      document.documentElement.requestFullscreen?.().catch(() => {})
+      bloxityRequestFullscreen()
+    } else {
+      if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
+      bloxityExitFullscreen()
+    }
+  }, [fullscreen])
+
+  // Lets a host portal's own pause menu answer Escape too. Additive: this
+  // does not suppress LevelSelect.jsx's/RebirthModal.jsx's own local
+  // Escape-to-close handlers, which still fire alongside it.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape' && isBloxityEmbedded()) bloxityShowMenu()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
   }, [])
 
   return (

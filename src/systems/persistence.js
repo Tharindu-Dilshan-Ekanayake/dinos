@@ -46,6 +46,13 @@ function serialise(state) {
     muted: state.muted,
     autoFight: state.autoFight,
     quality: state.quality,
+    // Bloxity portal settings additively synced onto these same fields - see
+    // systems/bloxity.js. `fullscreen` is deliberately excluded: replaying a
+    // stored `true` without a fresh user gesture just fails silently.
+    masterVolume: state.masterVolume,
+    showFps: state.showFps,
+    cameraSensitivity: state.cameraSensitivity,
+    chatEnabled: state.chatEnabled,
     upgradeLevels: { ...state.upgradeLevels },
     trainedPower: state.trainedPower,
     battlePower: state.battlePower,

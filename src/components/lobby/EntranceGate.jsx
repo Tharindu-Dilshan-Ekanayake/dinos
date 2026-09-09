@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import { ARENA_ENTRANCE, ARENA_THRESHOLD_Z } from '../../data/lobby.js'
+import { LOBBY_Z_OFFSET } from '../../data/arena.js'
 import { formatNumber } from '../../data/progression.js'
 import { recommendedDamage } from '../../data/stages.js'
 import { useGameStore } from '../../store/useGameStore.js'
@@ -94,11 +95,30 @@ const FRAME = mergeBoxes(
   }))
 )
 
+/**
+ * Distance at which the plaque reaches its full, as-authored size.
+ *
+ * The name and its figures are sized to read from across the plaza, which is
+ * exactly what makes them absurd close up: walk to the threshold to actually
+ * cross it and the camera closes in with you, blowing a sign meant to fill a
+ * doorway from a distance into a wall of oversized, overlapping letters.
+ *
+ * Rather than hide it - a sign that vanishes right where you need it most is
+ * its own kind of broken - it shrinks in step with the distance closing, which
+ * cancels out the perspective growth that caused the problem: from here out
+ * to the plaza it reads at its normal size, and every step closer than that
+ * scales it down by exactly as much as walking closer would otherwise have
+ * blown it up. It never disappears; it just stops getting bigger.
+ */
+const NORMAL_SIZE_DISTANCE = 16
+
 export default function EntranceGate() {
   const bestStage = useGameStore((s) => s.bestStage)
   const barrier = useRef()
   const barrierMat = useRef()
   const glow = useRef()
+  const plaque = useRef()
+  const faces = useRef([])
 
   const materials = useMemo(
     () => ({
@@ -125,6 +145,27 @@ export default function EntranceGate() {
     // reads as one powered thing rather than three independently animated
     // parts that happen to share a rhythm.
     if (glow.current) glow.current.scale.setScalar(6 + Math.sin(t * 1.8) * 0.4)
+
+    // Distance from the *camera*, not the dino: it is the camera's closing in
+    // that grows the sign, so that is what the shrink has to track. World
+    // space, not `playerPosition` - that reads hub-local while you are in the
+    // hub and arena-local once you cross into it (see playerWorld.js).
+    const gateWorldZ = GATE_Z + LOBBY_Z_OFFSET
+
+    if (plaque.current) {
+      const camDistance = Math.abs(state.camera.position.z - gateWorldZ)
+      const scale = Math.max(0.08, Math.min(1, camDistance / NORMAL_SIZE_DISTANCE))
+      plaque.current.scale.setScalar(scale)
+    }
+
+    // Only the face pointed at the camera, not both at once: a translucent
+    // barrier with type painted on each side shows the far face straight
+    // through the near one, so standing on one side used to double-expose
+    // its lettering over the reading you actually want.
+    const towardCamera = Math.sign(state.camera.position.z - gateWorldZ) || 1
+    for (const face of faces.current) {
+      if (face) face.visible = face.userData.facing === towardCamera
+    }
   })
 
   return (
@@ -157,26 +198,43 @@ export default function EntranceGate() {
         Lettered onto the barrier on both faces rather than billboarded: it
         belongs to the door it is written on. You read it walking up to the
         gate, and again over your shoulder on the way back out.
+
+        Scaled down inside `NORMAL_SIZE_DISTANCE`, not hidden: this plaque is
+        sized to be read from across the plaza, so walking under it without
+        some counter-shrink would blow it up into a wall of oversized letters
+        a few centimetres from the camera. It stays up the whole time, just
+        never bigger on screen than it already was at a normal reading
+        distance.
       */}
-      {[1, -1].map((facing) => (
-        <group key={facing} position-z={facing * FACE} rotation-y={facing > 0 ? 0 : Math.PI}>
-          <HeadlineText size={NAME_SIZE} y={PLAQUE_TOP} color="#ffffff" shadow="#12100e">
-            Stage 1
-          </HeadlineText>
-          <HeadlineText size={ASK_SIZE} y={PLAQUE_TOP - 1.51} color="#ffffff" shadow="#12100e">
-            Recommended
-          </HeadlineText>
-          <HeadlineText size={ASK_SIZE} y={PLAQUE_TOP - 2.34} color="#ffffff" shadow="#12100e">
-            Damage:
-          </HeadlineText>
-          <HeadlineText size={FIGURE_SIZE} y={PLAQUE_TOP - 3.38} color="#ffd23f" shadow="#12100e">
-            {formatNumber(recommendedDamage(0))}
-          </HeadlineText>
-          <HeadlineText size={0.46} y={PLAQUE_TOP - 4.48} color="#ffe9f0" shadow="#12100e">
-            {`Best so far: Stage ${bestStage + 1}`}
-          </HeadlineText>
-        </group>
-      ))}
+      <group ref={plaque}>
+        {[1, -1].map((facing, i) => (
+          <group
+            key={facing}
+            ref={(el) => {
+              faces.current[i] = el
+              if (el) el.userData.facing = facing
+            }}
+            position-z={facing * FACE}
+            rotation-y={facing > 0 ? 0 : Math.PI}
+          >
+            <HeadlineText size={NAME_SIZE} y={PLAQUE_TOP} color="#ffffff" shadow="#12100e">
+              Stage 1
+            </HeadlineText>
+            <HeadlineText size={ASK_SIZE} y={PLAQUE_TOP - 1.51} color="#ffffff" shadow="#12100e">
+              Recommended
+            </HeadlineText>
+            <HeadlineText size={ASK_SIZE} y={PLAQUE_TOP - 2.34} color="#ffffff" shadow="#12100e">
+              Damage:
+            </HeadlineText>
+            <HeadlineText size={FIGURE_SIZE} y={PLAQUE_TOP - 3.38} color="#ffd23f" shadow="#12100e">
+              {formatNumber(recommendedDamage(0))}
+            </HeadlineText>
+            <HeadlineText size={0.46} y={PLAQUE_TOP - 4.48} color="#ffe9f0" shadow="#12100e">
+              {`Best so far: Stage ${bestStage + 1}`}
+            </HeadlineText>
+          </group>
+        ))}
+      </group>
     </group>
   )
 }

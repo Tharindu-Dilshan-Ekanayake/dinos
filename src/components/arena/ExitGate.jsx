@@ -1,4 +1,5 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
+import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 import {
   ARENA,
@@ -13,6 +14,16 @@ import { EVENTS, emit } from '../../systems/events.js'
 import { voxelMaterial } from '../../systems/voxelTexture.js'
 import HeadlineText from '../HeadlineText.jsx'
 import { DECAL } from '../../systems/decal.js'
+
+/**
+ * Distance at which the plaque reaches its full, as-authored size.
+ *
+ * Sized to read from across the chamber, the same block of type is a wall of
+ * oversized letters from underneath it - see lobby/EntranceGate.jsx, which
+ * the same plaque design and the same counter-shrink here are both copied
+ * from.
+ */
+const NORMAL_SIZE_DISTANCE = 16
 
 const WIDTH = ARENA.gapHalfWidth * 2
 /** Tall and slim, so the gateway reads from the far end of the chamber. */
@@ -87,22 +98,24 @@ export default function ExitGate({ stage, active = true, sealed }) {
   // every click would be paid for in the frame budget.
   const strongEnough = useGameStore((s) => s.clickPower >= requiredDamage(stage + 1))
 
+  const plaque = useRef()
+  const faces = useRef([])
+
   /*
-   * Only the gate you are at, and the one you just came through, say anything.
+   * The one behind you, the one you are in, and two more ahead say anything.
    *
-   * Every mounted chamber has a gate, they stand dead in line down the
-   * corridor, and each one lettered its own plaque - so looking forward you
-   * read "Stage 2" over "Stage 3" over "Stage 4", three sets of type at three
-   * sizes stacked in the middle of the screen, none of them legible and none of
-   * them about the doorway you are actually walking to. At the small type it
-   * was merely busy; at the size the reference letters these, it is a wall of
-   * words.
+   * Every mounted chamber has a gate, and they used to stand dead in line down
+   * the corridor with every one lettered - "Stage 2" over "Stage 3" over
+   * "Stage 4", stacked in the middle of the screen. Now that each plaque only
+   * shows the face pointed at the camera (see `faces` below) that stack is one
+   * layer deep instead of two, and a short run of stage numbers ahead reads as
+   * a corridor with levels in it rather than a wall of words.
    *
    * The one behind you keeps its lettering because you may be walking back out
    * through it - that is the whole reason the plaque is painted on both faces.
    */
   const stageIndex = useGameStore((s) => s.stageIndex)
-  const lettered = active || stage === stageIndex - 1
+  const lettered = stage === stageIndex - 1 || (stage >= stageIndex && stage <= stageIndex + 2)
 
   const nextIndex = stage + 1
   const atEnd = nextIndex >= MAX_STAGES
@@ -163,6 +176,23 @@ export default function ExitGate({ stage, active = true, sealed }) {
 
   const origin = chamberOrigin(stage)
 
+  useFrame((state) => {
+    const barrierWorldZ = origin + EXIT_BARRIER_Z
+
+    if (plaque.current) {
+      const camDistance = Math.abs(state.camera.position.z - barrierWorldZ)
+      const scale = Math.max(0.08, Math.min(1, camDistance / NORMAL_SIZE_DISTANCE))
+      plaque.current.scale.setScalar(scale)
+    }
+
+    // Only the face pointed at the camera, not both at once - see
+    // lobby/EntranceGate.jsx, which this is copied from.
+    const towardCamera = Math.sign(state.camera.position.z - barrierWorldZ) || 1
+    for (const face of faces.current) {
+      if (face) face.visible = face.userData.facing === towardCamera
+    }
+  })
+
   return (
     <group position={[EXIT_GATE.position[0], EXIT_GATE.position[1], origin]}>
       {/* Set into the wall: two pillars flanking the cut, no lintel - an arch
@@ -210,48 +240,54 @@ export default function ExitGate({ stage, active = true, sealed }) {
           it is written on. You read it walking up to the gate, and again over
           your shoulder from the level beyond.
         */}
-        {!atEnd &&
-          lettered &&
-          [1, -1].map((facing) => (
-            <group
-              key={facing}
-              position-z={facing * FACE}
-              rotation-y={facing > 0 ? 0 : Math.PI}
-            >
-              {/*
-                Three sizes, not three colours: the level's name huge, what it
-                asks of you small and grey-white under it, the number itself
-                back up in gold. Read at a walk it is a headline with a price
-                under it, which is the decision the gate is actually posing.
-
-                "Recommended" and "Damage:" are two lines on purpose. Set on
-                one they made a band of small type nearly as wide as the
-                gateway, which fought the stage name above it for the eye;
-                broken, the whole plaque sits inside the width of the number.
-              */}
-              <HeadlineText size={NAME_SIZE} y={PLAQUE_TOP} color="#ffffff">
-                {`Stage ${nextIndex + 1}`}
-              </HeadlineText>
-              <HeadlineText size={ASK_SIZE} y={PLAQUE_TOP - 1.51} color="#ffffff">
-                Recommended
-              </HeadlineText>
-              <HeadlineText size={ASK_SIZE} y={PLAQUE_TOP - 2.34} color="#ffffff">
-                Damage:
-              </HeadlineText>
-              {/*
-                Gold, because it is the number you are being asked to have -
-                and rose rather than gold when you do not have it yet. One
-                glance at the colour is the whole survivability check.
-              */}
-              <HeadlineText
-                size={FIGURE_SIZE}
-                y={PLAQUE_TOP - 3.38}
-                color={survivable ? '#ffd23f' : '#ff9f9f'}
+        {!atEnd && lettered && (
+          <group ref={plaque}>
+            {[1, -1].map((facing, i) => (
+              <group
+                key={facing}
+                ref={(el) => {
+                  faces.current[i] = el
+                  if (el) el.userData.facing = facing
+                }}
+                position-z={facing * FACE}
+                rotation-y={facing > 0 ? 0 : Math.PI}
               >
-                {formatNumber(recommended)}
-              </HeadlineText>
-            </group>
-          ))}
+                {/*
+                  Three sizes, not three colours: the level's name huge, what it
+                  asks of you small and grey-white under it, the number itself
+                  back up in gold. Read at a walk it is a headline with a price
+                  under it, which is the decision the gate is actually posing.
+
+                  "Recommended" and "Damage:" are two lines on purpose. Set on
+                  one they made a band of small type nearly as wide as the
+                  gateway, which fought the stage name above it for the eye;
+                  broken, the whole plaque sits inside the width of the number.
+                */}
+                <HeadlineText size={NAME_SIZE} y={PLAQUE_TOP} color="#ffffff">
+                  {`Stage ${nextIndex + 1}`}
+                </HeadlineText>
+                <HeadlineText size={ASK_SIZE} y={PLAQUE_TOP - 1.51} color="#ffffff">
+                  Recommended
+                </HeadlineText>
+                <HeadlineText size={ASK_SIZE} y={PLAQUE_TOP - 2.34} color="#ffffff">
+                  Damage:
+                </HeadlineText>
+                {/*
+                  Gold, because it is the number you are being asked to have -
+                  and rose rather than gold when you do not have it yet. One
+                  glance at the colour is the whole survivability check.
+                */}
+                <HeadlineText
+                  size={FIGURE_SIZE}
+                  y={PLAQUE_TOP - 3.38}
+                  color={survivable ? '#ffd23f' : '#ff9f9f'}
+                >
+                  {formatNumber(recommended)}
+                </HeadlineText>
+              </group>
+            ))}
+          </group>
+        )}
       </group>
     </group>
   )

@@ -386,6 +386,9 @@
 .arcade-pink   { background: linear-gradient(to bottom, #ff8ec4, #e0338c); }
 .arcade-red    { background: linear-gradient(to bottom, #ff8a75, #dc2626); }
 .arcade-slate  { background: linear-gradient(to bottom, #8b98ad, #4a5568); }
+/* Bux (Bloxity's own currency) gets a colour none of the in-game economy
+   uses, so the gem tile is never mistaken for a wins/rebirth/damage tile. */
+.arcade-cyan   { background: linear-gradient(to bottom, #6be8ff, #0e9fc4); }
 
 /* Panel sharing the button's outline, for stat plaques and shop rows. */
 .arcade-panel {

@@ -47,23 +47,20 @@ export default function ArenaScene({ includePlayer = true, includeCamera = true,
       <Gates />
 
       {/*
-        The pack stands in its chamber whether or not you are in it yet.
-        
-        It used to come into existence on the frame you crossed the threshold,
-        along with everything else here - so looking down the corridor from the
-        hub you saw an empty Stage 1, walked into it, and a pack of dinos
-        appeared out of nothing in front of you. That is the last of the "it
-        teleported" left: not the ground moving, but the room being furnished
-        the moment you were inside it.
-        
-        Mounted always, the level you are walking toward is the level you
-        arrive in. It costs the enemy models being built at startup instead of
-        at the doorway, which is the trade this whole seam is about. What still
-        waits for `active` is everything that *does* something - the attacks,
-        the damage, the travel trigger, the pads' keypress - so a pack visible
-        from the hub is scenery until you are actually in the room with it.
+        The pack is mounted always but only shown once `active` - hidden with
+        `visible`, not left unmounted.
+
+        Mounting always means the enemy models are built at startup rather
+        than at the doorway, so there is no stutter the frame you cross the
+        threshold. Hiding until `active` means the hub does not show you a
+        chamber's dinos before you have actually walked into it. Everything
+        that *does* something - the attacks, the damage, the travel trigger,
+        the pads' keypress - waits for `active` too, same as the pack's
+        visibility.
       */}
-      <EnemyPack />
+      <group visible={active}>
+        <EnemyPack />
+      </group>
       <HitParticles />
 
       {active && (
