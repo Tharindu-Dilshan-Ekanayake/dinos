@@ -1,10 +1,6 @@
-import { Suspense, useCallback } from 'react'
+import { Suspense } from 'react'
 import { Physics } from '@react-three/rapier'
-import { ARENA, chamberOrigin, clampToCorridor } from '../data/arena.js'
-import { useGameStore } from '../store/useGameStore.js'
-import { playerPosition } from '../systems/playerState.js'
 import ArenaEnvironment from './arena/ArenaEnvironment.jsx'
-import ArenaPlayer from './arena/ArenaPlayer.jsx'
 import ArenaCombat from './arena/ArenaCombat.jsx'
 import ArenaFightCatcher from './arena/ArenaFightCatcher.jsx'
 import ArenaTravel from './arena/ArenaTravel.jsx'
@@ -13,7 +9,6 @@ import EnemyPack from './arena/EnemyPack.jsx'
 import GateHeadline from './arena/GateHeadline.jsx'
 import Gates from './arena/Gates.jsx'
 import ReturnPads from './arena/ReturnPads.jsx'
-import LobbyCamera from './lobby/LobbyCamera.jsx'
 import DebrisField from './DebrisField.jsx'
 import HitParticles from './HitParticles.jsx'
 import IdleDamage from './IdleDamage.jsx'
@@ -25,59 +20,55 @@ import IdleDamage from './IdleDamage.jsx'
  * fight. The camera, controller and input are the same ones the hub uses, so
  * moving between the two never changes how the dino handles.
  */
-export default function ArenaScene({ includePlayer = true, includeCamera = true, active = true }) {
-  // Where the open space is depends on where the dino is standing, so the
-  // camera's clamp is handed the live player position rather than importing it
-  // into the layout data.
-  const clampCamera = useCallback((point) => {
-    // Only a *sealed* gate holds the camera back; once the chamber is clear
-    // the corridor is one continuous space and the camera may follow you
-    // through it.
-    const { stageIndex, stageCleared } = useGameStore.getState()
-    const sealedZ = stageCleared
-      ? null
-      : chamberOrigin(stageIndex) + ARENA.backZ + 1.5
-    return clampToCorridor(point, playerPosition, sealedZ)
-  }, [])
-
+export default function ArenaScene({ active = true }) {
   return (
     <>
-      {includeCamera && <LobbyCamera clamp={clampCamera} />}
       <ArenaEnvironment />
       <Gates />
 
       {/*
-        The pack stands in its chamber whether or not you are in it yet.
-        
-        It used to come into existence on the frame you crossed the threshold,
-        along with everything else here - so looking down the corridor from the
-        hub you saw an empty Stage 1, walked into it, and a pack of dinos
-        appeared out of nothing in front of you. That is the last of the "it
-        teleported" left: not the ground moving, but the room being furnished
-        the moment you were inside it.
-        
-        Mounted always, the level you are walking toward is the level you
-        arrive in. It costs the enemy models being built at startup instead of
-        at the doorway, which is the trade this whole seam is about. What still
-        waits for `active` is everything that *does* something - the attacks,
-        the damage, the travel trigger, the pads' keypress - so a pack visible
-        from the hub is scenery until you are actually in the room with it.
+        The pack is mounted always but only shown once you are near the
+        doorway - hidden with `visible`, not left unmounted. See
+        `REVEAL_MARGIN` in EnemyPack.jsx for why that reveal is a few steps
+        earlier than the scene actually flips to `active`, rather than tied
+        to `active` directly.
+
+        Mounting always means the enemy models are built at startup rather
+        than at the doorway, so there is no stutter the frame you cross the
+        threshold.
       */}
       <EnemyPack />
       <HitParticles />
 
-      {active && (
-        <>
-          <IdleDamage />
-          <ArenaFightCatcher />
-          <ArenaTravel />
-          {includePlayer && <ArenaPlayer />}
-          <EnemyAttacks />
-          <GateHeadline />
-          <ReturnPads />
-          <ArenaCombat />
-        </>
-      )}
+      {/*
+        Everything below used to wait for `active` at the React level, mounted
+        and unmounted as one block the instant the scene flipped - eight
+        components (materials, event subscriptions, memoized buffers) coming
+        into or out of existence on the single frame you stepped through the
+        gate, on top of whatever React itself has to do to reconcile a
+        subtree that size. That is a second, independent source of the same
+        "it teleported" hitch the pack and the physics world were already
+        fixed for above.
+
+        Each of these now guards itself instead - `if (store.scene !==
+        'arena') return` at the top of its own frame, or nothing at all where
+        it already read live state and never depended on being freshly
+        mounted (ArenaTravel, EnemyAttacks). Mounted permanently, there is
+        nothing left to construct or tear down at the doorway - the swap is
+        just a flag flipping on components already running.
+
+        GateHeadline is the one exception, left conditional: it is a plain
+        `return null` component with no `useFrame` of its own to gate inside,
+        and its only mount cost is one event subscription - not worth the
+        same treatment.
+      */}
+      <IdleDamage />
+      <ArenaFightCatcher />
+      <ArenaTravel />
+      <EnemyAttacks />
+      <ReturnPads />
+      <ArenaCombat />
+      {active && <GateHeadline />}
 
       {/*
         The physics world is built once, not at the doorway.

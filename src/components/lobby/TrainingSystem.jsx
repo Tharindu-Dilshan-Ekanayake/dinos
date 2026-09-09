@@ -9,7 +9,7 @@ import {
 import { TRAINING_POSITIONS, TRAINING_PADS_LAYOUT } from '../../data/lobby.js'
 import { useGameStore } from '../../store/useGameStore.js'
 import { EVENTS, emit } from '../../systems/events.js'
-import { playerActivity, playerPosition } from '../../systems/playerState.js'
+import { playerActivity, playerHub } from '../../systems/playerState.js'
 
 /**
  * Awards training damage while the player stands on an unlocked pad.
@@ -38,13 +38,15 @@ export default function TrainingSystem() {
     const delta = Math.min(rawDelta, 0.25)
     const { rebirths, perClick } = useGameStore.getState()
 
-    // Find the pad under the player, if any.
+    // Find the pad under the player, if any. Pads are laid out in the hub's
+    // own numbers, so the player is asked for in those.
+    const player = playerHub()
     let current = null
     for (let i = 0; i < TRAINING_PADS_LAYOUT.length; i++) {
       const pad = TRAINING_PADS_LAYOUT[i]
       const position = TRAINING_POSITIONS[i]
-      const dx = playerPosition.x - position[0]
-      const dz = playerPosition.z - position[2]
+      const dx = player.x - position[0]
+      const dz = player.z - position[2]
       if (onBelt(dx, dz)) {
         current = padUnlocked(pad, rebirths) ? pad : null
         break

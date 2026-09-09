@@ -2,7 +2,6 @@ import { useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import {
   INTERACT_RADIUS,
-  clampToPlaza,
   PODIUMS,
   REBIRTH_PEDESTALS,
   REBIRTH_POSITIONS,
@@ -14,14 +13,12 @@ import { REBIRTH_WINS_REQUIRED } from '../../data/progression.js'
 import { useGameStore } from '../../store/useGameStore.js'
 import { EVENTS, emit } from '../../systems/events.js'
 import { consumeInteract } from '../../systems/input.js'
-import { playerPosition } from '../../systems/playerState.js'
+import { playerHub } from '../../systems/playerState.js'
 import ArenaGate from './ArenaGate.jsx'
 import EntranceGate from './EntranceGate.jsx'
 import FightCatcher from './FightCatcher.jsx'
-import LobbyCamera from './LobbyCamera.jsx'
 import LobbyEnvironment from './LobbyEnvironment.jsx'
 import LobbyGround from './LobbyGround.jsx'
-import Player from './Player.jsx'
 import Podium from './Podium.jsx'
 import RebirthPedestal from './RebirthPedestal.jsx'
 import TrainingPad from './TrainingPad.jsx'
@@ -39,12 +36,14 @@ function Interactions() {
   const lastPrompt = useRef(null)
 
   useFrame(() => {
+    // Podiums and pedestals are laid out in the hub's own numbers.
+    const player = playerHub()
     let best = null
     let bestDistance = INTERACT_RADIUS * INTERACT_RADIUS
 
     for (const podium of PODIUMS) {
-      const dx = playerPosition.x - podium.position[0]
-      const dz = playerPosition.z - podium.position[2]
+      const dx = player.x - podium.position[0]
+      const dz = player.z - podium.position[2]
       const d2 = dx * dx + dz * dz
       if (d2 < bestDistance) {
         bestDistance = d2
@@ -54,8 +53,8 @@ function Interactions() {
 
     for (let i = 0; i < REBIRTH_POSITIONS.length; i++) {
       const position = REBIRTH_POSITIONS[i]
-      const dx = playerPosition.x - position[0]
-      const dz = playerPosition.z - position[2]
+      const dx = player.x - position[0]
+      const dz = player.z - position[2]
       const d2 = dx * dx + dz * dz
       if (d2 < bestDistance) {
         bestDistance = d2
@@ -105,8 +104,6 @@ function Interactions() {
 }
 
 export default function LobbyScene({
-  includePlayer = true,
-  includeCamera = true,
   includeEnvironment = true,
   includeGameplay = true,
   includeArenaPreview = true,
@@ -114,7 +111,6 @@ export default function LobbyScene({
 }) {
   return (
     <group position={worldPosition}>
-      {includeCamera && <LobbyCamera clamp={clampToPlaza} />}
       {includeEnvironment && <LobbyEnvironment />}
       <LobbyGround />
       {includeGameplay && <FightCatcher />}
@@ -140,7 +136,6 @@ export default function LobbyScene({
 
       <ArenaGate active={includeGameplay} showPreview={includeArenaPreview} />
       <EntranceGate />
-      {includePlayer && <Player />}
       {includeGameplay && <TrainingSystem />}
       {includeGameplay && <Interactions />}
     </group>

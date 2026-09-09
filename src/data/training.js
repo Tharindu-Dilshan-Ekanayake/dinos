@@ -123,10 +123,12 @@ const CORNERS = [
  * four and a half, so dressing pinned at 2.6 stood a clear metre off the side
  * of the thing it was meant to belong to - and left no room to close the row up.
  *
- * It cannot go much below this: the machines are 4.6 apart, so 2.2 either side
- * is all the room there is before one pad's dressing is standing on the next.
+ * It cannot go past this: the machines are 6 apart now (their base slabs
+ * clear each other by a metre and a half - see TRAINING_ROW.spacing in
+ * data/lobby.js), so 2.9 either side is all the room there is before one
+ * pad's dressing reaches over the gap onto the next.
  */
-const ROW_HALF = 2.2
+const ROW_HALF = 2.9
 const MAX_DEPTH = 0.55
 /** How tall a piece of dressing may stand beside a flat pad. */
 const MAX_HEIGHT = 0.55

@@ -1,15 +1,23 @@
 import * as THREE from 'three'
-import { PLAYER_SPAWN } from '../data/lobby.js'
+import { HUB_SPAWN, LOBBY_Z_OFFSET } from '../data/arena.js'
 
 /**
- * The lobby player's live position, shared between the controller that writes
- * it and everything that reacts to it (podium highlights, the arena gate, the
- * follow camera).
+ * The player's live position, in world coordinates, shared between the
+ * controller that writes it and everything that reacts to it (podium
+ * highlights, the arena gate, the follow camera, the enemy packs).
  *
  * A plain module-level vector rather than context or store state: it changes
  * every frame while walking, and nothing that reads it should re-render.
+ *
+ * World, everywhere, always. It used to be scene-local - hub numbers in the
+ * hub, arena numbers in the arena, the two the same axes slid sixty-three
+ * apart - and the crossing between them was a conversion, which meant one dino
+ * had to be swapped for another at the gateway and every seam bug this game
+ * has had came out of that swap. The hub is still *drawn* in its own numbers,
+ * inside a group at that offset; anything in there that needs the player in
+ * its own terms asks `playerHub` below.
  */
-export const playerPosition = new THREE.Vector3(...PLAYER_SPAWN)
+export const playerPosition = new THREE.Vector3(...HUB_SPAWN)
 
 /**
  * Facing angle in radians. The dino model faces +X, so PI/2 turns it to face
@@ -51,9 +59,24 @@ export function consumeTeleport() {
   return value
 }
 
-/** Reset to the hub entrance, e.g. when returning from the arena. */
-export function resetPlayerPosition() {
-  placePlayer(PLAYER_SPAWN)
+/**
+ * The player, in the hub's own coordinates.
+ *
+ * Everything mounted inside the hub's offset group - podiums, training pads,
+ * the gateway, its sky - measures against layout written in hub numbers, and
+ * should go on doing exactly that rather than having its own data rewritten to
+ * suit the arena. This is the one place the two are reconciled.
+ *
+ * Shared scratch: read it within the frame, never hold onto it.
+ */
+const hubLocal = new THREE.Vector3()
+
+export function playerHub() {
+  return hubLocal.set(
+    playerPosition.x,
+    playerPosition.y,
+    playerPosition.z - LOBBY_Z_OFFSET
+  )
 }
 
 /** Drop the player at an arbitrary spawn, optionally without a camera cut. */

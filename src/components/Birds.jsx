@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { playerWorld } from '../systems/playerWorld.js'
+import { playerPosition } from '../systems/playerState.js'
 
 /**
  * Birds circling high over the level.
@@ -119,8 +119,8 @@ export default function Birds({ color = '#3d4657', hidden = false }) {
 
     // The world position, not the scene-local one: a flock centred on the
     // latter jumps the length of the corridor the moment you cross into Stage
-    // 1, which is the one frame it must not move on. See playerWorld.js.
-    const player = playerWorld()
+    // 1, which is the one frame it must not move on.
+    const player = playerPosition
 
     for (let i = 0; i < COUNT; i++) {
       const bird = flock[i]

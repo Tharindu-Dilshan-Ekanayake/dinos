@@ -26,15 +26,15 @@ import {
   upgradeCost,
 } from '../data/upgrades.js'
 import { areaIndexForStage } from '../data/areas.js'
-import { MIN_HITS_TO_CLEAR, enemyCountForStage } from '../data/arena.js'
+import {
+  HUB_ARRIVAL_WORLD,
+  MIN_HITS_TO_CLEAR,
+  chamberSpawn,
+  enemyCountForStage,
+} from '../data/arena.js'
 import { EVENTS, emit } from '../systems/events.js'
 import { loadSave } from '../systems/persistence.js'
-import {
-  HUB_ARRIVAL,
-  HUB_RETURN,
-} from '../data/lobby.js'
-import { placePlayer, playerFacing, playerPosition } from '../systems/playerState.js'
-import { SEAM_MARGIN, arenaToHubPoint, hubToArena } from '../data/arena.js'
+import { placePlayer } from '../systems/playerState.js'
 
 const COMBO_WINDOW_MS = 900
 const MAX_COMBO = 8
@@ -148,6 +148,20 @@ const initial = (() => {
      */
     quality: 'auto',
     playerName: '',
+    /*
+     * Settings the Bloxity portal can drive (systems/bloxity.js), additive
+     * to the fields above rather than replacing them - the in-game Settings
+     * menu keeps working exactly as it does today either way.
+     */
+    masterVolume: 100,
+    showFps: false,
+    cameraSensitivity: 1,
+    chatEnabled: true,
+    // Transient like `dead`/`comboCount` below: replaying a stored `true` on
+    // reload can't actually enter fullscreen without a fresh user gesture, so
+    // persisting it would just create a misleading "should be fullscreen but
+    // isn't" state. Always starts false.
+    fullscreen: false,
     scene: 'lobby',
     // Death is transient: you always come back at the hub.
     dead: false,
@@ -166,6 +180,14 @@ const initial = (() => {
     base.muted = Boolean(save.muted)
     base.autoFight = Boolean(save.autoFight)
     if (typeof save.quality === 'string') base.quality = save.quality
+    if (Number.isFinite(Number(save.masterVolume))) {
+      base.masterVolume = Math.min(100, Math.max(0, Number(save.masterVolume)))
+    }
+    base.showFps = Boolean(save.showFps)
+    if (Number.isFinite(Number(save.cameraSensitivity))) {
+      base.cameraSensitivity = Math.min(5, Math.max(0.1, Number(save.cameraSensitivity)))
+    }
+    base.chatEnabled = save.chatEnabled !== false
     if (!save.migrated) {
       base.wins = Number(save.wins) || 0
       base.totalWins = Number(save.totalWins) || 0
@@ -272,8 +294,11 @@ export const useGameStore = create((set, get) => ({
     const s = get()
     // A cleared chamber sits at zero health, and a pending one is already on
     // its way there. Without this guard any further hit would fall straight
-    // through to _clearStage and pay out again.
-    const blocked = s.stageCleared || s.clearPending || s.dead
+    // through to _clearStage and pay out again. The scene check belongs here
+    // too: the hub's own click-to-swing (FightCatcher.jsx) reuses this same
+    // pipeline for its animation and training gain, and without it a click in
+    // the lobby was landing real damage on whatever stage was last entered.
+    const blocked = s.stageCleared || s.clearPending || s.dead || s.scene !== 'arena'
 
     /*
      * A click still swings even here - the animation, the hit particles, the
@@ -429,16 +454,11 @@ export const useGameStore = create((set, get) => ({
       areaIndex: 0,
     })
     /*
-     * Put down where you already are, in the arena's own numbers.
-     *
-     * You walk in over the top of the hub's ramp, which is the same physical
-     * spot as the far edge of the arena's landing - so converting the position
-     * rather than spawning you in the middle of the chamber is the whole
-     * difference between stepping through a doorway and being teleported.
+     * The dino is not moved at all. It is standing in the gateway, and the
+     * gateway is one continuous floor that the corridor carries on from - so
+     * there is nothing to convert and nowhere to put it down. All that changes
+     * here is that a run has started.
      */
-    const [ax, az] = hubToArena(playerPosition.x, playerPosition.z)
-    // A step inside, so the arena's own way-out trigger is behind you.
-    placePlayer([ax, 0, az - SEAM_MARGIN], playerFacing.angle, { markTeleport: false })
 
     if (s.areaIndex !== 0) emit(EVENTS.AREA_CHANGE, { from: s.areaIndex, to: 0 })
     emit(EVENTS.SCENE_CHANGE, { scene: 'arena' })
@@ -493,19 +513,12 @@ export const useGameStore = create((set, get) => ({
     })
 
     /*
-     * Put down at the arena's doorway, not left wherever the arena's own
-     * coordinates happened to fall. Walking out of Stage 1 leaves you around
-     * z=+10 in arena space, which is *inside* the hub's bounds - so the hub's
-     * own "are you lost?" check saw nothing wrong and you simply appeared
-     * standing in the middle of the plaza.
+     * Walking out moves nothing: you are already standing in the gateway, and
+     * the plaza carries on from it. The only thing that puts the dino anywhere
+     * is a Return pad, which cashes you out from deep in the corridor - that
+     * one *is* a jump home, and is the only one that should cut the camera.
      */
-    if (walked) {
-      const [hx, hz] = arenaToHubPoint(playerPosition.x, playerPosition.z)
-      // Likewise: a step down the ramp, clear of the hub's way-in trigger.
-      placePlayer([hx, 0, hz + SEAM_MARGIN], playerFacing.angle)
-    } else {
-      placePlayer(HUB_ARRIVAL.position, HUB_ARRIVAL.angle)
-    }
+    if (!walked) placePlayer(HUB_ARRIVAL_WORLD.position, HUB_ARRIVAL_WORLD.angle)
 
     emit(EVENTS.CLAIM_WINS, { wins: carried })
     emit(EVENTS.SCENE_CHANGE, { scene: 'lobby' })
@@ -654,7 +667,7 @@ export const useGameStore = create((set, get) => ({
       areaIndex: 0,
     })
     // Dying puts you at the same doorway a finished run does.
-    placePlayer(HUB_ARRIVAL.position, HUB_ARRIVAL.angle)
+    placePlayer(HUB_ARRIVAL_WORLD.position, HUB_ARRIVAL_WORLD.angle)
     emit(EVENTS.RESPAWN)
     emit(EVENTS.SCENE_CHANGE, { scene: 'lobby' })
   },
@@ -683,6 +696,15 @@ export const useGameStore = create((set, get) => ({
       areaIndex: nextArea,
       scene: 'arena',
     })
+
+    /*
+     * The level menu skips the walk, so it has to land the dino somewhere. It
+     * is the one way into a chamber that is not a walk, and without this the
+     * game believed you were in a level you were not standing anywhere near -
+     * the corridor's own clamp would eventually snap you into it, but only
+     * once you happened to press a key.
+     */
+    placePlayer(chamberSpawn(stageIndex), Math.PI / 2)
 
     if (nextArea !== s.areaIndex) {
       emit(EVENTS.AREA_CHANGE, { from: s.areaIndex, to: nextArea })
@@ -775,11 +797,20 @@ export const useGameStore = create((set, get) => ({
      * arrive anywhere - you were simply re-interpreted, sixty three units off,
      * and whatever the plaza clamp made of that is where you turned up.
      *
-     * Walking between the two is handled elsewhere and converts properly (see
-     * enterArena and the claim path); this is the case where there is no walk
-     * to convert, so it gets a defined place to arrive.
+     * Landed at the doorway (`HUB_ARRIVAL_WORLD`), the same spot a walked-out run
+     * ends at - not the middle of the plaza. It used to be its own separate
+     * point out in the open, so the one button that skips the walk was also
+     * the one arrival that didn't look like one: everything else about
+     * leaving the arena drops you at the gate you left through, and the Hub
+     * button dropping you in the middle of the concourse instead read as a
+     * jump cut rather than as coming home.
+     *
+     * Walking between the two moves nothing at all - the hub and the corridor
+     * are one floor and one coordinate space, so a crossing is a step. This is
+     * the case where there is no walk, so it gets a defined place to arrive.
      */
-    if (scene === 'lobby') placePlayer(HUB_RETURN.position, HUB_RETURN.angle)
+    if (scene === 'lobby') placePlayer(HUB_ARRIVAL_WORLD.position, HUB_ARRIVAL_WORLD.angle)
+    else placePlayer(chamberSpawn(get().stageIndex), Math.PI / 2)
 
     emit(EVENTS.SCENE_CHANGE, { scene })
   },
@@ -821,6 +852,31 @@ export const useGameStore = create((set, get) => ({
 
   setPlayerName(playerName) {
     set({ playerName: String(playerName).slice(0, 16) })
+  },
+
+  /*
+   * The Bloxity portal's own settings (systems/bloxity.js) land here too,
+   * through the same actions the in-game Settings menu calls - one field,
+   * two ways to set it, rather than a parallel copy of the state.
+   */
+  setMasterVolume(volume) {
+    set({ masterVolume: Math.min(100, Math.max(0, Number(volume) || 0)) })
+  },
+
+  setShowFps(show) {
+    set({ showFps: Boolean(show) })
+  },
+
+  setCameraSensitivity(mult) {
+    set({ cameraSensitivity: Math.min(5, Math.max(0.1, Number(mult) || 1)) })
+  },
+
+  setChatEnabled(enabled) {
+    set({ chatEnabled: Boolean(enabled) })
+  },
+
+  setFullscreen(fullscreen) {
+    set({ fullscreen: Boolean(fullscreen) })
   },
 
   /** Wipe everything, including permanent rebirths. */

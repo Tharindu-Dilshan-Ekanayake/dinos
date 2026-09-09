@@ -32,9 +32,22 @@ import { stanceFor } from '../data/stance.js'
 const CASTS_SHADOW = { body: true, belly: true, spike: true, mark: false, eye: false, pupil: false }
 
 /** Builds the per-stage material set. Callers own disposal. */
+/**
+ * Every tier gets at least this much emissive on its spikes and markings,
+ * even the early ones data/evolutions.js scores at `glow: 0`.
+ *
+ * A flat-lit body colour under the hub's bright, even light reads as dull
+ * plastic rather than a creature - the later tiers' full glow is still
+ * reserved for them (see `glow > 0` below), but a small floor on the accent
+ * colours is what keeps a Hatchling or a Raptor looking like it belongs on
+ * the same podium row as the tiers that do glow, instead of looking washed
+ * out next to them.
+ */
+const MIN_GLOW = 0.18
+
 export function useDinoMaterials(evolution) {
   const materials = useMemo(() => {
-    const glow = evolution.glow ?? 0
+    const glow = Math.max(evolution.glow ?? 0, MIN_GLOW)
 
     const body = new THREE.MeshStandardMaterial({
       color: evolution.body,
@@ -76,7 +89,9 @@ export function useDinoMaterials(evolution) {
       emissiveIntensity: glow * 0.5,
     })
 
-    // Late stages glow from the inside rather than just wearing bright colours.
+    // Every stage glows a little from the inside rather than just wearing
+    // bright colours; the late stages (see MIN_GLOW above) are the ones that
+    // actually earn the name and glow several times stronger.
     if (glow > 0) {
       body.emissive = new THREE.Color(evolution.aura)
       body.emissiveIntensity = glow * 0.26

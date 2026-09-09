@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { EVENTS, on } from '../systems/events.js'
+import { bloxityLoadingEnd } from '../systems/bloxity.js'
 
 /**
  * Covers the canvas until the first frame is on screen, which also hides the
@@ -9,7 +10,9 @@ export default function LoadingVeil() {
   const [ready, setReady] = useState(false)
   const [gone, setGone] = useState(false)
 
-  useEffect(() => on(EVENTS.READY, () => setReady(true)), [])
+  // The same signal that dismisses this veil is the one honest "loading is
+  // done" moment this game has - see systems/bloxity.js's game-lifecycle group.
+  useEffect(() => on(EVENTS.READY, () => { setReady(true); bloxityLoadingEnd() }), [])
 
   useEffect(() => {
     if (!ready) return

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef } from 'react'
-import { AREAS } from '../data/areas.js'
+import { useEffect, useRef } from 'react'
+import { areaForStage } from '../data/areas.js'
 import { formatNumber } from '../data/progression.js'
 import {
   MAX_STAGES,
@@ -24,6 +24,10 @@ function StageButton({ index, current, bestStage, clickPower }) {
   const isCurrent = index === current
   const reached = index <= bestStage
   const locked = !reached
+  // Areas now rotate one per stage rather than one per fifteen-stage block
+  // (see data/areas.js), so there is no contiguous run to head a section with
+  // - this dot is what still says which world a given stage actually is.
+  const area = areaForStage(index)
 
   return (
     <div
@@ -36,10 +40,14 @@ function StageButton({ index, current, bestStage, clickPower }) {
       }`}
       title={
         locked
-          ? 'Not reached yet - walk there'
-          : `Needs ${formatNumber(requiredDamage(index))} damage (tuned for ${formatNumber(recommendedDamage(index))})`
+          ? `${area.name} - not reached yet, walk there`
+          : `${area.name} - needs ${formatNumber(requiredDamage(index))} damage (tuned for ${formatNumber(recommendedDamage(index))})`
       }
     >
+      <span
+        className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full"
+        style={{ background: area.enemyAccent, opacity: locked ? 0.35 : 1 }}
+      />
       <span className="text-xs font-black leading-none text-white/90">
         {locked ? '🔒' : boss ? '★' : index + 1}
       </span>
@@ -59,18 +67,6 @@ export default function LevelSelect({ open, onClose }) {
   // click happening behind it.
   const clickPower = useGameStore((s) => (open ? s.clickPower : 0))
   const currentRef = useRef(null)
-
-  const groups = useMemo(
-    () =>
-      AREAS.map((area) => ({
-        area,
-        stages: Array.from(
-          { length: Math.min(area.toStage, MAX_STAGES) - area.fromStage + 1 },
-          (_, i) => area.fromStage - 1 + i
-        ),
-      })),
-    []
-  )
 
   // Drop the player straight at the level they are on rather than the top.
   useEffect(() => {
@@ -107,32 +103,23 @@ export default function LevelSelect({ open, onClose }) {
 
         <p className="mt-1 text-[11px] leading-relaxed text-white/50">
           Numbers are the damage each level is tuned for. Every run starts at Stage 1 - walk
-          through the gates to get back here.
+          through the gates to get back here. The dot on each tile is the world it's set in - a
+          different one nearly every stage.
         </p>
 
-        <div className="mt-3 min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
-          {groups.map(({ area, stages }) => (
-            <div key={area.id}>
-              <div
-                className="mb-1.5 text-[10px] font-black uppercase tracking-[0.2em]"
-                style={{ color: area.enemyAccent }}
-              >
-                {area.name}
+        <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-1">
+          <div className="grid grid-cols-6 gap-1.5">
+            {Array.from({ length: MAX_STAGES }, (_, index) => (
+              <div key={index} ref={index === stageIndex ? currentRef : null}>
+                <StageButton
+                  index={index}
+                  current={stageIndex}
+                  bestStage={bestStage}
+                  clickPower={clickPower}
+                />
               </div>
-              <div className="grid grid-cols-6 gap-1.5">
-                {stages.map((index) => (
-                  <div key={index} ref={index === stageIndex ? currentRef : null}>
-                    <StageButton
-                      index={index}
-                      current={stageIndex}
-                      bestStage={bestStage}
-                      clickPower={clickPower}
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
         <button

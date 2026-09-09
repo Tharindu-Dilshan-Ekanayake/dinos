@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { Billboard } from '@react-three/drei'
-import { arenaGroundHeight } from '../data/arena.js'
+import { arenaGroundHeight, hubGroundHeight } from '../data/arena.js'
 import { EVOLUTIONS } from '../data/evolutions.js'
-import { groundHeightAt } from '../data/lobby.js'
 import { useGameStore } from '../store/useGameStore.js'
 import { EVENTS, on } from '../systems/events.js'
 import { playerActivity, playerFacing, playerPosition } from '../systems/playerState.js'
@@ -57,7 +56,7 @@ const SNAP_DISTANCE = 15
 // training aren't phase-locked to the sender, but the same rhythm reads fine.
 const TRAIN_SWING_INTERVAL = 0.55
 
-function OtherPlayer({ id, username, worldOffset }) {
+function OtherPlayer({ id, username }) {
   // Only re-rendered when the evolution actually changes (equip, rebirth) -
   // everything else about this dino is driven imperatively below.
   const [evolutionIndex, setEvolutionIndex] = useState(0)
@@ -84,13 +83,23 @@ function OtherPlayer({ id, username, worldOffset }) {
       setEvolutionIndex(live.evolutionIndex)
     }
 
+    /*
+     * Everyone broadcasts world coordinates now - the position a player holds
+     * is world space wherever they are standing, so a lobby-mate needs no
+     * offset applying to them and no question asked about which half they are
+     * in. Only the fallback height still cares, because the two halves stand
+     * on different floors.
+     */
     const inLobby = live.inLobby !== false
-    const targetX = inLobby ? live.x + worldOffset[0] : live.x
-    const targetZ = inLobby ? live.z + worldOffset[2] : live.z
+    const targetX = live.x
+    const targetZ = live.z
     // Real height when it's on hand (mid-jump included) - a ground lookup is
     // only a fallback for a lobby-mate whose first update hasn't arrived yet.
-    const fallbackY = inLobby ? groundHeightAt(live.x, live.z) : arenaGroundHeight()
-    const targetY = Number.isFinite(live.y) ? live.y + (inLobby ? worldOffset[1] : 0) : fallbackY
+    const targetY = Number.isFinite(live.y)
+      ? live.y
+      : inLobby
+        ? hubGroundHeight(live.x, live.z)
+        : arenaGroundHeight()
 
     if (!smoothed.current) {
       smoothed.current = { x: targetX, y: targetY, z: targetZ, angle: live.angle }
@@ -174,7 +183,7 @@ function OtherPlayer({ id, username, worldOffset }) {
   )
 }
 
-export default function OtherPlayers({ worldOffset = [0, 0, 0] }) {
+export default function OtherPlayers() {
   const [mm, setMm] = useState(getMatchmakingState)
   const lastSent = useRef(null)
 
@@ -225,7 +234,6 @@ export default function OtherPlayers({ worldOffset = [0, 0, 0] }) {
           key={player.id}
           id={player.id}
           username={player.username}
-          worldOffset={worldOffset}
         />
       ))}
     </>

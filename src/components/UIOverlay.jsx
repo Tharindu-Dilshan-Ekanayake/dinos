@@ -4,9 +4,12 @@ import { UPGRADE_LIST, upgradeCost } from '../data/upgrades.js'
 import { useGameStore } from '../store/useGameStore.js'
 import { EVENTS, on } from '../systems/events.js'
 import ArenaControls from './ArenaControls.jsx'
+import BloxityAccount from './BloxityAccount.jsx'
+import BuxShop from './BuxShop.jsx'
 import DeathReturn from './DeathReturn.jsx'
 import EvolutionTrack from './EvolutionTrack.jsx'
 import FloatingTexts from './FloatingTexts.jsx'
+import FpsCounter from './FpsCounter.jsx'
 import BottomDetails from './BottomDetails.jsx'
 import InteractPrompt from './InteractPrompt.jsx'
 import Leaderboard from './Leaderboard.jsx'
@@ -17,6 +20,7 @@ import ScreenFlash from './ScreenFlash.jsx'
 import SettingsMenu from './SettingsMenu.jsx'
 import StageHeadline from './StageHeadline.jsx'
 import UpgradePanel from './UpgradePanel.jsx'
+import { useBloxityAuth } from '../systems/useBloxity.js'
 
 /**
  * A count of something you hold.
@@ -185,6 +189,7 @@ export default function UIOverlay() {
   const [rebirthOpen, setRebirthOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [boardOpen, setBoardOpen] = useState(false)
+  const [buxOpen, setBuxOpen] = useState(false)
   const [shopOpen, setShopOpen] = useState(false)
   const [levelsOpen, setLevelsOpen] = useState(false)
 
@@ -217,11 +222,16 @@ export default function UIOverlay() {
   const rebirthPercent = useGameStore((s) =>
     Math.min(100, Math.floor((s.totalWins / REBIRTH_WINS_REQUIRED) * 100))
   )
+  // Reactive, unlike calling isBloxityAvailable() directly: the SDK script
+  // loads asynchronously, so this can flip from false to true well after
+  // this component's first render (see systems/bloxity.js's poll loop).
+  const { available: bloxityAvailable } = useBloxityAuth()
 
   return (
     <>
       <FloatingTexts />
       <ScreenFlash />
+      <FpsCounter />
 
       <div className="pointer-events-none absolute inset-0 z-10 flex flex-col justify-between">
         <header className="safe-top flex items-start justify-between gap-2 px-3">
@@ -236,6 +246,7 @@ export default function UIOverlay() {
             carrying.
           */}
           <div className="flex flex-col items-start gap-2">
+            <BloxityAccount />
             <TopStats />
             {!inLobby && <StageHeadline />}
           </div>
@@ -286,14 +297,32 @@ export default function UIOverlay() {
                 open={boardOpen}
                 onToggle={(next) => {
                   setBoardOpen(next)
-                  if (next) setSettingsOpen(false)
+                  if (next) {
+                    setSettingsOpen(false)
+                    setBuxOpen(false)
+                  }
                 }}
               />
+              {bloxityAvailable && (
+                <BuxShop
+                  open={buxOpen}
+                  onToggle={(next) => {
+                    setBuxOpen(next)
+                    if (next) {
+                      setBoardOpen(false)
+                      setSettingsOpen(false)
+                    }
+                  }}
+                />
+              )}
               <SettingsMenu
                 open={settingsOpen}
                 onToggle={(next) => {
                   setSettingsOpen(next)
-                  if (next) setBoardOpen(false)
+                  if (next) {
+                    setBoardOpen(false)
+                    setBuxOpen(false)
+                  }
                 }}
               />
             </div>

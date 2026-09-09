@@ -28,7 +28,13 @@ export default function IdleDamage() {
   const pending = useRef(0)
 
   useFrame((_, rawDelta) => {
-    const idleDps = useGameStore.getState().idleDps
+    const state = useGameStore.getState()
+    // Mounted permanently now (see ArenaScene.jsx). `packState.inRange` is
+    // measured in world space and can already read true while you are still
+    // walking up to the gate from the hub - a bite has to wait for you to
+    // actually be standing in the room, not just close enough to it.
+    if (state.scene !== 'arena') return
+    const idleDps = state.idleDps
     if (idleDps <= 0) return
 
     if (packState.targetSlot < 0 || !packState.inRange) {

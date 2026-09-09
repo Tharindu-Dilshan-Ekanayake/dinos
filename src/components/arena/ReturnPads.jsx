@@ -92,21 +92,32 @@ export default function ReturnPads() {
     emit(EVENTS.PROMPT, prompt)
   }
 
-  // Nothing to offer once the pads are gone - and a prompt left up would
-  // otherwise follow you through the gate into the next level.
-  useEffect(() => () => emit(EVENTS.PROMPT, null), [])
-
   useFrame((_, rawDelta) => {
     const delta = Math.min(rawDelta, 0.05)
     const a = anim.current
     a.phase += delta
 
     /*
-     * Drained every frame regardless - a plain tap still queues this the
-     * instant E goes down (see input.js), and left unread it would otherwise
-     * sit there and fire the moment some other prompt (a podium, back in the
-     * hub) next checks it. It plays no part in banking the run any more -
-     * that is a held press now, tracked below - so its value is discarded.
+     * Mounted permanently now (see ArenaScene.jsx), not just while you are in
+     * the arena, so it has to drop its own prompt and stop eating "E" presses
+     * the instant you are not - otherwise a press meant for a hub podium,
+     * which polls the same key, could be stolen by a pad you already walked
+     * away from. `setPrompt` only actually emits once, the first frame this
+     * is true, so this is the unmount-time cleanup the old version fired,
+     * just driven by the scene instead of by the component's lifetime.
+     */
+    if (useGameStore.getState().scene !== 'arena') {
+      setPrompt(null)
+      return
+    }
+
+    /*
+     * Drained every arena frame regardless of range - a plain tap still
+     * queues this the instant E goes down (see input.js), and left unread it
+     * would otherwise sit there and fire the moment some other prompt (a
+     * podium, back in the hub) next checks it. It plays no part in banking
+     * the run any more - that is a held press now, tracked below - so its
+     * value is discarded.
      */
     consumeInteract()
 

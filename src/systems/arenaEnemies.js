@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { MAX_ENEMIES } from '../data/arena.js'
+import { stageHealth } from '../data/stages.js'
 
 /**
  * Live positions and targeting for the enemy pack.
@@ -55,6 +56,22 @@ export function slotHealthRatio(ratio, slot, slotCount) {
 }
 
 /**
+ * How much of a chamber's pack is still standing, as 0-1.
+ *
+ * Every chamber in the corridor keeps its own pack standing in it, so a pack
+ * has to be able to answer this about itself rather than assuming it is the
+ * one being fought. The level you are actually in reads the live pool; every
+ * other one reads what it was left at, and a level never entered is untouched.
+ */
+export function chamberRatio(store, stage) {
+  const max = stageHealth(stage)
+  if (max <= 0) return 0
+  const raw =
+    stage === store.stageIndex ? store.enemyHealth : store.chamberHealth?.[stage] ?? max
+  return Math.max(0, Math.min(1, raw / max))
+}
+
+/**
  * Where the last blow landed.
  *
  * The particle and debris systems used to spawn at a fixed point, which was
@@ -66,13 +83,4 @@ export const lastImpact = new THREE.Vector3(0, 1.2, -6)
 /** Record an impact position for the effect layers. */
 export function setLastImpact(x, y, z) {
   lastImpact.set(x, y, z)
-}
-
-/** Reset targeting, e.g. when the stage changes. */
-export function resetPack(slotCount) {
-  packState.slotCount = Math.max(1, slotCount)
-  packState.targetSlot = -1
-  packState.aliveCount = 0
-  packState.inRange = false
-  packState.targetDistance = Infinity
 }

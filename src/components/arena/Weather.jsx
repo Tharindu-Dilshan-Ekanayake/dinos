@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
-import { playerWorld } from '../../systems/playerWorld.js'
+import { playerPosition } from '../../systems/playerState.js'
 
 /**
  * The weather in a chamber: rain, snow, drifting leaves, rising embers.
@@ -132,9 +132,9 @@ export default function Weather({ weather }) {
     /*
      * The field is centred on the player's *world* position, not the
      * scene-local one - otherwise the whole downpour steps sixty-three units
-     * sideways the frame you walk into Stage 1. See playerWorld.js.
+     * sideways the frame you walk into Stage 1.
      */
-    const player = playerWorld()
+    const player = playerPosition
 
     for (let i = 0; i < mesh.count; i++) {
       const i3 = i * 3
